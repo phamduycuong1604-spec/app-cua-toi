@@ -249,3 +249,8 @@ document.getElementById("nut-them").onclick = () => moKhungNhap(null);
 // ----- 6. KHỞI ĐỘNG APP -----
 document.getElementById("ngay-hien-tai").textContent = ngayDeDoc(homNay());
 veDanhSach();
+
+// ----- 7. ĐĂNG KÝ "NGƯỜI GIỮ KHO" để app cài được và chạy khi mất mạng -----
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
