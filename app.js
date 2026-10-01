@@ -186,6 +186,7 @@ const oNgay = document.getElementById("o-ngay");
 const oGio = document.getElementById("o-gio");
 const oGhiChu = document.getElementById("o-ghi-chu");
 const nutXoa = document.getElementById("nut-xoa");
+const nutLichMay = document.getElementById("nut-lich-may");
 
 // viec = null nghĩa là thêm mới; có viec nghĩa là sửa việc đó
 function moKhungNhap(viec) {
@@ -197,6 +198,8 @@ function moKhungNhap(viec) {
   oGio.value = viec ? viec.gio : "";
   oGhiChu.value = viec ? viec.ghiChu : "";
   nutXoa.classList.toggle("an", !viec); // chỉ hiện nút Xóa khi đang sửa
+  // Nút "Thêm vào lịch điện thoại" chỉ hiện khi sửa việc đã có giờ
+  nutLichMay.classList.toggle("an", !(viec && viec.gio));
 
   khungNhap.classList.remove("an");
   nenMo.classList.remove("an");
@@ -223,6 +226,8 @@ khungNhap.onsubmit = (suKien) => {
   if (idDangSua) {
     // Sửa: ghi đè thông tin mới lên việc cũ
     const viec = danhSachViec.find((v) => v.id === idDangSua);
+    // Đổi ngày hoặc giờ thì cho phép nhắc lại theo giờ mới
+    if (viec.ngay !== thongTin.ngay || viec.gio !== thongTin.gio) viec.daNhac = false;
     Object.assign(viec, thongTin);
   } else {
     // Thêm mới: tạo id riêng dựa trên thời điểm hiện tại
@@ -254,3 +259,116 @@ veDanhSach();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js");
 }
+
+
+// ----- 8. NHẮC LỊCH -----
+// Cứ 20 giây app xem một lần: việc nào đến giờ mà chưa xong, chưa nhắc → nhắc.
+// LƯU Ý: điện thoại chỉ cho web app nhắc khi app đang mở hoặc vừa chạy ngầm.
+// Nếu tắt hẳn app, hãy dùng nút "Thêm vào lịch điện thoại" để chắc chắn được nhắc.
+
+const nutBatNhac = document.getElementById("nut-bat-nhac");
+const loiNhac = document.getElementById("loi-nhac");
+
+// Hiện nút "Bật nhắc lịch" nếu chưa cho phép thông báo
+function capNhatNutBatNhac() {
+  const coTheBat = "Notification" in window && Notification.permission === "default";
+  nutBatNhac.classList.toggle("an", !coTheBat);
+}
+
+nutBatNhac.onclick = async () => {
+  await Notification.requestPermission();
+  capNhatNutBatNhac();
+};
+
+// Gửi một thông báo lên điện thoại + hiện dòng nhắc trong app
+async function guiThongBao(viec) {
+  const tieuDe = "⏰ Đến giờ: " + viec.ten;
+  const noiDung = viec.ghiChu || "Lúc " + viec.gio;
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    const nguoiGiuKho = await navigator.serviceWorker.ready;
+    nguoiGiuKho.showNotification(tieuDe, {
+      body: noiDung,
+      icon: "icons/icon-192.png",
+      tag: viec.id, // tránh hiện trùng
+    });
+  }
+
+  loiNhac.textContent = tieuDe;
+  loiNhac.classList.remove("an");
+  setTimeout(() => loiNhac.classList.add("an"), 8000);
+}
+
+let ngayDangHien = homNay();
+
+function kiemTraNhacViec() {
+  // Qua nửa đêm thì cập nhật lại ngày và danh sách
+  if (homNay() !== ngayDangHien) {
+    ngayDangHien = homNay();
+    document.getElementById("ngay-hien-tai").textContent = ngayDeDoc(ngayDangHien);
+    veDanhSach();
+  }
+
+  const bayGio = new Date();
+  let coThayDoi = false;
+
+  danhSachViec.forEach((viec) => {
+    if (viec.xong || viec.daNhac || !viec.gio) return;
+    const [nam, thang, ngay] = viec.ngay.split("-").map(Number);
+    const [gio, phut] = viec.gio.split(":").map(Number);
+    const lucNhac = new Date(nam, thang - 1, ngay, gio, phut);
+
+    if (lucNhac <= bayGio) {
+      viec.daNhac = true;
+      coThayDoi = true;
+      guiThongBao(viec);
+    }
+  });
+
+  if (coThayDoi) luuDanhSach();
+}
+
+capNhatNutBatNhac();
+kiemTraNhacViec();
+setInterval(kiemTraNhacViec, 20000);
+// Mở lại app từ nền thì kiểm tra ngay
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) kiemTraNhacViec();
+});
+
+
+// ----- 9. THÊM VÀO LỊCH ĐIỆN THOẠI -----
+// Tạo một file lịch (.ics). Mở file này, điện thoại sẽ hỏi thêm vào ứng dụng Lịch,
+// và Lịch sẽ nhắc đúng giờ kể cả khi app này đang tắt.
+
+nutLichMay.onclick = () => {
+  const viec = danhSachViec.find((v) => v.id === idDangSua);
+  const thoiDiem = viec.ngay.replaceAll("-", "") + "T" + viec.gio.replace(":", "") + "00";
+  const chu = (x) => x.replace(/[\\,;]/g, (k) => "\\" + k).replace(/\n/g, "\\n");
+
+  const noiDungFile = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Viec Hom Nay//VI",
+    "BEGIN:VEVENT",
+    "UID:" + viec.id + "@viec-hom-nay",
+    "DTSTAMP:" + new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z",
+    "DTSTART:" + thoiDiem,
+    "DURATION:PT30M",
+    "SUMMARY:" + chu(viec.ten),
+    "DESCRIPTION:" + chu(viec.ghiChu || ""),
+    "BEGIN:VALARM",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:" + chu(viec.ten),
+    "TRIGGER:PT0M",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  const file = new Blob([noiDungFile], { type: "text/calendar" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(file);
+  link.download = "viec.ics";
+  link.click();
+};

@@ -21,7 +21,12 @@
   <header class="dau-trang">
     <h1>Việc Hôm Nay</h1>
     <p id="ngay-hien-tai"></p>
+    <!-- Nút xin quyền gửi thông báo (tự ẩn khi đã bật) -->
+    <button id="nut-bat-nhac" class="nut-bat-nhac an">🔔 Bật nhắc lịch</button>
   </header>
+
+  <!-- Dòng nhắc nhỏ hiện ngay trong app khi đến giờ -->
+  <div id="loi-nhac" class="loi-nhac an"></div>
 
   <!-- PHẦN GIỮA: danh sách công việc -->
   <main>
@@ -59,6 +64,9 @@
     <label>Ghi chú
       <textarea id="o-ghi-chu" rows="3" placeholder="Không bắt buộc"></textarea>
     </label>
+
+    <!-- Thêm vào lịch của điện thoại: nhắc chắc chắn kể cả khi tắt hẳn app -->
+    <button type="button" id="nut-lich-may" class="nut-lich-may an">📅 Thêm vào lịch điện thoại</button>
 
     <div class="hang-nut">
       <button type="button" id="nut-xoa" class="nut nut-xoa">Xóa</button>

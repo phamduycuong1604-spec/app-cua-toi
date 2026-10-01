@@ -193,5 +193,42 @@ main { padding: 8px 16px; }
 .nut-phu { background: var(--mau-nen); color: var(--mau-chu); }
 .nut-xoa { background: none; color: var(--mau-xoa); }
 
+/* ===== NHẮC LỊCH ===== */
+.nut-bat-nhac {
+  margin-top: 12px;
+  padding: 10px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: #fff4d6;
+  color: #7a5400;
+  cursor: pointer;
+}
+.loi-nhac {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--mau-chinh);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+.nut-lich-may {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 4px;
+  font-size: 15px;
+  border: 1px dashed var(--mau-vien);
+  border-radius: 10px;
+  background: none;
+  color: var(--mau-chinh);
+  cursor: pointer;
+}
+
 /* Dùng để ẩn một phần tử */
 .an { display: none !important; }
