@@ -1,8 +1,8 @@
 /* ===== BẢNG MÀU PASTEL (đổi ở đây là đổi cả app) ===== */
 :root {
-  --bac-ha: #a8e6cf;        /* xanh bạc hà */
-  --bac-ha-nhat: #e3f7ef;
-  --bac-ha-dam: #2e9e78;    /* xanh bạc hà đậm: dùng cho chữ, nút */
+  --bac-ha: #5fcfa5;        /* xanh bạc hà */
+  --bac-ha-nhat: #cdf1e3;
+  --bac-ha-dam: #178562;    /* xanh bạc hà đậm: dùng cho chữ, nút */
   --hong: #ffc8dd;          /* hồng phấn */
   --hong-nhat: #ffeef4;
   --hong-dam: #d9577f;      /* hồng đậm: dùng cho chữ, điểm nhấn */
@@ -11,8 +11,8 @@
   --chu: #26332f;
   --chu-nhat: #7b8a85;
   --vien: #e6eeeb;
-  --bong: 0 8px 24px rgba(46, 158, 120, 0.10);
-  --nut-chinh: #2e9e78;     /* nền nút chính, luôn đi với chữ trắng */
+  --bong: 0 8px 24px rgba(23, 133, 98, 0.14);
+  --nut-chinh: #178562;     /* nền nút chính, luôn đi với chữ trắng */
   --chu-tren-bac-ha: #17463a;
   --chu-tren-hong: #4a1d2c;
 }
@@ -20,9 +20,9 @@
 /* Tự đổi sang nền tối nếu điện thoại đang bật chế độ tối */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bac-ha: #3f7f69;
-    --bac-ha-nhat: #1f302a;
-    --bac-ha-dam: #8be0bf;
+    --bac-ha: #2f8f6e;
+    --bac-ha-nhat: #1d3a30;
+    --bac-ha-dam: #7fe0b9;
     --hong: #8a4a60;
     --hong-nhat: #33222a;
     --hong-dam: #f6a3bf;
@@ -296,7 +296,7 @@ button { font-family: inherit; cursor: pointer; }
   height: 64px;
   border-radius: 22px;
   border: none;
-  background: linear-gradient(135deg, var(--nut-chinh), #5cc9a3);
+  background: linear-gradient(135deg, var(--nut-chinh), #3fbf8f);
   color: white;
   font-size: 34px;
   line-height: 1;
