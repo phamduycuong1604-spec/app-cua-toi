@@ -30,5 +30,8 @@ Lưu ý: kho code phải để **Public** thì GitHub Pages mới miễn phí.
 
 ## Giới hạn của nhắc lịch
 
+Mỗi việc có giờ được nhắc lúc **bắt đầu**. Nếu có giờ kết thúc, app nhắc thêm lúc
+**giữa chừng** (kèm tiến độ checklist) và lúc **kết thúc**.
+
 Web app chỉ nhắc được khi app đang mở hoặc vừa chạy ngầm. Muốn chắc chắn được nhắc
 kể cả khi tắt hẳn app: mở việc đó → bấm **📅 Thêm vào lịch điện thoại**.
