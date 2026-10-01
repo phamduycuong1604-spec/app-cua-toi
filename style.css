@@ -89,6 +89,38 @@ main { padding: 8px 16px; }
   padding: 48px 16px;
 }
 
+/* Tiêu đề ngày trong chế độ "Tuần này" */
+.tieu-de-ngay {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mau-chu-nhat);
+  margin: 18px 0 8px;
+}
+.tieu-de-ngay:first-child { margin-top: 4px; }
+
+/* ===== THANH TAB Ở ĐÁY ===== */
+.thanh-tab {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--mau-the);
+  border-top: 1px solid var(--mau-vien);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1;
+  padding: 18px 4px;
+  font-size: 16px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  color: var(--mau-chu-nhat);
+  cursor: pointer;
+}
+.tab.dang-chon { color: var(--mau-chinh); box-shadow: inset 0 3px 0 var(--mau-chinh); }
+
 /* ===== NÚT TRÒN "+" ===== */
 .nut-them {
   position: fixed;

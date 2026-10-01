@@ -61,17 +61,63 @@ function sapXep(ds) {
   );
 }
 
+// Đang xem tab nào: "hom-nay", "ngay-mai" hoặc "tuan-nay"
+let cheDoXem = "hom-nay";
+
+// Cộng thêm số ngày vào hôm nay. Ví dụ congNgay(1) = ngày mai
+function congNgay(soNgay) {
+  const d = new Date();
+  d.setDate(d.getDate() + soNgay);
+  return ngayThanhChu(d);
+}
+
+// Tuần tính từ Thứ Hai đến Chủ Nhật
+function dauVaCuoiTuan() {
+  const thuHomNay = new Date().getDay(); // 0 = Chủ Nhật, 1 = Thứ Hai...
+  const luiVeThuHai = thuHomNay === 0 ? -6 : 1 - thuHomNay;
+  return [congNgay(luiVeThuHai), congNgay(luiVeThuHai + 6)];
+}
+
+// Chọn ra những việc thuộc tab đang xem
+function locTheoCheDo() {
+  if (cheDoXem === "hom-nay") return danhSachViec.filter((v) => v.ngay === homNay());
+  if (cheDoXem === "ngay-mai") return danhSachViec.filter((v) => v.ngay === congNgay(1));
+  const [dau, cuoi] = dauVaCuoiTuan();
+  return danhSachViec.filter((v) => v.ngay >= dau && v.ngay <= cuoi);
+}
+
 function veDanhSach() {
-  const ds = sapXep(danhSachViec);
+  const ds = sapXep(locTheoCheDo());
   khungDanhSach.innerHTML = "";
 
   if (ds.length === 0) {
-    khungDanhSach.innerHTML = `<p class="trong">Chưa có việc nào.<br>Bấm nút + để thêm.</p>`;
+    khungDanhSach.innerHTML = `<p class="trong">Không có việc nào.<br>Bấm nút + để thêm.</p>`;
     return;
   }
 
-  ds.forEach((viec) => khungDanhSach.appendChild(taoTheViec(viec)));
+  // Tab "Tuần này": thêm dòng tiêu đề mỗi khi sang ngày mới
+  let ngayTruoc = null;
+  ds.forEach((viec) => {
+    if (cheDoXem === "tuan-nay" && viec.ngay !== ngayTruoc) {
+      const tieuDe = document.createElement("div");
+      tieuDe.className = "tieu-de-ngay";
+      tieuDe.textContent = viec.ngay === homNay() ? "Hôm nay" : ngayDeDoc(viec.ngay);
+      khungDanhSach.appendChild(tieuDe);
+      ngayTruoc = viec.ngay;
+    }
+    khungDanhSach.appendChild(taoTheViec(viec));
+  });
 }
+
+// Bấm vào một tab
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("dang-chon"));
+    tab.classList.add("dang-chon");
+    cheDoXem = tab.dataset.cheDo;
+    veDanhSach();
+  };
+});
 
 // Tạo "thẻ" hiển thị cho một công việc
 function taoTheViec(viec) {
@@ -95,10 +141,12 @@ function taoTheViec(viec) {
   ten.textContent = viec.ten;
   noiDung.appendChild(ten);
 
-  const gio = document.createElement("div");
-  gio.className = "gio";
-  gio.textContent = (viec.gio ? "🕒 " + viec.gio + " · " : "") + ngayDeDoc(viec.ngay);
-  noiDung.appendChild(gio);
+  if (viec.gio) {
+    const gio = document.createElement("div");
+    gio.className = "gio";
+    gio.textContent = "🕒 " + viec.gio;
+    noiDung.appendChild(gio);
+  }
 
   if (viec.ghiChu) {
     const ghiChu = document.createElement("div");
@@ -144,7 +192,8 @@ function moKhungNhap(viec) {
   idDangSua = viec ? viec.id : null;
   document.getElementById("tieu-de-khung").textContent = viec ? "Sửa công việc" : "Thêm việc mới";
   oTen.value = viec ? viec.ten : "";
-  oNgay.value = viec ? viec.ngay : homNay();
+  // Thêm mới khi đang ở tab "Ngày mai" thì điền sẵn ngày mai cho tiện
+  oNgay.value = viec ? viec.ngay : (cheDoXem === "ngay-mai" ? congNgay(1) : homNay());
   oGio.value = viec ? viec.gio : "";
   oGhiChu.value = viec ? viec.ghiChu : "";
   nutXoa.classList.toggle("an", !viec); // chỉ hiện nút Xóa khi đang sửa
