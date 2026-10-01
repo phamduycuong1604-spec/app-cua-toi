@@ -4,11 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Việc Hôm Nay</title>
+
+  <!-- Phông chữ Be Vietnam Pro: đẹp và hiển thị tiếng Việt chuẩn -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 
   <!-- Thông tin để cài app vào màn hình chính -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2f6fed">
+  <meta name="theme-color" content="#cdf1e3">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -17,53 +22,81 @@
 </head>
 <body>
 
-  <!-- PHẦN ĐẦU: tên app và ngày hôm nay -->
+  <!-- PHẦN ĐẦU: chào + nút bật nhắc lịch -->
   <header class="dau-trang">
-    <h1>Việc Hôm Nay</h1>
-    <p id="ngay-hien-tai"></p>
+    <div>
+      <p class="loi-chao" id="loi-chao">Xin chào 👋</p>
+      <h1>Việc Hôm Nay</h1>
+    </div>
     <!-- Nút xin quyền gửi thông báo (tự ẩn khi đã bật) -->
-    <button id="nut-bat-nhac" class="nut-bat-nhac an">🔔 Bật nhắc lịch</button>
+    <button id="nut-bat-nhac" class="nut-bat-nhac an" aria-label="Bật nhắc lịch">🔔</button>
   </header>
 
   <!-- Dòng nhắc nhỏ hiện ngay trong app khi đến giờ -->
   <div id="loi-nhac" class="loi-nhac an"></div>
 
-  <!-- PHẦN GIỮA: danh sách công việc -->
-  <main>
-    <div id="danh-sach"></div>
-  </main>
+  <!-- LỊCH THÁNG -->
+  <section class="the-lich">
+    <div class="thanh-thang">
+      <button id="thang-truoc" class="nut-tron" aria-label="Tháng trước">‹</button>
+      <h2 id="ten-thang"></h2>
+      <button id="thang-sau" class="nut-tron" aria-label="Tháng sau">›</button>
+    </div>
+    <div class="hang-thu">
+      <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span>
+    </div>
+    <div id="luoi-ngay" class="luoi-ngay"></div>
+  </section>
 
-  <!-- THANH TAB Ở ĐÁY MÀN HÌNH: chọn xem việc hôm nay / ngày mai / tuần này -->
-  <nav class="thanh-tab">
-    <button class="tab dang-chon" data-che-do="hom-nay">Hôm nay</button>
-    <button class="tab" data-che-do="ngay-mai">Ngày mai</button>
-    <button class="tab" data-che-do="tuan-nay">Tuần này</button>
-  </nav>
+  <!-- CHI TIẾT NGÀY ĐANG CHỌN: theo từng khung giờ -->
+  <section class="phan-ngay">
+    <div class="thanh-ngay">
+      <div>
+        <h2 id="ten-ngay"></h2>
+        <p id="tom-tat-ngay" class="tom-tat"></p>
+      </div>
+      <button id="ve-hom-nay" class="chip">Hôm nay</button>
+    </div>
+    <div id="dong-thoi-gian"></div>
+  </section>
 
-  <!-- NÚT TRÒN "+" để thêm việc mới (đặt góc dưới bên phải, dễ bấm bằng ngón cái) -->
+  <!-- NÚT TRÒN "+" để thêm việc mới (góc dưới bên phải, dễ bấm bằng ngón cái) -->
   <button id="nut-them" class="nut-them" aria-label="Thêm việc mới">+</button>
 
-  <!-- KHUNG NHẬP: hiện lên từ dưới khi thêm hoặc sửa việc -->
+  <!-- KHUNG NHẬP: trượt lên từ dưới khi thêm hoặc sửa việc -->
   <div id="nen-mo" class="nen-mo an"></div>
   <form id="khung-nhap" class="khung-nhap an">
+    <div class="tay-cam"></div>
     <h2 id="tieu-de-khung">Thêm việc mới</h2>
 
     <label>Tên công việc
       <input id="o-ten" type="text" required placeholder="Ví dụ: Đi chợ">
     </label>
 
+    <label>Ngày
+      <input id="o-ngay" type="date" required>
+    </label>
+
     <div class="hang-doi">
-      <label>Ngày
-        <input id="o-ngay" type="date" required>
-      </label>
-      <label>Giờ
+      <label>Bắt đầu
         <input id="o-gio" type="time">
+      </label>
+      <label>Kết thúc
+        <input id="o-gio-ket-thuc" type="time">
       </label>
     </div>
 
     <label>Ghi chú
-      <textarea id="o-ghi-chu" rows="3" placeholder="Không bắt buộc"></textarea>
+      <textarea id="o-ghi-chu" rows="2" placeholder="Không bắt buộc"></textarea>
     </label>
+
+    <!-- CHECKLIST: các bước nhỏ của công việc -->
+    <div class="nhan">Checklist</div>
+    <div id="sua-checklist" class="sua-checklist"></div>
+    <div class="them-muc">
+      <input id="o-muc-moi" type="text" placeholder="Thêm một bước…">
+      <button type="button" id="nut-them-muc" class="nut-them-muc" aria-label="Thêm bước">+</button>
+    </div>
 
     <!-- Thêm vào lịch của điện thoại: nhắc chắc chắn kể cả khi tắt hẳn app -->
     <button type="button" id="nut-lich-may" class="nut-lich-may an">📅 Thêm vào lịch điện thoại</button>
