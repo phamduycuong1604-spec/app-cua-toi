@@ -1,7 +1,12 @@
 // =====================================================
 // APP QUẢN LÝ CÔNG VIỆC HÀNG NGÀY
 // Mỗi công việc là một "hộp" thông tin như sau:
-//   { id, ten, ngay: "2026-10-01", gio: "08:30", ghiChu, xong: true/false }
+//   {
+//     id, ten, ngay: "2026-10-01",
+//     gio: "08:30", gioKetThuc: "09:30",   (có thể bỏ trống)
+//     ghiChu, xong: true/false,
+//     checklist: [ { ten: "Mua rau", xong: false }, ... ]
+//   }
 // =====================================================
 
 
@@ -13,7 +18,9 @@ const TEN_SO = "danh-sach-viec";
 
 function docDanhSach() {
   try {
-    return JSON.parse(localStorage.getItem(TEN_SO)) || [];
+    const ds = JSON.parse(localStorage.getItem(TEN_SO)) || [];
+    // Việc tạo từ bản cũ chưa có giờ kết thúc / checklist thì bổ sung cho đủ
+    return ds.map((v) => ({ gioKetThuc: "", checklist: [], ...v }));
   } catch (loi) {
     return [];
   }
@@ -24,10 +31,11 @@ function luuDanhSach() {
 }
 
 let danhSachViec = docDanhSach();
-let idDangSua = null; // id của việc đang sửa (null = đang thêm mới)
 
 
 // ----- 2. CÁC HÀM NHỎ VỀ NGÀY THÁNG -----
+
+const TEN_THU = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
 
 // Đổi một ngày thành chữ dạng "2026-10-01"
 function ngayThanhChu(ngay) {
@@ -37,92 +45,172 @@ function ngayThanhChu(ngay) {
   return `${nam}-${thang}-${ngayTrongThang}`;
 }
 
+// Đổi chữ "2026-10-01" ngược lại thành ngày
+function chuThanhNgay(chu) {
+  const [nam, thang, ngay] = chu.split("-").map(Number);
+  return new Date(nam, thang - 1, ngay);
+}
+
 function homNay() {
   return ngayThanhChu(new Date());
 }
 
-// Hiện ngày kiểu Việt Nam, ví dụ: "Thứ Năm, 01/10/2026"
+// Ví dụ: "Thứ Năm, 01/10"
 function ngayDeDoc(chuNgay) {
-  const [nam, thang, ngay] = chuNgay.split("-").map(Number);
-  const d = new Date(nam, thang - 1, ngay);
-  const thu = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"][d.getDay()];
-  return `${thu}, ${String(ngay).padStart(2, "0")}/${String(thang).padStart(2, "0")}/${nam}`;
+  const d = chuThanhNgay(chuNgay);
+  const ngay = String(d.getDate()).padStart(2, "0");
+  const thang = String(d.getMonth() + 1).padStart(2, "0");
+  return `${TEN_THU[d.getDay()]}, ${ngay}/${thang}`;
 }
 
 
-// ----- 3. VẼ DANH SÁCH LÊN MÀN HÌNH -----
+// ----- 3. TRẠNG THÁI ĐANG XEM -----
 
-const khungDanhSach = document.getElementById("danh-sach");
+let ngayDangChon = homNay();                 // ngày đang xem chi tiết
+let thangDangXem = chuThanhNgay(homNay());   // tháng đang hiện trên lịch
+thangDangXem.setDate(1);
 
-// Sắp xếp: theo ngày, rồi theo giờ (việc không có giờ xếp cuối ngày)
-function sapXep(ds) {
-  return [...ds].sort((a, b) =>
-    (a.ngay + (a.gio || "99")).localeCompare(b.ngay + (b.gio || "99"))
-  );
+function viecCuaNgay(chuNgay) {
+  return danhSachViec.filter((v) => v.ngay === chuNgay);
 }
 
-// Đang xem tab nào: "hom-nay", "ngay-mai" hoặc "tuan-nay"
-let cheDoXem = "hom-nay";
-
-// Cộng thêm số ngày vào hôm nay. Ví dụ congNgay(1) = ngày mai
-function congNgay(soNgay) {
-  const d = new Date();
-  d.setDate(d.getDate() + soNgay);
-  return ngayThanhChu(d);
+// Vẽ lại toàn bộ màn hình
+function veTatCa() {
+  veLichThang();
+  veChiTietNgay();
 }
 
-// Tuần tính từ Thứ Hai đến Chủ Nhật
-function dauVaCuoiTuan() {
-  const thuHomNay = new Date().getDay(); // 0 = Chủ Nhật, 1 = Thứ Hai...
-  const luiVeThuHai = thuHomNay === 0 ? -6 : 1 - thuHomNay;
-  return [congNgay(luiVeThuHai), congNgay(luiVeThuHai + 6)];
-}
 
-// Chọn ra những việc thuộc tab đang xem
-function locTheoCheDo() {
-  if (cheDoXem === "hom-nay") return danhSachViec.filter((v) => v.ngay === homNay());
-  if (cheDoXem === "ngay-mai") return danhSachViec.filter((v) => v.ngay === congNgay(1));
-  const [dau, cuoi] = dauVaCuoiTuan();
-  return danhSachViec.filter((v) => v.ngay >= dau && v.ngay <= cuoi);
-}
+// ----- 4. LỊCH THÁNG -----
 
-function veDanhSach() {
-  const ds = sapXep(locTheoCheDo());
-  khungDanhSach.innerHTML = "";
+const luoiNgay = document.getElementById("luoi-ngay");
 
-  if (ds.length === 0) {
-    khungDanhSach.innerHTML = `<p class="trong">Không có việc nào.<br>Bấm nút + để thêm.</p>`;
-    return;
+function veLichThang() {
+  const nam = thangDangXem.getFullYear();
+  const thang = thangDangXem.getMonth();
+  document.getElementById("ten-thang").textContent = `Tháng ${thang + 1}, ${nam}`;
+
+  // Nút "Hôm nay" chỉ hiện khi đang xem ngày khác hoặc tháng khác
+  const dangOHomNay = ngayDangChon === homNay() && homNay().startsWith(ngayThanhChu(thangDangXem).slice(0, 7));
+  document.getElementById("ve-hom-nay").classList.toggle("an", dangOHomNay);
+
+  luoiNgay.innerHTML = "";
+
+  // Số ô trống đầu tháng (tuần bắt đầu từ Thứ Hai)
+  const soOTrong = (new Date(nam, thang, 1).getDay() + 6) % 7;
+  for (let i = 0; i < soOTrong; i++) {
+    luoiNgay.appendChild(document.createElement("span"));
   }
 
-  // Tab "Tuần này": thêm dòng tiêu đề mỗi khi sang ngày mới
-  let ngayTruoc = null;
-  ds.forEach((viec) => {
-    if (cheDoXem === "tuan-nay" && viec.ngay !== ngayTruoc) {
-      const tieuDe = document.createElement("div");
-      tieuDe.className = "tieu-de-ngay";
-      tieuDe.textContent = viec.ngay === homNay() ? "Hôm nay" : ngayDeDoc(viec.ngay);
-      khungDanhSach.appendChild(tieuDe);
-      ngayTruoc = viec.ngay;
+  const soNgayTrongThang = new Date(nam, thang + 1, 0).getDate();
+  for (let ngay = 1; ngay <= soNgayTrongThang; ngay++) {
+    const chuNgay = ngayThanhChu(new Date(nam, thang, ngay));
+    const o = document.createElement("button");
+    o.className = "o-ngay";
+    if (chuNgay === homNay()) o.classList.add("hom-nay");
+    if (chuNgay === ngayDangChon) o.classList.add("dang-chon");
+    o.textContent = ngay;
+
+    // Chấm nhỏ: hồng = còn việc chưa xong, xanh = đã xong (tối đa 3 chấm)
+    const cacViec = viecCuaNgay(chuNgay);
+    if (cacViec.length) {
+      const cacCham = document.createElement("div");
+      cacCham.className = "cac-cham";
+      cacViec.slice(0, 3).forEach((v) => {
+        const cham = document.createElement("i");
+        cham.className = "cham" + (v.xong ? " xong" : "");
+        cacCham.appendChild(cham);
+      });
+      o.appendChild(cacCham);
     }
-    khungDanhSach.appendChild(taoTheViec(viec));
-  });
+
+    o.onclick = () => {
+      ngayDangChon = chuNgay;
+      veTatCa();
+    };
+    luoiNgay.appendChild(o);
+  }
 }
 
-// Bấm vào một tab
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.onclick = () => {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("dang-chon"));
-    tab.classList.add("dang-chon");
-    cheDoXem = tab.dataset.cheDo;
-    veDanhSach();
-  };
-});
+function doiThang(soThang) {
+  thangDangXem.setMonth(thangDangXem.getMonth() + soThang);
+  veLichThang();
+}
+
+document.getElementById("thang-truoc").onclick = () => doiThang(-1);
+document.getElementById("thang-sau").onclick = () => doiThang(1);
+
+document.getElementById("ve-hom-nay").onclick = () => {
+  ngayDangChon = homNay();
+  thangDangXem = chuThanhNgay(homNay());
+  thangDangXem.setDate(1);
+  veTatCa();
+};
+
+
+// ----- 5. CHI TIẾT NGÀY THEO KHUNG GIỜ -----
+
+const dongThoiGian = document.getElementById("dong-thoi-gian");
+
+function veChiTietNgay() {
+  const cacViec = viecCuaNgay(ngayDangChon).sort((a, b) =>
+    (a.gio || "").localeCompare(b.gio || "")
+  );
+  const soXong = cacViec.filter((v) => v.xong).length;
+
+  document.getElementById("ten-ngay").textContent =
+    ngayDangChon === homNay() ? "Hôm nay · " + ngayDeDoc(ngayDangChon) : ngayDeDoc(ngayDangChon);
+  document.getElementById("tom-tat-ngay").textContent = cacViec.length
+    ? `${cacViec.length} việc · ${soXong} đã xong`
+    : "Chưa có việc nào";
+
+  dongThoiGian.innerHTML = "";
+
+  // a) Việc không đặt giờ → nhóm "Cả ngày"
+  const viecCaNgay = cacViec.filter((v) => !v.gio);
+  if (viecCaNgay.length) {
+    const nhom = document.createElement("div");
+    nhom.className = "nhom-ca-ngay";
+    nhom.innerHTML = `<p class="nhan-nho">Cả ngày</p>`;
+    viecCaNgay.forEach((v) => nhom.appendChild(taoTheViec(v)));
+    dongThoiGian.appendChild(nhom);
+  }
+
+  // b) Việc có giờ → xếp vào từng khung giờ
+  const viecCoGio = cacViec.filter((v) => v.gio);
+  const gioCuaViec = viecCoGio.map((v) => Number(v.gio.slice(0, 2)));
+  const gioDau = Math.min(6, ...gioCuaViec);   // mặc định hiện từ 6 giờ sáng
+  const gioCuoi = Math.max(22, ...gioCuaViec); // đến 10 giờ tối
+  const gioHienTai = new Date().getHours();
+
+  for (let gio = gioDau; gio <= gioCuoi; gio++) {
+    const hang = document.createElement("div");
+    hang.className = "hang-gio";
+    if (ngayDangChon === homNay() && gio === gioHienTai) hang.classList.add("bay-gio");
+
+    const nhan = document.createElement("div");
+    nhan.className = "nhan-gio";
+    nhan.textContent = String(gio).padStart(2, "0") + ":00";
+
+    const o = document.createElement("div");
+    o.className = "o-gio";
+    viecCoGio
+      .filter((v) => Number(v.gio.slice(0, 2)) === gio)
+      .forEach((v) => o.appendChild(taoTheViec(v)));
+
+    hang.appendChild(nhan);
+    hang.appendChild(o);
+    dongThoiGian.appendChild(hang);
+  }
+}
 
 // Tạo "thẻ" hiển thị cho một công việc
 function taoTheViec(viec) {
+  // Xen kẽ màu xanh / hồng cho đẹp mắt (dựa theo id nên màu không đổi)
+  const mauHong = Number(viec.id) % 2 === 1;
+
   const the = document.createElement("div");
-  the.className = "viec" + (viec.xong ? " da-xong" : "");
+  the.className = "viec" + (mauHong ? " mau-hong" : "") + (viec.xong ? " da-xong" : "");
 
   // Nút tròn để đánh dấu xong / chưa xong
   const nutTich = document.createElement("button");
@@ -131,28 +219,61 @@ function taoTheViec(viec) {
   nutTich.setAttribute("aria-label", "Đánh dấu hoàn thành");
   nutTich.onclick = () => doiTrangThaiXong(viec.id);
 
-  // Phần chữ: bấm vào để sửa
   const noiDung = document.createElement("div");
   noiDung.className = "noi-dung";
-  noiDung.onclick = () => moKhungNhap(viec);
+
+  // Phần đầu thẻ: bấm vào để sửa
+  const dauThe = document.createElement("div");
+  dauThe.className = "dau-the";
+  dauThe.onclick = () => moKhungNhap(viec);
 
   const ten = document.createElement("div");
   ten.className = "ten";
   ten.textContent = viec.ten;
-  noiDung.appendChild(ten);
+  dauThe.appendChild(ten);
 
   if (viec.gio) {
-    const gio = document.createElement("div");
-    gio.className = "gio";
-    gio.textContent = "🕒 " + viec.gio;
-    noiDung.appendChild(gio);
+    const thoiGian = document.createElement("div");
+    thoiGian.className = "thoi-gian";
+    thoiGian.textContent = "🕒 " + viec.gio + (viec.gioKetThuc ? " – " + viec.gioKetThuc : "");
+    dauThe.appendChild(thoiGian);
   }
 
   if (viec.ghiChu) {
     const ghiChu = document.createElement("div");
     ghiChu.className = "ghi-chu";
     ghiChu.textContent = viec.ghiChu;
-    noiDung.appendChild(ghiChu);
+    dauThe.appendChild(ghiChu);
+  }
+  noiDung.appendChild(dauThe);
+
+  // Checklist: bấm vào từng bước để đánh dấu
+  if (viec.checklist.length) {
+    const soXong = viec.checklist.filter((m) => m.xong).length;
+    const phanTram = Math.round((soXong / viec.checklist.length) * 100);
+
+    const khung = document.createElement("div");
+    khung.className = "checklist";
+    khung.innerHTML = `
+      <div class="thanh-tien-do">
+        <div class="vach"><i style="width:${phanTram}%"></i></div>
+        <span>${soXong}/${viec.checklist.length}</span>
+      </div>`;
+
+    viec.checklist.forEach((muc, viTri) => {
+      const dong = document.createElement("button");
+      dong.className = "muc" + (muc.xong ? " xong" : "");
+      const hop = document.createElement("span");
+      hop.className = "hop";
+      hop.textContent = muc.xong ? "✓" : "";
+      const chu = document.createElement("span");
+      chu.textContent = muc.ten;
+      dong.appendChild(hop);
+      dong.appendChild(chu);
+      dong.onclick = () => doiTrangThaiMuc(viec.id, viTri);
+      khung.appendChild(dong);
+    });
+    noiDung.appendChild(khung);
   }
 
   the.appendChild(nutTich);
@@ -161,49 +282,67 @@ function taoTheViec(viec) {
 }
 
 
-// ----- 4. THÊM / SỬA / XÓA / ĐÁNH DẤU XONG -----
+// ----- 6. ĐÁNH DẤU XONG / XÓA -----
 
 function doiTrangThaiXong(id) {
   const viec = danhSachViec.find((v) => v.id === id);
   viec.xong = !viec.xong;
   luuDanhSach();
-  veDanhSach();
+  veTatCa();
+}
+
+function doiTrangThaiMuc(id, viTri) {
+  const viec = danhSachViec.find((v) => v.id === id);
+  viec.checklist[viTri].xong = !viec.checklist[viTri].xong;
+  luuDanhSach();
+  veTatCa();
 }
 
 function xoaViec(id) {
   danhSachViec = danhSachViec.filter((v) => v.id !== id);
   luuDanhSach();
-  veDanhSach();
+  veTatCa();
 }
 
 
-// ----- 5. KHUNG NHẬP (thêm hoặc sửa) -----
+// ----- 7. KHUNG NHẬP (thêm hoặc sửa) -----
 
 const khungNhap = document.getElementById("khung-nhap");
 const nenMo = document.getElementById("nen-mo");
 const oTen = document.getElementById("o-ten");
 const oNgay = document.getElementById("o-ngay");
 const oGio = document.getElementById("o-gio");
+const oGioKetThuc = document.getElementById("o-gio-ket-thuc");
 const oGhiChu = document.getElementById("o-ghi-chu");
+const oMucMoi = document.getElementById("o-muc-moi");
+const khungSuaChecklist = document.getElementById("sua-checklist");
 const nutXoa = document.getElementById("nut-xoa");
 const nutLichMay = document.getElementById("nut-lich-may");
+
+let idDangSua = null;       // id của việc đang sửa (null = đang thêm mới)
+let checklistDangSua = [];  // bản nháp checklist trong khung nhập
 
 // viec = null nghĩa là thêm mới; có viec nghĩa là sửa việc đó
 function moKhungNhap(viec) {
   idDangSua = viec ? viec.id : null;
   document.getElementById("tieu-de-khung").textContent = viec ? "Sửa công việc" : "Thêm việc mới";
   oTen.value = viec ? viec.ten : "";
-  // Thêm mới khi đang ở tab "Ngày mai" thì điền sẵn ngày mai cho tiện
-  oNgay.value = viec ? viec.ngay : (cheDoXem === "ngay-mai" ? congNgay(1) : homNay());
+  oNgay.value = viec ? viec.ngay : ngayDangChon; // thêm mới: lấy ngày đang xem
   oGio.value = viec ? viec.gio : "";
+  oGioKetThuc.value = viec ? viec.gioKetThuc : "";
   oGhiChu.value = viec ? viec.ghiChu : "";
+  oMucMoi.value = "";
+  // Chép checklist ra bản nháp, để bấm "Hủy" thì không bị thay đổi
+  checklistDangSua = viec ? viec.checklist.map((m) => ({ ...m })) : [];
+  veSuaChecklist();
+
   nutXoa.classList.toggle("an", !viec); // chỉ hiện nút Xóa khi đang sửa
   // Nút "Thêm vào lịch điện thoại" chỉ hiện khi sửa việc đã có giờ
   nutLichMay.classList.toggle("an", !(viec && viec.gio));
 
   khungNhap.classList.remove("an");
   nenMo.classList.remove("an");
-  if (!viec) oTen.focus();
+  khungNhap.scrollTop = 0;
 }
 
 function dongKhungNhap() {
@@ -211,17 +350,81 @@ function dongKhungNhap() {
   nenMo.classList.add("an");
 }
 
+// Vẽ danh sách các bước trong khung nhập
+function veSuaChecklist() {
+  khungSuaChecklist.innerHTML = "";
+  checklistDangSua.forEach((muc, viTri) => {
+    const dong = document.createElement("div");
+    dong.className = "dong-muc";
+
+    const hop = document.createElement("input");
+    hop.type = "checkbox";
+    hop.className = "hop-sua";
+    hop.checked = muc.xong;
+    hop.onchange = () => (muc.xong = hop.checked);
+
+    const chu = document.createElement("input");
+    chu.type = "text";
+    chu.value = muc.ten;
+    chu.oninput = () => (muc.ten = chu.value);
+
+    const nutBo = document.createElement("button");
+    nutBo.type = "button";
+    nutBo.className = "nut-bo";
+    nutBo.textContent = "×";
+    nutBo.setAttribute("aria-label", "Bỏ bước này");
+    nutBo.onclick = () => {
+      checklistDangSua.splice(viTri, 1);
+      veSuaChecklist();
+    };
+
+    dong.appendChild(hop);
+    dong.appendChild(chu);
+    dong.appendChild(nutBo);
+    khungSuaChecklist.appendChild(dong);
+  });
+}
+
+function themMucChecklist() {
+  const ten = oMucMoi.value.trim();
+  if (!ten) return;
+  checklistDangSua.push({ ten, xong: false });
+  oMucMoi.value = "";
+  veSuaChecklist();
+}
+
+document.getElementById("nut-them-muc").onclick = () => {
+  themMucChecklist();
+  oMucMoi.focus();
+};
+// Bấm Enter trong ô "Thêm một bước" thì thêm bước, không lưu cả form
+oMucMoi.onkeydown = (suKien) => {
+  if (suKien.key === "Enter") {
+    suKien.preventDefault();
+    themMucChecklist();
+  }
+};
+
 // Bấm "Lưu"
 khungNhap.onsubmit = (suKien) => {
   suKien.preventDefault(); // không cho trang tải lại
+
+  // Bước còn gõ dở trong ô "Thêm một bước" cũng được thêm vào
+  themMucChecklist();
 
   const thongTin = {
     ten: oTen.value.trim(),
     ngay: oNgay.value,
     gio: oGio.value,
+    gioKetThuc: oGio.value ? oGioKetThuc.value : "", // không có giờ bắt đầu thì bỏ giờ kết thúc
     ghiChu: oGhiChu.value.trim(),
+    checklist: checklistDangSua.filter((m) => m.ten.trim()),
   };
   if (!thongTin.ten) return;
+  if (thongTin.gioKetThuc && thongTin.gioKetThuc <= thongTin.gio) {
+    alert("Giờ kết thúc phải sau giờ bắt đầu.");
+    return;
+  }
 
   if (idDangSua) {
     // Sửa: ghi đè thông tin mới lên việc cũ
@@ -234,8 +437,13 @@ khungNhap.onsubmit = (suKien) => {
     danhSachViec.push({ id: String(Date.now()), xong: false, ...thongTin });
   }
 
+  // Chuyển lịch tới ngày của việc vừa lưu
+  ngayDangChon = thongTin.ngay;
+  thangDangXem = chuThanhNgay(thongTin.ngay);
+  thangDangXem.setDate(1);
+
   luuDanhSach();
-  veDanhSach();
+  veTatCa();
   dongKhungNhap();
 };
 
@@ -251,17 +459,28 @@ nenMo.onclick = dongKhungNhap;
 document.getElementById("nut-them").onclick = () => moKhungNhap(null);
 
 
-// ----- 6. KHỞI ĐỘNG APP -----
-document.getElementById("ngay-hien-tai").textContent = ngayDeDoc(homNay());
-veDanhSach();
+// ----- 8. LỜI CHÀO THEO GIỜ -----
+function capNhatLoiChao() {
+  const gio = new Date().getHours();
+  const loiChao =
+    gio < 11 ? "Chào buổi sáng ☀️" :
+    gio < 14 ? "Chào buổi trưa 🌤️" :
+    gio < 18 ? "Chào buổi chiều 🌸" : "Chào buổi tối 🌙";
+  document.getElementById("loi-chao").textContent = loiChao;
+}
 
-// ----- 7. ĐĂNG KÝ "NGƯỜI GIỮ KHO" để app cài được và chạy khi mất mạng -----
+
+// ----- 9. KHỞI ĐỘNG APP -----
+capNhatLoiChao();
+veTatCa();
+
+// Đăng ký "người giữ kho" để app cài được và chạy khi mất mạng
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js");
 }
 
 
-// ----- 8. NHẮC LỊCH -----
+// ----- 10. NHẮC LỊCH -----
 // Cứ 20 giây app xem một lần: việc nào đến giờ mà chưa xong, chưa nhắc → nhắc.
 // LƯU Ý: điện thoại chỉ cho web app nhắc khi app đang mở hoặc vừa chạy ngầm.
 // Nếu tắt hẳn app, hãy dùng nút "Thêm vào lịch điện thoại" để chắc chắn được nhắc.
@@ -269,7 +488,7 @@ if ("serviceWorker" in navigator) {
 const nutBatNhac = document.getElementById("nut-bat-nhac");
 const loiNhac = document.getElementById("loi-nhac");
 
-// Hiện nút "Bật nhắc lịch" nếu chưa cho phép thông báo
+// Hiện nút chuông nếu chưa cho phép thông báo
 function capNhatNutBatNhac() {
   const coTheBat = "Notification" in window && Notification.permission === "default";
   nutBatNhac.classList.toggle("an", !coTheBat);
@@ -300,13 +519,17 @@ async function guiThongBao(viec) {
 }
 
 let ngayDangHien = homNay();
+let gioDangHien = new Date().getHours();
 
 function kiemTraNhacViec() {
-  // Qua nửa đêm thì cập nhật lại ngày và danh sách
-  if (homNay() !== ngayDangHien) {
+  // Sang giờ mới hoặc qua nửa đêm thì vẽ lại (vạch giờ hiện tại, ô "hôm nay")
+  if (homNay() !== ngayDangHien || new Date().getHours() !== gioDangHien) {
+    // Đang xem "hôm nay" mà qua nửa đêm thì tự chuyển sang ngày mới
+    if (ngayDangChon === ngayDangHien) ngayDangChon = homNay();
     ngayDangHien = homNay();
-    document.getElementById("ngay-hien-tai").textContent = ngayDeDoc(ngayDangHien);
-    veDanhSach();
+    gioDangHien = new Date().getHours();
+    capNhatLoiChao();
+    veTatCa();
   }
 
   const bayGio = new Date();
@@ -314,9 +537,9 @@ function kiemTraNhacViec() {
 
   danhSachViec.forEach((viec) => {
     if (viec.xong || viec.daNhac || !viec.gio) return;
-    const [nam, thang, ngay] = viec.ngay.split("-").map(Number);
     const [gio, phut] = viec.gio.split(":").map(Number);
-    const lucNhac = new Date(nam, thang - 1, ngay, gio, phut);
+    const lucNhac = chuThanhNgay(viec.ngay);
+    lucNhac.setHours(gio, phut);
 
     if (lucNhac <= bayGio) {
       viec.daNhac = true;
@@ -337,14 +560,18 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
-// ----- 9. THÊM VÀO LỊCH ĐIỆN THOẠI -----
+// ----- 11. THÊM VÀO LỊCH ĐIỆN THOẠI -----
 // Tạo một file lịch (.ics). Mở file này, điện thoại sẽ hỏi thêm vào ứng dụng Lịch,
 // và Lịch sẽ nhắc đúng giờ kể cả khi app này đang tắt.
 
 nutLichMay.onclick = () => {
   const viec = danhSachViec.find((v) => v.id === idDangSua);
-  const thoiDiem = viec.ngay.replaceAll("-", "") + "T" + viec.gio.replace(":", "") + "00";
+  const ngayGon = viec.ngay.replaceAll("-", "");
+  const gioGon = (gio) => gio.replace(":", "") + "00";
   const chu = (x) => x.replace(/[\\,;]/g, (k) => "\\" + k).replace(/\n/g, "\\n");
+
+  // Ghi chú + checklist gộp vào phần mô tả
+  const moTa = [viec.ghiChu, ...viec.checklist.map((m) => "☐ " + m.ten)].filter(Boolean).join("\n");
 
   const noiDungFile = [
     "BEGIN:VCALENDAR",
@@ -353,10 +580,10 @@ nutLichMay.onclick = () => {
     "BEGIN:VEVENT",
     "UID:" + viec.id + "@viec-hom-nay",
     "DTSTAMP:" + new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z",
-    "DTSTART:" + thoiDiem,
-    "DURATION:PT30M",
+    "DTSTART:" + ngayGon + "T" + gioGon(viec.gio),
+    viec.gioKetThuc ? "DTEND:" + ngayGon + "T" + gioGon(viec.gioKetThuc) : "DURATION:PT30M",
     "SUMMARY:" + chu(viec.ten),
-    "DESCRIPTION:" + chu(viec.ghiChu || ""),
+    "DESCRIPTION:" + chu(moTa),
     "BEGIN:VALARM",
     "ACTION:DISPLAY",
     "DESCRIPTION:" + chu(viec.ten),
