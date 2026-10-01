@@ -1,0 +1,165 @@
+/* ===== MÀU SẮC CHUNG (đổi ở đây là đổi cả app) ===== */
+:root {
+  --mau-chinh: #2f6fed;
+  --mau-nen: #f4f6fb;
+  --mau-the: #ffffff;
+  --mau-chu: #1d2433;
+  --mau-chu-nhat: #6b7385;
+  --mau-xong: #2fa36b;
+  --mau-xoa: #e5484d;
+  --mau-vien: #e2e6ef;
+}
+
+/* Tự đổi sang nền tối nếu điện thoại đang bật chế độ tối */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mau-nen: #12151c;
+    --mau-the: #1d222c;
+    --mau-chu: #eef1f7;
+    --mau-chu-nhat: #9aa3b5;
+    --mau-vien: #2c3240;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--mau-nen);
+  color: var(--mau-chu);
+  /* chừa chỗ phía dưới cho thanh tab và nút + */
+  padding-bottom: 140px;
+}
+
+/* ===== PHẦN ĐẦU ===== */
+.dau-trang {
+  padding: 24px 16px 8px;
+  padding-top: calc(24px + env(safe-area-inset-top));
+}
+.dau-trang h1 { margin: 0; font-size: 26px; }
+.dau-trang p { margin: 4px 0 0; color: var(--mau-chu-nhat); }
+
+main { padding: 8px 16px; }
+
+/* ===== MỘT CÔNG VIỆC TRONG DANH SÁCH ===== */
+.viec {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--mau-the);
+  border: 1px solid var(--mau-vien);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+/* Vòng tròn đánh dấu xong */
+.o-tich {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--mau-chu-nhat);
+  background: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+.viec.da-xong .o-tich {
+  background: var(--mau-xong);
+  border-color: var(--mau-xong);
+}
+
+.noi-dung { flex: 1; min-width: 0; cursor: pointer; }
+.noi-dung .ten { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.noi-dung .gio { color: var(--mau-chinh); font-size: 14px; margin-top: 2px; }
+.noi-dung .ghi-chu {
+  color: var(--mau-chu-nhat);
+  font-size: 14px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.viec.da-xong .ten { text-decoration: line-through; color: var(--mau-chu-nhat); }
+
+.trong {
+  text-align: center;
+  color: var(--mau-chu-nhat);
+  padding: 48px 16px;
+}
+
+/* ===== NÚT TRÒN "+" ===== */
+.nut-them {
+  position: fixed;
+  right: 20px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: none;
+  background: var(--mau-chinh);
+  color: white;
+  font-size: 34px;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgba(47, 111, 237, 0.4);
+  cursor: pointer;
+}
+
+/* ===== KHUNG NHẬP (trượt lên từ dưới) ===== */
+.nen-mo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+.khung-nhap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--mau-the);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.khung-nhap h2 { margin: 0 0 12px; font-size: 20px; }
+.khung-nhap label {
+  display: block;
+  font-size: 14px;
+  color: var(--mau-chu-nhat);
+  margin-bottom: 12px;
+}
+.khung-nhap input,
+.khung-nhap textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px;
+  font-size: 16px; /* 16px để iPhone không tự phóng to khi gõ */
+  font-family: inherit;
+  color: var(--mau-chu);
+  background: var(--mau-nen);
+  border: 1px solid var(--mau-vien);
+  border-radius: 10px;
+}
+.hang-doi { display: flex; gap: 10px; }
+.hang-doi label { flex: 1; }
+
+.hang-nut { display: flex; gap: 10px; margin-top: 8px; }
+.nut {
+  flex: 1;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.nut-chinh { background: var(--mau-chinh); color: white; }
+.nut-phu { background: var(--mau-nen); color: var(--mau-chu); }
+.nut-xoa { background: none; color: var(--mau-xoa); }
+
+/* Dùng để ẩn một phần tử */
+.an { display: none !important; }

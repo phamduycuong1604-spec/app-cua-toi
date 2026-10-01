@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Việc Hôm Nay</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- PHẦN ĐẦU: tên app và ngày hôm nay -->
+  <header class="dau-trang">
+    <h1>Việc Hôm Nay</h1>
+    <p id="ngay-hien-tai"></p>
+  </header>
+
+  <!-- PHẦN GIỮA: danh sách công việc -->
+  <main>
+    <div id="danh-sach"></div>
+  </main>
+
+  <!-- NÚT TRÒN "+" để thêm việc mới (đặt góc dưới bên phải, dễ bấm bằng ngón cái) -->
+  <button id="nut-them" class="nut-them" aria-label="Thêm việc mới">+</button>
+
+  <!-- KHUNG NHẬP: hiện lên từ dưới khi thêm hoặc sửa việc -->
+  <div id="nen-mo" class="nen-mo an"></div>
+  <form id="khung-nhap" class="khung-nhap an">
+    <h2 id="tieu-de-khung">Thêm việc mới</h2>
+
+    <label>Tên công việc
+      <input id="o-ten" type="text" required placeholder="Ví dụ: Đi chợ">
+    </label>
+
+    <div class="hang-doi">
+      <label>Ngày
+        <input id="o-ngay" type="date" required>
+      </label>
+      <label>Giờ
+        <input id="o-gio" type="time">
+      </label>
+    </div>
+
+    <label>Ghi chú
+      <textarea id="o-ghi-chu" rows="3" placeholder="Không bắt buộc"></textarea>
+    </label>
+
+    <div class="hang-nut">
+      <button type="button" id="nut-xoa" class="nut nut-xoa">Xóa</button>
+      <button type="button" id="nut-huy" class="nut nut-phu">Hủy</button>
+      <button type="submit" class="nut nut-chinh">Lưu</button>
+    </div>
+  </form>
+
+  <script src="app.js"></script>
+</body>
+</html>
