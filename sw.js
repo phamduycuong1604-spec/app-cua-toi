@@ -7,7 +7,7 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v11";
+const PHIEN_BAN = "viec-hom-nay-v12";
 
 const CAC_FILE = [
   "./",

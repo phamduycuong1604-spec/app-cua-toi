@@ -13,6 +13,9 @@
 const SO_THU_CHI = "so-thu-chi";
 const CAC_NGUON = ["TikTok", "Facebook", "Instagram", "Zalo", "Khác"];
 
+// Các mục chi: bấm 1 cái là điền nội dung (số tiền tự nhập)
+const CAC_MUC_CHI = ["Mua sắm", "Phần mềm", "Cafe", "Đá bóng", "Ăn", "Cho vợ", "Khác"];
+
 // Các gói màu bán sẵn: bấm 1 cái là điền tên + giá.
 // gia: null = combo tùy biến, tự gõ giá. Muốn thêm/bớt gói thì sửa danh sách này.
 const CAC_GOI_MAU = [
@@ -133,6 +136,9 @@ function veThuChi() {
   conLai.textContent = (tongThu - tongChi < 0 ? "−" : "") + dinhDangTien(Math.abs(tongThu - tongChi));
 
   vePhanPreset(cacKhoan.filter((k) => k.loai === "preset"));
+  // Chi theo mục: nhiều tiền nhất lên đầu
+  const theoMuc = gomNhom(cacKhoan.filter((k) => k.loai === "chi"), (k) => k.noiDung).sort((a, b) => b.giaTri - a.giaTri);
+  veThanhNgang(document.getElementById("theo-muc-chi"), theoMuc);
   veChiaNho(cacKhoan);
   veDanhSachKhoan(cacKhoan);
 }
@@ -300,7 +306,29 @@ function chonLoai(loai) {
   document.querySelectorAll(".nut-loai").forEach((n) => n.classList.toggle("dang-chon", n.dataset.loai === loai));
   document.getElementById("phan-preset").classList.toggle("an", loai !== "preset");
   document.getElementById("phan-thu-chi-khac").classList.toggle("an", loai === "preset");
+  document.getElementById("phan-muc-chi").classList.toggle("an", loai !== "chi");
+  tc("noi-dung").placeholder = loai === "chi" ? "Hoặc gõ nội dung khác" : "Ví dụ: Dạy chỉnh ảnh";
+  veChonMucChi();
 }
+
+// Vẽ các nút mục chi; mục đang chọn được tô màu
+function veChonMucChi() {
+  const khung = document.getElementById("chon-muc-chi");
+  khung.innerHTML = "";
+  CAC_MUC_CHI.forEach((muc) => {
+    const nut = document.createElement("button");
+    nut.type = "button";
+    nut.className = "nut-nguon" + (tc("noi-dung").value.trim() === muc ? " dang-chon" : "");
+    nut.textContent = muc;
+    nut.onclick = () => {
+      tc("noi-dung").value = muc;
+      veChonMucChi();
+      tc("so-tien").focus(); // nhảy tới ô số tiền để gõ luôn
+    };
+    khung.appendChild(nut);
+  });
+}
+tc("noi-dung").addEventListener("input", veChonMucChi);
 document.querySelectorAll(".nut-loai").forEach((nut) => (nut.onclick = () => chonLoai(nut.dataset.loai)));
 
 // Vẽ các nút gói màu; gói đang chọn được tô màu
@@ -375,6 +403,7 @@ function moKhungThuChi(khoan) {
   nguonDangChon = khoan && khoan.loai === "preset" ? khoan.nguon : CAC_NGUON[0];
   veChonNguon();
   veChonGoi();
+  veChonMucChi();
   capNhatThanhTien();
   capNhatGoiYPreset();
   tc("xoa").classList.toggle("an", !khoan);
