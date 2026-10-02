@@ -20,6 +20,15 @@ function moCaiDat() {
   cd("ten").textContent = daDangNhap ? `Đang đăng nhập: ${toi.ten}${toi.quanTri ? " (quản trị viên)" : ""}` : "";
   cd("mk-cu").value = cd("mk-moi").value = "";
 
+  // Bản sao lưu cất lúc đăng nhập (nếu có)
+  const saoLuu = docSo("sao-luu-may");
+  cd("phan-sao-luu").classList.toggle("an", !saoLuu);
+  if (saoLuu) {
+    cd("sao-luu-mo-ta").textContent =
+      `Cất lúc ${new Date(saoLuu.luc).toLocaleString("vi-VN")}: ${(saoLuu.viec || []).length} việc, ` +
+      `${(saoLuu.thuChi || []).length} khoản thu chi. Gộp vào sẽ không xóa dữ liệu đang có, mục nào đã có thì bỏ qua.`;
+  }
+
   goiMauDangSua = caiDat.goiMau.map((g) => ({ ...g }));
   mucChiDangSua = [...caiDat.mucChi];
   veSuaGoiMau();
@@ -52,6 +61,13 @@ cd("doi-mk").onclick = async () => {
 
 cd("dang-xuat").onclick = () => {
   if (confirm("Đăng xuất khỏi máy này? Dữ liệu vẫn được giữ trên tài khoản.")) dangXuat();
+};
+
+
+cd("khoi-phuc").onclick = () => {
+  if (!confirm("Gộp bản sao lưu trên máy vào dữ liệu hiện tại?")) return;
+  const soMoi = khoiPhucSaoLuu();
+  alert(soMoi ? `Đã khôi phục ${soMoi} mục! Dữ liệu sẽ tự gửi lên tài khoản.` : "Mọi mục trong bản sao lưu đều đã có sẵn, không cần thêm gì.");
 };
 
 
