@@ -1,4 +1,4 @@
-# Việc Hôm Nay
+# THƯ KÍ OF PHA
 
 App quản lý công việc hàng ngày cho điện thoại (cài được vào màn hình chính).
 
