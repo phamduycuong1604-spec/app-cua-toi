@@ -493,7 +493,7 @@ function coMayChu() {
 }
 
 function daDangKyMayChu() {
-  return coMayChu() && localStorage.getItem("da-dang-ky-may-chu") === "1";
+  return coMayChu() && localStorage.getItem("da-dang-ky-may-chu-2") === "1";
 }
 
 // Lấy sẵn "khóa" của máy chủ khi mở app, để lúc bấm 🔔 đăng ký được ngay
@@ -514,8 +514,9 @@ async function dangKyMayChu() {
     const dangKy =
       (await nguoiGiuKho.pushManager.getSubscription()) ||
       (await nguoiGiuKho.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: khoaByte }));
-    localStorage.setItem("da-dang-ky-may-chu", "1");
-    await guiLenMayChu(dangKy);
+    if (!(await guiLenMayChu(dangKy))) throw new Error("máy chủ không nhận được lịch nhắc");
+    localStorage.setItem("da-dang-ky-may-chu-2", "1");
+    alert("Đã bật thông báo! Từ giờ máy chủ sẽ nhắc bạn cả khi app đang tắt.");
   } catch (loi) {
     alert("Chưa bật được thông báo từ máy chủ. Hãy kiểm tra mạng rồi bấm 🔔 lại nhé.\n(" + loi.message + ")");
   }
@@ -526,18 +527,19 @@ let henDongBo = null;
 function dongBoMayChu() {
   if (!daDangKyMayChu()) return;
   clearTimeout(henDongBo);
-  henDongBo = setTimeout(guiLenMayChu, 1000);
+  henDongBo = setTimeout(() => guiLenMayChu(), 1000);
 }
 
+// Trả về true nếu máy chủ đã nhận
 async function guiLenMayChu(dangKy) {
   try {
     const nguoiGiuKho = await navigator.serviceWorker.ready;
     dangKy = dangKy || (await nguoiGiuKho.pushManager.getSubscription());
     if (!dangKy) {
       // Điện thoại đã tắt thông báo → cho hiện lại nút 🔔
-      localStorage.removeItem("da-dang-ky-may-chu");
+      localStorage.removeItem("da-dang-ky-may-chu-2");
       capNhatNutBatNhac();
-      return;
+      return false;
     }
 
     // Chỉ gửi các lần nhắc chưa tới giờ của việc chưa xong
@@ -552,13 +554,15 @@ async function guiLenMayChu(dangKy) {
       });
     });
 
-    await fetch(DIA_CHI_MAY_CHU + "/dong-bo", {
+    const ketQua = await fetch(DIA_CHI_MAY_CHU + "/dong-bo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dangKy: dangKy.toJSON(), cacNhac }),
     });
+    return ketQua.ok;
   } catch (loi) {
     // Mất mạng: lần sửa sau hoặc lần mở app sau sẽ gửi lại
+    return false;
   }
 }
 
