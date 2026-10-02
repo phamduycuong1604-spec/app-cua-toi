@@ -9,6 +9,8 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `index.html` | Bộ khung: các nút, ô nhập |
 | `style.css` | Màu sắc, kích thước, bố cục |
 | `app.js` | "Bộ não" tab Lịch việc: thêm/sửa/xóa, lưu dữ liệu, nhắc lịch |
+| `tai-khoan.js` | Đăng nhập, đăng xuất, tự đồng bộ dữ liệu với máy chủ |
+| `cai-dat.js` | Trang ⚙️ Cài đặt: đổi mật khẩu, sửa gói màu/mục chi, quản lý tài khoản |
 | `thu-chi.js` | "Bộ não" tab Thu chi: bán preset, thu khác, chi, tổng hợp theo ngày/tháng/năm |
 | `sw.js` | Chạy ngầm: giúp app mở khi mất mạng và hiện thông báo |
 | `manifest.json` | Tên, biểu tượng khi cài vào màn hình chính |
@@ -54,3 +56,11 @@ Làm một lần:
    thêm 2 chìa khóa: `CLOUDFLARE_ACCOUNT_ID` và `CLOUDFLARE_API_TOKEN`.
 6. Vào mục **Actions** → **Triển khai máy chủ nhắc giờ** → **Run workflow**.
 7. Chạy xong (dấu ✓ xanh), chờ 2–3 phút, mở app → bấm nút chuông 🔔 → **Cho phép**.
+
+## Tài khoản người dùng
+
+- Chỉ quản trị viên cấp tài khoản (⚙️ Cài đặt → Quản lý tài khoản).
+- Tài khoản quản trị đầu tiên: mở app → nhập tên, mật khẩu và **mã khởi tạo**
+  (chính là `CLOUDFLARE_ACCOUNT_ID` đã lưu trong GitHub Secrets).
+- Dữ liệu mỗi người lưu trên máy chủ (Cloudflare D1), đổi máy hay cài lại app vẫn còn.
+- Mật khẩu chỉ lưu dạng đã băm (PBKDF2); sai 5 lần bị khóa 15 phút.
