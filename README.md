@@ -8,7 +8,8 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 |---|---|
 | `index.html` | Bộ khung: các nút, ô nhập |
 | `style.css` | Màu sắc, kích thước, bố cục |
-| `app.js` | "Bộ não": thêm/sửa/xóa, lưu dữ liệu, nhắc lịch |
+| `app.js` | "Bộ não" tab Lịch việc: thêm/sửa/xóa, lưu dữ liệu, nhắc lịch |
+| `thu-chi.js` | "Bộ não" tab Thu chi: bán preset, thu khác, chi, tổng hợp theo ngày/tháng/năm |
 | `sw.js` | Chạy ngầm: giúp app mở khi mất mạng và hiện thông báo |
 | `manifest.json` | Tên, biểu tượng khi cài vào màn hình chính |
 | `icons/` | Biểu tượng app |
