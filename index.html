@@ -35,6 +35,9 @@
   <!-- Dòng nhắc nhỏ hiện ngay trong app khi đến giờ -->
   <div id="loi-nhac" class="loi-nhac an"></div>
 
+  <!-- ===== TAB 1: LỊCH VIỆC ===== -->
+  <div id="trang-lich">
+
   <!-- LỊCH THÁNG -->
   <section class="the-lich">
     <div class="thanh-thang">
@@ -59,6 +62,61 @@
     </div>
     <div id="dong-thoi-gian"></div>
   </section>
+
+  </div>
+
+  <!-- ===== TAB 2: THU CHI ===== -->
+  <div id="trang-thu-chi" class="an">
+    <!-- Chọn xem theo Ngày / Tháng / Năm -->
+    <div class="chon-ky">
+      <button class="nut-ky" data-ky="ngay">Ngày</button>
+      <button class="nut-ky dang-chon" data-ky="thang">Tháng</button>
+      <button class="nut-ky" data-ky="nam">Năm</button>
+    </div>
+    <div class="thanh-thang thanh-ky">
+      <button id="ky-truoc" class="nut-tron" aria-label="Kỳ trước">‹</button>
+      <h2 id="ten-ky"></h2>
+      <button id="ky-sau" class="nut-tron" aria-label="Kỳ sau">›</button>
+    </div>
+
+    <!-- 3 ô tổng: thu, chi, còn lại -->
+    <div class="cac-o-tong">
+      <div class="o-tong o-thu"><span>Tổng thu</span><b id="tong-thu"></b></div>
+      <div class="o-tong o-chi"><span>Tổng chi</span><b id="tong-chi"></b></div>
+      <div class="o-tong o-con-lai"><span>Còn lại</span><b id="con-lai"></b></div>
+    </div>
+
+    <!-- Riêng phần bán preset -->
+    <section class="the-preset">
+      <div class="dau-preset">
+        <h3>🎨 Bán preset</h3>
+        <span id="tom-tat-preset" class="tom-tat"></span>
+      </div>
+      <b id="doanh-thu-preset" class="so-lon"></b>
+      <p class="nhan-nho">Theo nguồn khách</p>
+      <div id="theo-nguon"></div>
+      <p class="nhan-nho">Preset bán chạy</p>
+      <div id="theo-preset"></div>
+    </section>
+
+    <!-- Doanh thu từng ngày (khi xem tháng) / từng tháng (khi xem năm) -->
+    <section id="khung-chia-nho" class="the-preset">
+      <h3 id="tieu-de-chia-nho"></h3>
+      <div id="chia-nho"></div>
+    </section>
+
+    <!-- Danh sách các khoản trong kỳ -->
+    <section class="phan-ngay">
+      <p class="nhan-nho">Các khoản thu chi</p>
+      <div id="danh-sach-thu-chi"></div>
+    </section>
+  </div>
+
+  <!-- THANH TAB Ở ĐÁY: chuyển giữa Lịch việc và Thu chi -->
+  <nav class="thanh-tab">
+    <button class="tab dang-chon" data-trang="trang-lich">📅<span>Lịch việc</span></button>
+    <button class="tab" data-trang="trang-thu-chi">💰<span>Thu chi</span></button>
+  </nav>
 
   <!-- NÚT TRÒN "+" để thêm việc mới (góc dưới bên phải, dễ bấm bằng ngón cái) -->
   <button id="nut-them" class="nut-them" aria-label="Thêm việc mới">+</button>
@@ -109,6 +167,64 @@
   </form>
 
   <script src="may-chu.js"></script>
+  <!-- KHUNG NHẬP THU CHI -->
+  <div id="nen-mo-tc" class="nen-mo an"></div>
+  <form id="khung-thu-chi" class="khung-nhap an">
+    <div class="tay-cam"></div>
+    <h2 id="tieu-de-thu-chi">Thêm khoản mới</h2>
+
+    <!-- Chọn loại: bán preset / thu khác / chi -->
+    <div class="chon-loai">
+      <button type="button" class="nut-loai dang-chon" data-loai="preset">🎨 Bán preset</button>
+      <button type="button" class="nut-loai" data-loai="thu">➕ Thu khác</button>
+      <button type="button" class="nut-loai" data-loai="chi">➖ Chi</button>
+    </div>
+
+    <label>Ngày
+      <input id="tc-ngay" type="date" required>
+    </label>
+
+    <!-- Phần riêng cho bán preset -->
+    <div id="phan-preset">
+      <label>Tên preset
+        <input id="tc-ten-preset" type="text" list="ds-ten-preset" placeholder="Ví dụ: Preset Tone Hàn">
+        <datalist id="ds-ten-preset"></datalist>
+      </label>
+      <div class="hang-doi">
+        <label>Số lượng
+          <input id="tc-so-luong" type="number" inputmode="numeric" min="1" value="1">
+        </label>
+        <label>Giá gói (đ)
+          <input id="tc-gia-goi" type="number" inputmode="numeric" min="0" placeholder="99000">
+        </label>
+      </div>
+      <div class="nhan">Nguồn khách</div>
+      <div id="chon-nguon" class="chon-nguon"></div>
+      <p class="thanh-tien">Thành tiền: <b id="tc-thanh-tien">0 đ</b></p>
+    </div>
+
+    <!-- Phần cho thu khác / chi -->
+    <div id="phan-thu-chi-khac" class="an">
+      <label>Nội dung
+        <input id="tc-noi-dung" type="text" placeholder="Ví dụ: Tiền quảng cáo">
+      </label>
+      <label>Số tiền (đ)
+        <input id="tc-so-tien" type="number" inputmode="numeric" min="0" placeholder="200000">
+      </label>
+    </div>
+
+    <label>Ghi chú
+      <input id="tc-ghi-chu" type="text" placeholder="Không bắt buộc">
+    </label>
+
+    <div class="hang-nut">
+      <button type="button" id="tc-xoa" class="nut nut-xoa">Xóa</button>
+      <button type="button" id="tc-huy" class="nut nut-phu">Hủy</button>
+      <button type="submit" class="nut nut-chinh">Lưu</button>
+    </div>
+  </form>
+
   <script src="app.js"></script>
+  <script src="thu-chi.js"></script>
 </body>
 </html>

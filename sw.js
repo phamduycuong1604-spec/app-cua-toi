@@ -7,13 +7,14 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v8";
+const PHIEN_BAN = "viec-hom-nay-v9";
 
 const CAC_FILE = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./thu-chi.js",
   "./may-chu.js",
   "./manifest.json",
   "./icons/icon-180.png",
