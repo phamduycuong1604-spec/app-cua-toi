@@ -1,0 +1,13 @@
+# Cấu hình "máy chủ nhắc giờ" chạy trên Cloudflare Workers (miễn phí)
+name = "viec-hom-nay-nhac"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Mỗi phút máy chủ thức dậy một lần để xem có việc nào cần nhắc không
+[triggers]
+crons = ["* * * * *"]
+
+# Cơ sở dữ liệu D1 (lần đầu triển khai Cloudflare sẽ tự tạo)
+[[d1_databases]]
+binding = "DB"

@@ -28,6 +28,7 @@ function docDanhSach() {
 
 function luuDanhSach() {
   localStorage.setItem(TEN_SO, JSON.stringify(danhSachViec));
+  dongBoMayChu(); // gửi lịch nhắc mới lên máy chủ (nếu đã bật)
 }
 
 let danhSachViec = docDanhSach();
@@ -482,7 +483,87 @@ if ("serviceWorker" in navigator) {
 }
 
 
-// ----- 10. NHẮC LỊCH -----
+// ----- 10. MÁY CHỦ NHẮC GIỜ -----
+// Gửi danh sách "lúc nào nhắc, nhắc gì" lên máy chủ. Đến giờ, máy chủ gửi
+// thông báo về điện thoại kể cả khi app đang tắt hẳn.
+// (DIA_CHI_MAY_CHU nằm trong file may-chu.js)
+
+function coMayChu() {
+  return typeof DIA_CHI_MAY_CHU === "string" && DIA_CHI_MAY_CHU !== "" && "PushManager" in window;
+}
+
+function daDangKyMayChu() {
+  return coMayChu() && localStorage.getItem("da-dang-ky-may-chu") === "1";
+}
+
+// Lấy sẵn "khóa" của máy chủ khi mở app, để lúc bấm 🔔 đăng ký được ngay
+let khoaMayChu = null;
+if (coMayChu()) {
+  fetch(DIA_CHI_MAY_CHU + "/khoa")
+    .then((kq) => kq.json())
+    .then((dl) => (khoaMayChu = dl.khoa))
+    .catch(() => {});
+}
+
+// Đăng ký điện thoại này với máy chủ (cần bấm nút chuông 🔔)
+async function dangKyMayChu() {
+  try {
+    const nguoiGiuKho = await navigator.serviceWorker.ready;
+    const khoa = khoaMayChu || (await (await fetch(DIA_CHI_MAY_CHU + "/khoa")).json()).khoa;
+    const khoaByte = Uint8Array.from(atob(khoa.replace(/-/g, "+").replace(/_/g, "/")), (k) => k.charCodeAt(0));
+    const dangKy =
+      (await nguoiGiuKho.pushManager.getSubscription()) ||
+      (await nguoiGiuKho.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: khoaByte }));
+    localStorage.setItem("da-dang-ky-may-chu", "1");
+    await guiLenMayChu(dangKy);
+  } catch (loi) {
+    alert("Chưa bật được thông báo từ máy chủ. Hãy kiểm tra mạng rồi bấm 🔔 lại nhé.\n(" + loi.message + ")");
+  }
+}
+
+// Đợi 1 giây sau lần sửa cuối rồi mới gửi, tránh gửi liên tục khi bấm nhiều
+let henDongBo = null;
+function dongBoMayChu() {
+  if (!daDangKyMayChu()) return;
+  clearTimeout(henDongBo);
+  henDongBo = setTimeout(guiLenMayChu, 1000);
+}
+
+async function guiLenMayChu(dangKy) {
+  try {
+    const nguoiGiuKho = await navigator.serviceWorker.ready;
+    dangKy = dangKy || (await nguoiGiuKho.pushManager.getSubscription());
+    if (!dangKy) {
+      // Điện thoại đã tắt thông báo → cho hiện lại nút 🔔
+      localStorage.removeItem("da-dang-ky-may-chu");
+      capNhatNutBatNhac();
+      return;
+    }
+
+    // Chỉ gửi các lần nhắc chưa tới giờ của việc chưa xong
+    const bayGio = Date.now();
+    const cacNhac = [];
+    danhSachViec.forEach((viec) => {
+      if (viec.xong || !viec.gio) return;
+      cacMocNhac(viec).forEach((moc) => {
+        if (moc.luc.getTime() > bayGio) {
+          cacNhac.push({ luc: moc.luc.getTime(), tieuDe: moc.tieuDe, noiDung: moc.noiDung, the: viec.id + moc.co });
+        }
+      });
+    });
+
+    await fetch(DIA_CHI_MAY_CHU + "/dong-bo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dangKy: dangKy.toJSON(), cacNhac }),
+    });
+  } catch (loi) {
+    // Mất mạng: lần sửa sau hoặc lần mở app sau sẽ gửi lại
+  }
+}
+
+
+// ----- 11. NHẮC LỊCH -----
 // Cứ 20 giây app xem một lần: việc nào đến giờ mà chưa xong, chưa nhắc → nhắc.
 // LƯU Ý: điện thoại chỉ cho web app nhắc khi app đang mở hoặc vừa chạy ngầm.
 // Nếu tắt hẳn app, hãy dùng nút "Thêm vào lịch điện thoại" để chắc chắn được nhắc.
@@ -490,20 +571,25 @@ if ("serviceWorker" in navigator) {
 const nutBatNhac = document.getElementById("nut-bat-nhac");
 const loiNhac = document.getElementById("loi-nhac");
 
-// Hiện nút chuông nếu chưa cho phép thông báo
+// Hiện nút chuông nếu chưa cho phép thông báo, hoặc chưa đăng ký với máy chủ nhắc giờ
 function capNhatNutBatNhac() {
-  const coTheBat = "Notification" in window && Notification.permission === "default";
-  nutBatNhac.classList.toggle("an", !coTheBat);
+  const coThongBao = "Notification" in window;
+  const chuaHoi = coThongBao && Notification.permission === "default";
+  const chuaDangKy = coThongBao && coMayChu() && Notification.permission !== "denied" && !daDangKyMayChu();
+  nutBatNhac.classList.toggle("an", !(chuaHoi || chuaDangKy));
 }
 
 nutBatNhac.onclick = async () => {
-  await Notification.requestPermission();
+  if ((await Notification.requestPermission()) === "granted" && coMayChu()) {
+    await dangKyMayChu();
+  }
   capNhatNutBatNhac();
 };
 
 // Gửi một thông báo lên điện thoại + hiện dòng nhắc trong app
 async function guiThongBao(viec, tieuDe, noiDung) {
-  if ("Notification" in window && Notification.permission === "granted") {
+  // Đã đăng ký máy chủ thì máy chủ sẽ gửi thông báo, ở đây chỉ hiện dòng nhắc trong app
+  if ("Notification" in window && Notification.permission === "granted" && !daDangKyMayChu()) {
     const nguoiGiuKho = await navigator.serviceWorker.ready;
     nguoiGiuKho.showNotification(tieuDe, {
       body: noiDung,
@@ -597,6 +683,7 @@ function kiemTraNhacViec() {
 
 capNhatNutBatNhac();
 kiemTraNhacViec();
+dongBoMayChu(); // mỗi lần mở app gửi lại lịch nhắc cho chắc
 setInterval(kiemTraNhacViec, 20000);
 // Mở lại app từ nền thì kiểm tra ngay
 document.addEventListener("visibilitychange", () => {
@@ -604,7 +691,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
-// ----- 11. THÊM VÀO LỊCH ĐIỆN THOẠI -----
+// ----- 12. THÊM VÀO LỊCH ĐIỆN THOẠI -----
 // Tạo một file lịch (.ics). Mở file này, điện thoại sẽ hỏi thêm vào ứng dụng Lịch,
 // và Lịch sẽ nhắc đúng giờ kể cả khi app này đang tắt.
 

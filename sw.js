@@ -7,13 +7,14 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v5";
+const PHIEN_BAN = "viec-hom-nay-v6";
 
 const CAC_FILE = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./may-chu.js",
   "./manifest.json",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
@@ -47,6 +48,21 @@ self.addEventListener("fetch", (e) => {
         return ketQua;
       })
       .catch(() => caches.match(e.request))
+  );
+});
+
+// Máy chủ nhắc giờ gửi thông báo tới (kể cả khi app đang tắt) → hiện lên điện thoại
+self.addEventListener("push", (e) => {
+  let tin = {};
+  try {
+    tin = e.data ? e.data.json() : {};
+  } catch (loi) {}
+  e.waitUntil(
+    self.registration.showNotification(tin.tieuDe || "Việc Hôm Nay", {
+      body: tin.noiDung || "",
+      icon: "icons/icon-192.png",
+      tag: tin.the,
+    })
   );
 });
 

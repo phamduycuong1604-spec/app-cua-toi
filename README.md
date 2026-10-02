@@ -12,6 +12,9 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `sw.js` | Chạy ngầm: giúp app mở khi mất mạng và hiện thông báo |
 | `manifest.json` | Tên, biểu tượng khi cài vào màn hình chính |
 | `icons/` | Biểu tượng app |
+| `may-chu.js` | Địa chỉ máy chủ nhắc giờ (tự động điền) |
+| `may-chu/` | Máy chủ nhắc giờ chạy trên Cloudflare: gửi thông báo kể cả khi app tắt |
+| `.github/workflows/may-chu.yml` | Tự động đưa máy chủ lên Cloudflare |
 
 ## Khi sửa code
 
@@ -35,3 +38,18 @@ Mỗi việc có giờ được nhắc lúc **bắt đầu**. Nếu có giờ k�
 
 Web app chỉ nhắc được khi app đang mở hoặc vừa chạy ngầm. Muốn chắc chắn được nhắc
 kể cả khi tắt hẳn app: mở việc đó → bấm **📅 Thêm vào lịch điện thoại**.
+
+## Máy chủ nhắc giờ (thông báo cả khi tắt app)
+
+Làm một lần:
+
+1. Tạo tài khoản miễn phí tại https://dash.cloudflare.com/sign-up
+2. Vào **Workers & Pages** một lần (để Cloudflare tạo tên miền `workers.dev`).
+3. Lấy **Account ID**: ở trang Workers & Pages, cột bên phải có dòng **Account ID** → bấm sao chép.
+4. Tạo **API Token**: ảnh đại diện → **My Profile** → **API Tokens** → **Create Token** →
+   mẫu **Edit Cloudflare Workers** → **Use template**. Ở phần Permissions bấm **+ Add more**,
+   thêm dòng **Account · D1 · Edit**. Bấm **Continue to summary** → **Create Token** → sao chép.
+5. Trên GitHub: **Settings** → **Secrets and variables** → **Actions** → **New repository secret**,
+   thêm 2 chìa khóa: `CLOUDFLARE_ACCOUNT_ID` và `CLOUDFLARE_API_TOKEN`.
+6. Vào mục **Actions** → **Triển khai máy chủ nhắc giờ** → **Run workflow**.
+7. Chạy xong (dấu ✓ xanh), chờ 2–3 phút, mở app → bấm nút chuông 🔔 → **Cho phép**.
