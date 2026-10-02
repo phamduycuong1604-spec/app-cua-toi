@@ -34,7 +34,7 @@ export default {
       if (duongDan === "/trang-thai" && yeuCau.method === "GET") {
         return traLoi(await xemTrangThai(env));
       }
-      if (duongDan === "/") return traLoi({ ok: true, ten: "Máy chủ nhắc giờ - THƯ KÍ OF PHA" });
+      if (duongDan === "/") return traLoi({ ok: true, ten: "Máy chủ nhắc giờ - PHAHA" });
       return traLoi({ loi: "Không tìm thấy" }, 404);
     } catch (loi) {
       return traLoi({ loi: String(loi && loi.message ? loi.message : loi) }, 400);

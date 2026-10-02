@@ -58,7 +58,7 @@ self.addEventListener("push", (e) => {
     tin = e.data ? e.data.json() : {};
   } catch (loi) {}
   e.waitUntil(
-    self.registration.showNotification(tin.tieuDe || "THƯ KÍ OF PHA", {
+    self.registration.showNotification(tin.tieuDe || "PHAHA", {
       body: tin.noiDung || "",
       icon: "icons/icon-192.png",
       tag: tin.the,
