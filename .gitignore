@@ -1,0 +1,4 @@
+# File tạm khi chạy máy chủ trên máy
+may-chu/.wrangler/
+may-chu/node_modules/
+may-chu/ket-qua.txt

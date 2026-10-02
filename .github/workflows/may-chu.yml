@@ -1,0 +1,68 @@
+# Tự động đưa "máy chủ nhắc giờ" (thư mục may-chu/) lên Cloudflare,
+# rồi ghi địa chỉ máy chủ vào file may-chu.js để app biết mà kết nối.
+#
+# Cần 2 "chìa khóa" trong Settings → Secrets and variables → Actions:
+#   CLOUDFLARE_API_TOKEN   và   CLOUDFLARE_ACCOUNT_ID
+name: Triển khai máy chủ nhắc giờ
+
+on:
+  push:
+    branches: [main]
+    paths: ["may-chu/**", ".github/workflows/may-chu.yml"]
+  workflow_dispatch: # cho phép bấm chạy tay trong mục Actions
+
+permissions:
+  contents: write # để ghi địa chỉ máy chủ vào may-chu.js
+  pages: write    # để yêu cầu GitHub Pages dựng lại trang
+
+concurrency: may-chu
+
+jobs:
+  trien-khai:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Kiểm tra đã có chìa khóa Cloudflare chưa
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Chưa thêm CLOUDFLARE_API_TOKEN và CLOUDFLARE_ACCOUNT_ID vào Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Đưa máy chủ lên Cloudflare
+        working-directory: may-chu
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.146.0 deploy 2>&1 | tee ket-qua.txt
+
+      - name: Ghi địa chỉ máy chủ vào app
+        run: |
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' may-chu/ket-qua.txt | head -n 1)
+          if [ -z "$URL" ]; then
+            echo "::error::Không tìm thấy địa chỉ máy chủ. Hãy mở trang Workers & Pages trên Cloudflare một lần để tạo tên miền workers.dev, rồi chạy lại."
+            exit 1
+          fi
+          echo "Địa chỉ máy chủ: $URL"
+          sed -i "s|^const DIA_CHI_MAY_CHU = .*|const DIA_CHI_MAY_CHU = \"$URL\";|" may-chu.js
+          if git diff --quiet -- may-chu.js; then
+            echo "Địa chỉ không đổi, không cần cập nhật app."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Tự động: ghi địa chỉ máy chủ nhắc giờ vào app" -- may-chu.js
+          git push
+          # Nhờ GitHub Pages dựng lại trang để điện thoại nhận địa chỉ mới
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/builds" \
+            || echo "Không yêu cầu được, GitHub Pages sẽ tự dựng lại sau."
