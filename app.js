@@ -430,7 +430,9 @@ khungNhap.onsubmit = (suKien) => {
     // Sửa: ghi đè thông tin mới lên việc cũ
     const viec = danhSachViec.find((v) => v.id === idDangSua);
     // Đổi ngày hoặc giờ thì cho phép nhắc lại theo giờ mới
-    if (viec.ngay !== thongTin.ngay || viec.gio !== thongTin.gio) viec.daNhac = false;
+    if (viec.ngay !== thongTin.ngay || viec.gio !== thongTin.gio || viec.gioKetThuc !== thongTin.gioKetThuc) {
+      viec.daNhac = viec.daNhacGiua = viec.daNhacKetThuc = false;
+    }
     Object.assign(viec, thongTin);
   } else {
     // Thêm mới: tạo id riêng dựa trên thời điểm hiện tại
@@ -500,22 +502,65 @@ nutBatNhac.onclick = async () => {
 };
 
 // Gửi một thông báo lên điện thoại + hiện dòng nhắc trong app
-async function guiThongBao(viec) {
-  const tieuDe = "⏰ Đến giờ: " + viec.ten;
-  const noiDung = viec.ghiChu || "Lúc " + viec.gio;
-
+async function guiThongBao(viec, tieuDe, noiDung) {
   if ("Notification" in window && Notification.permission === "granted") {
     const nguoiGiuKho = await navigator.serviceWorker.ready;
     nguoiGiuKho.showNotification(tieuDe, {
       body: noiDung,
       icon: "icons/icon-192.png",
-      tag: viec.id, // tránh hiện trùng
+      tag: viec.id + tieuDe, // tránh hiện trùng
     });
   }
 
   loiNhac.textContent = tieuDe;
   loiNhac.classList.remove("an");
   setTimeout(() => loiNhac.classList.add("an"), 8000);
+}
+
+// Ví dụ: "Checklist: xong 2/5 bước" (không có checklist thì để trống)
+function chuTienDo(viec) {
+  if (!viec.checklist.length) return "";
+  const soXong = viec.checklist.filter((m) => m.xong).length;
+  return `Checklist: xong ${soXong}/${viec.checklist.length} bước`;
+}
+
+// Đổi ngày + giờ của việc thành thời điểm cụ thể
+function thoiDiem(viec, gioPhut) {
+  const [gio, phut] = gioPhut.split(":").map(Number);
+  const d = chuThanhNgay(viec.ngay);
+  d.setHours(gio, phut);
+  return d;
+}
+
+// Mỗi việc có tối đa 3 lần nhắc: bắt đầu, giữa chừng, kết thúc
+function cacMocNhac(viec) {
+  const moc = [];
+  const batDau = thoiDiem(viec, viec.gio);
+  const tienDo = chuTienDo(viec);
+
+  moc.push({
+    co: "daNhac",
+    luc: batDau,
+    tieuDe: "▶️ Bắt đầu: " + viec.ten,
+    noiDung: [viec.gio + (viec.gioKetThuc ? " – " + viec.gioKetThuc : ""), viec.ghiChu].filter(Boolean).join(" · "),
+  });
+
+  if (viec.gioKetThuc) {
+    const ketThuc = thoiDiem(viec, viec.gioKetThuc);
+    moc.push({
+      co: "daNhacGiua",
+      luc: new Date((batDau.getTime() + ketThuc.getTime()) / 2),
+      tieuDe: "⏳ Đã được nửa thời gian: " + viec.ten,
+      noiDung: tienDo || "Còn đến " + viec.gioKetThuc + " là kết thúc",
+    });
+    moc.push({
+      co: "daNhacKetThuc",
+      luc: ketThuc,
+      tieuDe: "🏁 Kết thúc: " + viec.ten,
+      noiDung: (tienDo ? tienDo + ". " : "") + "Bấm vào app để đánh dấu hoàn thành nhé!",
+    });
+  }
+  return moc;
 }
 
 let ngayDangHien = homNay();
@@ -536,16 +581,15 @@ function kiemTraNhacViec() {
   let coThayDoi = false;
 
   danhSachViec.forEach((viec) => {
-    if (viec.xong || viec.daNhac || !viec.gio) return;
-    const [gio, phut] = viec.gio.split(":").map(Number);
-    const lucNhac = chuThanhNgay(viec.ngay);
-    lucNhac.setHours(gio, phut);
+    if (viec.xong || !viec.gio) return;
 
-    if (lucNhac <= bayGio) {
-      viec.daNhac = true;
+    cacMocNhac(viec).forEach((moc) => {
+      if (viec[moc.co] || moc.luc > bayGio) return; // đã nhắc rồi, hoặc chưa tới giờ
+      viec[moc.co] = true;
       coThayDoi = true;
-      guiThongBao(viec);
-    }
+      // Trễ quá 1 tiếng (ví dụ lâu rồi mới mở app) thì bỏ qua, không nhắc dồn
+      if (bayGio - moc.luc < 60 * 60 * 1000) guiThongBao(viec, moc.tieuDe, moc.noiDung);
+    });
   });
 
   if (coThayDoi) luuDanhSach();
@@ -573,6 +617,16 @@ nutLichMay.onclick = () => {
   // Ghi chú + checklist gộp vào phần mô tả
   const moTa = [viec.ghiChu, ...viec.checklist.map((m) => "☐ " + m.ten)].filter(Boolean).join("\n");
 
+  // Báo thức trong Lịch: lúc bắt đầu, và nếu có giờ kết thúc thì thêm giữa chừng + kết thúc
+  const baoThuc = (moTaBaoThuc, kichHoat) =>
+    ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + chu(moTaBaoThuc), "TRIGGER" + kichHoat, "END:VALARM"];
+  const baoThucLich = baoThuc("Bắt đầu: " + viec.ten, ":PT0M");
+  if (viec.gioKetThuc) {
+    const soPhut = (thoiDiem(viec, viec.gioKetThuc) - thoiDiem(viec, viec.gio)) / 60000;
+    baoThucLich.push(...baoThuc("Đã được nửa thời gian: " + viec.ten, ":PT" + Math.round(soPhut / 2) + "M"));
+    baoThucLich.push(...baoThuc("Kết thúc: " + viec.ten, ";RELATED=END:PT0M"));
+  }
+
   const noiDungFile = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -584,11 +638,7 @@ nutLichMay.onclick = () => {
     viec.gioKetThuc ? "DTEND:" + ngayGon + "T" + gioGon(viec.gioKetThuc) : "DURATION:PT30M",
     "SUMMARY:" + chu(viec.ten),
     "DESCRIPTION:" + chu(moTa),
-    "BEGIN:VALARM",
-    "ACTION:DISPLAY",
-    "DESCRIPTION:" + chu(viec.ten),
-    "TRIGGER:PT0M",
-    "END:VALARM",
+    ...baoThucLich,
     "END:VEVENT",
     "END:VCALENDAR",
   ].join("\r\n");
