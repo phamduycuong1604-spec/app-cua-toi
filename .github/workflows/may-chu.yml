@@ -41,7 +41,8 @@ jobs:
         working-directory: may-chu
         run: |
           set -o pipefail
-          npx --yes wrangler@4.146.0 deploy 2>&1 | tee ket-qua.txt
+          # MA_KHOI_TAO: cần có mã này mới tạo được tài khoản quản trị đầu tiên
+          npx --yes wrangler@4.146.0 deploy --var "MA_KHOI_TAO:$CLOUDFLARE_ACCOUNT_ID" 2>&1 | tee ket-qua.txt
 
       - name: Ghi địa chỉ máy chủ vào app
         run: |

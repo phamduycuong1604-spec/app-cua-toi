@@ -13,12 +13,13 @@
 const SO_THU_CHI = "so-thu-chi";
 const CAC_NGUON = ["TikTok", "Facebook", "Instagram", "Zalo", "Khác"];
 
-// Các mục chi: bấm 1 cái là điền nội dung (số tiền tự nhập)
-const CAC_MUC_CHI = ["Mua sắm", "Phần mềm", "Cafe", "Đá bóng", "Ăn", "Cho vợ", "Khác"];
-
-// Các gói màu bán sẵn: bấm 1 cái là điền tên + giá.
-// gia: null = combo tùy biến, tự gõ giá. Muốn thêm/bớt gói thì sửa danh sách này.
-const CAC_GOI_MAU = [
+// Cài đặt riêng của mỗi người (sửa trong trang ⚙️ Cài đặt):
+//  - mucChi: các mục chi, bấm 1 cái là điền nội dung (số tiền tự nhập)
+//  - goiMau: các gói màu bán sẵn, bấm 1 cái là điền tên + giá
+//    (gia: null = combo tùy biến, tự gõ giá)
+// Dưới đây là danh sách mẫu ban đầu cho tài khoản mới.
+const MUC_CHI_MAU = ["Mua sắm", "Phần mềm", "Cafe", "Đá bóng", "Ăn", "Cho vợ", "Khác"];
+const GOI_MAU_MAU = [
   { ten: "KODAK FILM WEDDING – Preset màu film Kodak 2026", gia: 100000 },
   { ten: "TỬ CHU BAY – Full Collection", gia: 150000 },
   { ten: "BLACK PIXEL – 15 bộ sưu tập màu cưới 2026", gia: 200000 },
@@ -30,6 +31,21 @@ const CAC_GOI_MAU = [
   { ten: "Combo 4", gia: null },
 ];
 
+function docCaiDat() {
+  let daLuu = null;
+  try {
+    daLuu = JSON.parse(localStorage.getItem("cai-dat"));
+  } catch (loi) {}
+  return { mucChi: MUC_CHI_MAU, goiMau: GOI_MAU_MAU, ...(daLuu || {}) };
+}
+
+function luuCaiDat() {
+  localStorage.setItem("cai-dat", JSON.stringify(caiDat));
+  daThayDoi("cai-dat"); // gửi lên tài khoản (tai-khoan.js)
+}
+
+let caiDat = docCaiDat();
+
 function docThuChi() {
   try {
     return JSON.parse(localStorage.getItem(SO_THU_CHI)) || [];
@@ -40,6 +56,7 @@ function docThuChi() {
 
 function luuThuChi() {
   localStorage.setItem(SO_THU_CHI, JSON.stringify(danhSachThuChi));
+  daThayDoi("thu-chi"); // gửi lên tài khoản (tai-khoan.js)
 }
 
 let danhSachThuChi = docThuChi();
@@ -315,7 +332,7 @@ function chonLoai(loai) {
 function veChonMucChi() {
   const khung = document.getElementById("chon-muc-chi");
   khung.innerHTML = "";
-  CAC_MUC_CHI.forEach((muc) => {
+  caiDat.mucChi.forEach((muc) => {
     const nut = document.createElement("button");
     nut.type = "button";
     nut.className = "nut-nguon" + (tc("noi-dung").value.trim() === muc ? " dang-chon" : "");
@@ -335,7 +352,7 @@ document.querySelectorAll(".nut-loai").forEach((nut) => (nut.onclick = () => cho
 function veChonGoi() {
   const khung = document.getElementById("chon-goi");
   khung.innerHTML = "";
-  CAC_GOI_MAU.forEach((goi) => {
+  caiDat.goiMau.forEach((goi) => {
     const nut = document.createElement("button");
     nut.type = "button";
     nut.className = "nut-goi" + (tc("ten-preset").value.trim() === goi.ten ? " dang-chon" : "");

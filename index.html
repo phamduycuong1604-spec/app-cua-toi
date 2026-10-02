@@ -29,7 +29,10 @@
       <h1>PHAHA</h1>
     </div>
     <!-- Nút xin quyền gửi thông báo (tự ẩn khi đã bật) -->
-    <button id="nut-bat-nhac" class="nut-bat-nhac an" aria-label="Bật nhắc lịch">🔔</button>
+    <div class="nut-dau-trang">
+      <button id="nut-bat-nhac" class="nut-bat-nhac an" aria-label="Bật nhắc lịch">🔔</button>
+      <button id="nut-cai-dat" class="nut-bat-nhac nut-cai-dat" aria-label="Cài đặt">⚙️</button>
+    </div>
   </header>
 
   <!-- Dòng nhắc nhỏ hiện ngay trong app khi đến giờ -->
@@ -183,7 +186,81 @@
     </div>
   </form>
 
+  <!-- MÀN HÌNH ĐĂNG NHẬP (hiện khi chưa đăng nhập) -->
+  <div id="man-dang-nhap" class="man-dang-nhap an">
+    <form id="form-dang-nhap" class="the-dang-nhap">
+      <img src="icons/icon-192.png" alt="" class="logo-dang-nhap">
+      <h1>PHAHA</h1>
+      <h2 id="dn-tieu-de">Đăng nhập</h2>
+      <label>Tên đăng nhập
+        <input id="dn-ten" type="text" autocomplete="username" autocapitalize="none" required>
+      </label>
+      <label>Mật khẩu
+        <input id="dn-mat-khau" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="dn-khoi-tao" class="an">
+        <label>Nhập lại mật khẩu
+          <input id="dn-mat-khau-2" type="password" autocomplete="new-password">
+        </label>
+        <label>Mã khởi tạo (Account ID Cloudflare)
+          <input id="dn-ma-khoi-tao" type="text" autocapitalize="none" autocomplete="off">
+        </label>
+      </div>
+      <p id="dn-loi" class="dn-loi"></p>
+      <button id="dn-nut" type="submit" class="nut nut-chinh">Đăng nhập</button>
+      <p id="dn-goi-y" class="tom-tat"></p>
+    </form>
+  </div>
+
+  <!-- TRANG CÀI ĐẶT -->
+  <div id="man-cai-dat" class="man-cai-dat an">
+    <div class="dau-cai-dat">
+      <h2>⚙️ Cài đặt</h2>
+      <button type="button" id="cd-dong" class="nut-tron" aria-label="Đóng">✕</button>
+    </div>
+
+    <section id="cd-phan-tai-khoan" class="the-preset">
+      <h3>👤 Tài khoản</h3>
+      <p id="cd-ten" class="tom-tat"></p>
+      <div class="nhan">Đổi mật khẩu</div>
+      <input id="cd-mk-cu" class="o-nhap" type="password" placeholder="Mật khẩu hiện tại" autocomplete="current-password">
+      <input id="cd-mk-moi" class="o-nhap" type="password" placeholder="Mật khẩu mới (ít nhất 6 ký tự)" autocomplete="new-password">
+      <div class="hang-nut">
+        <button type="button" id="cd-doi-mk" class="nut nut-phu">Đổi mật khẩu</button>
+        <button type="button" id="cd-dang-xuat" class="nut nut-xoa">Đăng xuất</button>
+      </div>
+    </section>
+
+    <section class="the-preset">
+      <h3>🎨 Gói màu</h3>
+      <p class="tom-tat">Để trống giá = combo tự nhập giá khi bán</p>
+      <div id="cd-goi-mau"></div>
+      <button type="button" id="cd-them-goi" class="nut-them-dong">+ Thêm gói</button>
+    </section>
+
+    <section class="the-preset">
+      <h3>💸 Mục chi</h3>
+      <div id="cd-muc-chi"></div>
+      <button type="button" id="cd-them-muc" class="nut-them-dong">+ Thêm mục</button>
+    </section>
+
+    <div class="hang-nut cd-luu">
+      <button type="button" id="cd-luu-danh-sach" class="nut nut-chinh">Lưu gói màu & mục chi</button>
+    </div>
+
+    <section id="cd-phan-quan-tri" class="the-preset an">
+      <h3>🛡️ Quản lý tài khoản</h3>
+      <div id="cd-nguoi-dung"></div>
+      <div class="nhan">Cấp tài khoản mới</div>
+      <input id="cd-ten-moi" class="o-nhap" type="text" placeholder="Tên đăng nhập (vd: lan, minh.anh)" autocapitalize="none">
+      <input id="cd-mk-nguoi-moi" class="o-nhap" type="text" placeholder="Mật khẩu ban đầu (ít nhất 6 ký tự)" autocapitalize="none">
+      <label class="dong-chon"><input id="cd-la-quan-tri" type="checkbox"> Cho làm quản trị viên</label>
+      <button type="button" id="cd-tao-tai-khoan" class="nut nut-chinh nut-rong">Tạo tài khoản</button>
+    </section>
+  </div>
+
   <script src="may-chu.js"></script>
+  <script src="tai-khoan.js"></script>
   <!-- KHUNG NHẬP THU CHI -->
   <div id="nen-mo-tc" class="nen-mo an"></div>
   <form id="khung-thu-chi" class="khung-nhap an">
@@ -249,5 +326,6 @@
 
   <script src="app.js"></script>
   <script src="thu-chi.js"></script>
+  <script src="cai-dat.js"></script>
 </body>
 </html>

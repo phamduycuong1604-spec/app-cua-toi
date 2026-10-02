@@ -12,6 +12,8 @@
 //  - nhac     : các lần nhắc đang chờ
 // =====================================================
 
+import { taoBangTaiKhoan, xuLyTaiKhoan } from "./tai-khoan.js";
+
 const LIEN_HE = "https://phamduycuong1604-spec.github.io/app-cua-toi/";
 const TOI_DA_LAN_NHAC = 1000;      // mỗi điện thoại gửi lên tối đa bấy nhiêu lần nhắc
 const TRE_TOI_DA = 60 * 60 * 1000; // trễ quá 1 tiếng thì bỏ, không nhắc nữa
@@ -23,6 +25,10 @@ export default {
     try {
       await taoBang(env);
       const duongDan = new URL(yeuCau.url).pathname;
+
+      // Tài khoản và dữ liệu người dùng (xem tai-khoan.js)
+      const ketQuaTaiKhoan = await xuLyTaiKhoan(yeuCau, env, duongDan, traLoi);
+      if (ketQuaTaiKhoan) return ketQuaTaiKhoan;
 
       if (duongDan === "/khoa" && yeuCau.method === "GET") {
         const { khoaCongKhai } = await layKhoaVapid(env);
@@ -56,15 +62,18 @@ function traLoi(duLieu, maTrangThai = 200) {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
     },
   });
 }
 
 
 // ----- TẠO BẢNG (nếu chưa có) -----
+let daTaoBang = false;
 async function taoBang(env) {
+  if (daTaoBang) return; // mỗi lần máy chủ khởi động chỉ cần tạo 1 lần
+  await taoBangTaiKhoan(env);
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS cau_hinh (khoa TEXT PRIMARY KEY, gia_tri TEXT)"),
     env.DB.prepare(
@@ -78,6 +87,7 @@ async function taoBang(env) {
       "CREATE TABLE IF NOT EXISTS nhat_ky (luc INTEGER, viec TEXT, may_chu_nhan TEXT, ma INTEGER, chi_tiet TEXT)"
     ),
   ]);
+  daTaoBang = true;
 }
 
 

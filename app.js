@@ -29,6 +29,7 @@ function docDanhSach() {
 function luuDanhSach() {
   localStorage.setItem(TEN_SO, JSON.stringify(danhSachViec));
   dongBoMayChu(); // gửi lịch nhắc mới lên máy chủ (nếu đã bật)
+  daThayDoi("viec"); // gửi dữ liệu lên tài khoản (tai-khoan.js)
 }
 
 let danhSachViec = docDanhSach();
