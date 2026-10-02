@@ -7,7 +7,7 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v12";
+const PHIEN_BAN = "viec-hom-nay-v13";
 
 const CAC_FILE = [
   "./",
@@ -24,7 +24,10 @@ const CAC_FILE = [
 
 // Lần đầu cài: cất các file vào kho
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(PHIEN_BAN).then((kho) => kho.addAll(CAC_FILE)));
+  // cache: "reload" = luôn tải bản mới nhất từ mạng, không lấy bản trình duyệt giữ tạm
+  e.waitUntil(
+    caches.open(PHIEN_BAN).then((kho) => kho.addAll(CAC_FILE.map((f) => new Request(f, { cache: "reload" }))))
+  );
   self.skipWaiting();
 });
 
@@ -45,7 +48,9 @@ self.addEventListener("fetch", (e) => {
   const diaChi = new URL(e.request.url);
   if (diaChi.origin !== self.location.origin && !diaChi.hostname.startsWith("fonts.")) return;
   e.respondWith(
-    fetch(e.request)
+    // cache: "no-cache" = luôn hỏi máy chủ xem có bản mới không (GitHub giữ file cũ tới 10 phút)
+    // (lúc mở trang, trình duyệt không cho thêm tùy chọn vào yêu cầu gốc nên phải tạo yêu cầu mới theo địa chỉ)
+    fetch(e.request.mode === "navigate" ? e.request.url : e.request, { cache: "no-cache" })
       .then((ketQua) => {
         const banSao = ketQua.clone();
         caches.open(PHIEN_BAN).then((kho) => kho.put(e.request, banSao));
