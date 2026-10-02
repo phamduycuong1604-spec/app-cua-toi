@@ -7,7 +7,7 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v7";
+const PHIEN_BAN = "viec-hom-nay-v8";
 
 const CAC_FILE = [
   "./",
@@ -58,7 +58,7 @@ self.addEventListener("push", (e) => {
     tin = e.data ? e.data.json() : {};
   } catch (loi) {}
   e.waitUntil(
-    self.registration.showNotification(tin.tieuDe || "Việc Hôm Nay", {
+    self.registration.showNotification(tin.tieuDe || "PHAHA", {
       body: tin.noiDung || "",
       icon: "icons/icon-192.png",
       tag: tin.the,
