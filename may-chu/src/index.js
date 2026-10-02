@@ -31,6 +31,9 @@ export default {
       if (duongDan === "/dong-bo" && yeuCau.method === "POST") {
         return await dongBo(await yeuCau.json(), env);
       }
+      if (duongDan === "/trang-thai" && yeuCau.method === "GET") {
+        return traLoi(await xemTrangThai(env));
+      }
       if (duongDan === "/") return traLoi({ ok: true, ten: "Máy chủ nhắc giờ - Việc Hôm Nay" });
       return traLoi({ loi: "Không tìm thấy" }, 404);
     } catch (loi) {
@@ -71,6 +74,9 @@ async function taoBang(env) {
       "CREATE TABLE IF NOT EXISTS nhac (endpoint TEXT, luc INTEGER, tieu_de TEXT, noi_dung TEXT, the TEXT)"
     ),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS nhac_theo_luc ON nhac (luc)"),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS nhat_ky (luc INTEGER, viec TEXT, may_chu_nhan TEXT, ma INTEGER, chi_tiet TEXT)"
+    ),
   ]);
 }
 
@@ -103,6 +109,7 @@ async function dongBo(duLieu, env) {
     );
   }
   await env.DB.batch(lenh);
+  await ghiNhatKy(env, `nhận ${lenh.length - 2} lần nhắc từ app`, dk.endpoint, 200, "");
   return traLoi({ ok: true, soLanNhac: lenh.length - 2 });
 }
 
@@ -124,7 +131,14 @@ async function guiCacLanNhacDenGio(env) {
     // Xóa trước để dù gửi lỗi cũng không nhắc lặp lại mãi
     await env.DB.prepare("DELETE FROM nhac WHERE rowid = ?1").bind(n.ma).run();
     const tinNhan = JSON.stringify({ tieuDe: n.tieu_de, noiDung: n.noi_dung, the: n.the });
-    const ketQua = await guiWebPush({ endpoint: n.endpoint, p256dh: n.p256dh, auth: n.auth }, tinNhan, khoa);
+    let ketQua;
+    try {
+      ketQua = await guiWebPush({ endpoint: n.endpoint, p256dh: n.p256dh, auth: n.auth }, tinNhan, khoa);
+      await ghiNhatKy(env, "gửi thông báo", n.endpoint, ketQua.status, await ketQua.text());
+    } catch (loi) {
+      await ghiNhatKy(env, "gửi thông báo", n.endpoint, 0, String(loi));
+      continue;
+    }
     // 404/410 = điện thoại đã tắt thông báo hoặc gỡ app → xóa đăng ký
     if (ketQua.status === 404 || ketQua.status === 410) {
       await env.DB.batch([
@@ -133,6 +147,32 @@ async function guiCacLanNhacDenGio(env) {
       ]);
     }
   }
+}
+
+
+// ----- NHẬT KÝ: ghi lại mọi việc máy chủ làm, để dễ tìm lỗi -----
+async function ghiNhatKy(env, viec, endpoint, ma, chiTiet) {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO nhat_ky VALUES (?1, ?2, ?3, ?4, ?5)").bind(
+      Date.now(), viec, new URL(endpoint).host, ma, String(chiTiet || "").slice(0, 300)
+    ),
+    // Chỉ giữ 30 dòng gần nhất
+    env.DB.prepare("DELETE FROM nhat_ky WHERE rowid NOT IN (SELECT rowid FROM nhat_ky ORDER BY luc DESC LIMIT 30)"),
+  ]);
+}
+
+// Trang /trang-thai: xem máy chủ đang thế nào (không hiện tên công việc)
+async function xemTrangThai(env) {
+  const gioVN = (ms) => new Date(ms).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const soDienThoai = await env.DB.prepare("SELECT COUNT(*) AS n FROM dang_ky").first("n");
+  const { results: sapToi } = await env.DB.prepare("SELECT luc FROM nhac ORDER BY luc LIMIT 10").all();
+  const { results: nhatKy } = await env.DB.prepare("SELECT * FROM nhat_ky ORDER BY luc DESC LIMIT 15").all();
+  return {
+    bayGio: gioVN(Date.now()),
+    soDienThoaiDaDangKy: soDienThoai,
+    cacLanNhacSapToi: sapToi.map((n) => gioVN(n.luc)),
+    nhatKy: nhatKy.map((d) => `${gioVN(d.luc)} | ${d.viec} | ${d.may_chu_nhan} | ${d.ma} ${d.chi_tiet}`.trim()),
+  };
 }
 
 
