@@ -13,6 +13,20 @@
 const SO_THU_CHI = "so-thu-chi";
 const CAC_NGUON = ["TikTok", "Facebook", "Instagram", "Zalo", "Khác"];
 
+// Các gói màu bán sẵn: bấm 1 cái là điền tên + giá.
+// gia: null = combo tùy biến, tự gõ giá. Muốn thêm/bớt gói thì sửa danh sách này.
+const CAC_GOI_MAU = [
+  { ten: "KODAK FILM WEDDING – Preset màu film Kodak 2026", gia: 100000 },
+  { ten: "TỬ CHU BAY – Full Collection", gia: 150000 },
+  { ten: "BLACK PIXEL – 15 bộ sưu tập màu cưới 2026", gia: 200000 },
+  { ten: "BLACK PIXEL – 52 preset phóng sự cưới", gia: 100000 },
+  { ten: "KINDNESS KINDRED – Gói preset đa nền tảng", gia: 200000 },
+  { ten: "Combo 1", gia: null },
+  { ten: "Combo 2", gia: null },
+  { ten: "Combo 3", gia: null },
+  { ten: "Combo 4", gia: null },
+];
+
 function docThuChi() {
   try {
     return JSON.parse(localStorage.getItem(SO_THU_CHI)) || [];
@@ -289,6 +303,31 @@ function chonLoai(loai) {
 }
 document.querySelectorAll(".nut-loai").forEach((nut) => (nut.onclick = () => chonLoai(nut.dataset.loai)));
 
+// Vẽ các nút gói màu; gói đang chọn được tô màu
+function veChonGoi() {
+  const khung = document.getElementById("chon-goi");
+  khung.innerHTML = "";
+  CAC_GOI_MAU.forEach((goi) => {
+    const nut = document.createElement("button");
+    nut.type = "button";
+    nut.className = "nut-goi" + (tc("ten-preset").value.trim() === goi.ten ? " dang-chon" : "");
+    const ten = document.createElement("span");
+    ten.textContent = goi.ten;
+    const gia = document.createElement("small");
+    gia.textContent = goi.gia ? dinhDangTien(goi.gia) : "Tự nhập giá";
+    nut.append(ten, gia);
+    nut.onclick = () => {
+      tc("ten-preset").value = goi.ten;
+      tc("gia-goi").value = goi.gia || "";
+      capNhatThanhTien();
+      veChonGoi();
+      if (!goi.gia) tc("gia-goi").focus(); // combo: nhảy tới ô giá để gõ luôn
+    };
+    khung.appendChild(nut);
+  });
+}
+tc("ten-preset").addEventListener("input", veChonGoi);
+
 // Thành tiền tự tính khi gõ số lượng / giá gói
 function capNhatThanhTien() {
   const thanhTien = (Number(tc("so-luong").value) || 0) * (Number(tc("gia-goi").value) || 0);
@@ -335,6 +374,7 @@ function moKhungThuChi(khoan) {
   tc("ghi-chu").value = khoan ? khoan.ghiChu : "";
   nguonDangChon = khoan && khoan.loai === "preset" ? khoan.nguon : CAC_NGUON[0];
   veChonNguon();
+  veChonGoi();
   capNhatThanhTien();
   capNhatGoiYPreset();
   tc("xoa").classList.toggle("an", !khoan);
