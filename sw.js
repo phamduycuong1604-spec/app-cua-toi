@@ -7,7 +7,7 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v9";
+const PHIEN_BAN = "viec-hom-nay-v10";
 
 const CAC_FILE = [
   "./",
@@ -41,6 +41,9 @@ self.addEventListener("activate", (e) => {
 // Khi app cần file: ưu tiên lấy bản mới trên mạng, mất mạng thì lấy trong kho
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Chỉ lo file của app (và phông chữ); việc khác như tải Google Sheets, máy chủ nhắc giờ thì để yên
+  const diaChi = new URL(e.request.url);
+  if (diaChi.origin !== self.location.origin && !diaChi.hostname.startsWith("fonts.")) return;
   e.respondWith(
     fetch(e.request)
       .then((ketQua) => {

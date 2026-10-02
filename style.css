@@ -575,5 +575,7 @@ button { font-family: inherit; cursor: pointer; }
 .thanh-tien { margin: 0 0 12px; font-size: 14px; color: var(--chu-nhat); }
 .thanh-tien b { color: var(--chu); font-size: 17px; }
 
+.the-nhap .tom-tat { margin: 4px 0 4px; }
+
 /* Dùng để ẩn một phần tử */
 .an { display: none !important; }

@@ -393,3 +393,138 @@ tc("xoa").onclick = () => {
 };
 tc("huy").onclick = dongKhungThuChi;
 nenMoTC.onclick = dongKhungThuChi;
+
+
+// ----- 6. NHẬP DỮ LIỆU TỪ GOOGLE SHEETS -----
+// Bảng tính dạng: Ngày | Tên preset | Số lượng | Thành tiền  (dòng 1 là tiêu đề)
+// - Ô ngày gộp cho nhiều dòng → dòng trống ngày thì lấy ngày của dòng trên
+// - Ngày viết "17/8" hoặc "20.8" (không có năm) → lấy năm nay;
+//   nếu ra ngày ở tương lai thì hiểu là năm ngoái
+// - Mỗi dòng chỉ nhập 1 lần: nhập lại (bằng link hay file) sẽ bỏ qua dòng đã có
+
+// Đọc chữ CSV thành bảng (hiểu cả ô có dấu phẩy nằm trong ngoặc kép)
+function docCSV(chu) {
+  const bang = [[]];
+  let o = "", trongNgoac = false;
+  for (let i = 0; i < chu.length; i++) {
+    const k = chu[i];
+    if (trongNgoac) {
+      if (k === '"' && chu[i + 1] === '"') { o += '"'; i++; }
+      else if (k === '"') trongNgoac = false;
+      else o += k;
+    } else if (k === '"') trongNgoac = true;
+    else if (k === ",") { bang[bang.length - 1].push(o); o = ""; }
+    else if (k === "\n") { bang[bang.length - 1].push(o); bang.push([]); o = ""; }
+    else if (k !== "\r") o += k;
+  }
+  bang[bang.length - 1].push(o);
+  return bang;
+}
+
+// "17/8", "20.8", "24/9/2026" → "2026-08-17"
+function docNgaySheet(chu) {
+  const so = (chu.match(/\d+/g) || []).map(Number);
+  if (so.length < 2) return null;
+  const [ngay, thang] = so;
+  if (ngay < 1 || ngay > 31 || thang < 1 || thang > 12) return null;
+  let nam = so[2] ? (so[2] < 100 ? 2000 + so[2] : so[2]) : new Date().getFullYear();
+  let ketQua = ngayThanhChu(new Date(nam, thang - 1, ngay));
+  if (!so[2] && ketQua > homNay()) ketQua = ngayThanhChu(new Date(nam - 1, thang - 1, ngay));
+  return ketQua;
+}
+
+// "1.250.000", "1,250,000 đ", "1250000" → 1250000
+function docTienSheet(chu) {
+  const chiSo = String(chu).replace(/[^\d]/g, "");
+  return chiSo ? Number(chiSo) : 0;
+}
+
+// Biến bảng thành danh sách khoản "bán preset"
+function bangThanhKhoan(bang) {
+  const cacKhoan = [];
+  const soLanGap = {}; // đếm các dòng giống hệt nhau trong cùng ngày
+  let ngayDangCo = null;
+  bang.slice(1).forEach((dong) => {
+    const [oNgay = "", oTen = "", oSoLuong = "", oThanhTien = ""] = dong;
+    if (oNgay.trim()) ngayDangCo = docNgaySheet(oNgay) || ngayDangCo;
+    const ten = oTen.trim();
+    const soLuong = docTienSheet(oSoLuong) || 1;
+    const thanhTien = docTienSheet(oThanhTien);
+    if (!ten || !thanhTien || !ngayDangCo) return; // bỏ dòng trống / dòng tổng
+
+    // "Dấu vân tay" của dòng để không nhập trùng
+    const dauVanTay = `${ngayDangCo}|${ten.toLowerCase()}|${soLuong}|${thanhTien}`;
+    soLanGap[dauVanTay] = (soLanGap[dauVanTay] || 0) + 1;
+    cacKhoan.push({
+      id: "nhap|" + dauVanTay + "|" + soLanGap[dauVanTay],
+      loai: "preset",
+      ngay: ngayDangCo,
+      tenPreset: ten,
+      soLuong,
+      giaGoi: thanhTien / soLuong, // bảng ghi thành tiền → chia ra giá 1 gói
+      nguon: "Khác",
+      ghiChu: "Nhập từ Google Sheets",
+    });
+  });
+  return cacKhoan;
+}
+
+function themCacKhoanNhap(cacKhoan) {
+  const daCo = new Set(danhSachThuChi.map((k) => k.id));
+  const moi = cacKhoan.filter((k) => !daCo.has(k.id));
+  if (!cacKhoan.length) return alert("Không tìm thấy dòng nào. Bảng tính cần các cột: Ngày | Tên | Số lượng | Thành tiền.");
+  if (!moi.length) return alert(`Cả ${cacKhoan.length} dòng đều đã được nhập trước đó rồi.`);
+
+  const tong = moi.reduce((t, k) => t + soTienCua(k), 0);
+  const tuNgay = moi.map((k) => k.ngay).sort()[0];
+  const denNgay = moi.map((k) => k.ngay).sort().pop();
+  const loiHoi =
+    `Tìm thấy ${moi.length} dòng bán preset mới` +
+    (moi.length < cacKhoan.length ? ` (bỏ qua ${cacKhoan.length - moi.length} dòng đã nhập)` : "") +
+    `\nTừ ${ngayDeDoc(tuNgay)} đến ${ngayDeDoc(denNgay)}\nTổng: ${dinhDangTien(tong)}\n\nThêm tất cả vào app?`;
+  if (!confirm(loiHoi)) return;
+
+  danhSachThuChi.push(...moi);
+  luuThuChi();
+  // Chuyển sang xem tháng có lần bán mới nhất
+  kyXem = "thang";
+  ngayMoc = denNgay;
+  document.querySelectorAll(".nut-ky").forEach((n) => n.classList.toggle("dang-chon", n.dataset.ky === "thang"));
+  veThuChi();
+  alert(`Đã thêm ${moi.length} dòng! Nguồn khách đang để "Khác", bấm vào từng dòng để sửa nếu cần.`);
+}
+
+// Cách 1: dán link Google Sheets → app tự tải về
+document.getElementById("nut-nhap-link").onclick = async () => {
+  const link = prompt("Dán link Google Sheets (đã chia sẻ \"Bất kỳ ai có đường liên kết\"):", localStorage.getItem("link-sheet") || "");
+  if (!link) return;
+  const maSheet = (link.match(/\/d\/([\w-]+)/) || [])[1];
+  if (!maSheet) return alert("Link chưa đúng. Link cần có dạng docs.google.com/spreadsheets/d/...");
+  const maTrang = (link.match(/[#&?]gid=(\d+)/) || [])[1] || "0";
+  localStorage.setItem("link-sheet", link);
+
+  try {
+    const ketQua = await fetch(`https://docs.google.com/spreadsheets/d/${maSheet}/export?format=csv&gid=${maTrang}`);
+    if (!ketQua.ok) throw new Error("mã lỗi " + ketQua.status);
+    const chu = await ketQua.text();
+    if (chu.trim().startsWith("<")) throw new Error("bảng tính chưa mở quyền xem");
+    themCacKhoanNhap(bangThanhKhoan(docCSV(chu)));
+  } catch (loi) {
+    alert(
+      "Không tải được bảng tính (" + loi.message + ").\n\n" +
+      "Kiểm tra: Chia sẻ → \"Bất kỳ ai có đường liên kết\".\n" +
+      "Hoặc dùng nút \"Chọn file CSV\": trong Google Sheets chọn Tệp → Tải xuống → CSV."
+    );
+  }
+};
+
+// Cách 2: chọn file CSV đã tải về máy
+const oFileCSV = document.getElementById("o-file-csv");
+document.getElementById("nut-nhap-file").onclick = () => oFileCSV.click();
+oFileCSV.onchange = async () => {
+  const file = oFileCSV.files[0];
+  if (!file) return;
+  const chu = await file.text();
+  oFileCSV.value = "";
+  themCacKhoanNhap(bangThanhKhoan(docCSV(chu)));
+};
