@@ -165,7 +165,23 @@ formDangNhap.onsubmit = async (suKien) => {
   nut.disabled = false;
 };
 
-// Đăng nhập thành công → lấy dữ liệu của tài khoản về máy
+// Gộp 2 danh sách theo id: giữ hết của danh sách 1, thêm những cái danh sách 2 chưa có
+function gopTheoId(ds1, ds2) {
+  const daCo = new Set(ds1.map((x) => x.id));
+  return [...ds1, ...ds2.filter((x) => !daCo.has(x.id))];
+}
+
+function docSo(so) {
+  try {
+    return JSON.parse(localStorage.getItem(so));
+  } catch (loi) {
+    return null;
+  }
+}
+
+// Đăng nhập thành công → lấy dữ liệu của tài khoản về máy.
+// KHÔNG BAO GIỜ xóa mất dữ liệu đang có trong máy: luôn cất một bản sao lưu trước,
+// và gộp (không ghi đè) nếu người dùng đồng ý.
 async function batDauPhienMoi({ ve, ten, quanTri }) {
   const nguoiTruoc = localStorage.getItem("ten-dang-nhap");
   localStorage.setItem("ve-dang-nhap", ve);
@@ -173,31 +189,63 @@ async function batDauPhienMoi({ ve, ten, quanTri }) {
   localStorage.setItem("la-quan-tri", quanTri ? "1" : "0");
 
   const duLieu = await goiMayChu("/du-lieu");
-  const mayChuTrong = Object.keys(duLieu).length === 0;
 
-  // Dữ liệu đang có sẵn trong máy từ trước khi có tài khoản (hoặc của chính người này)
-  const soViec = (JSON.parse(localStorage.getItem("danh-sach-viec") || "[]") || []).length;
-  const soKhoan = (JSON.parse(localStorage.getItem("so-thu-chi") || "[]") || []).length;
-  const duLieuCuCuaMay = (!nguoiTruoc || nguoiTruoc === ten) && (soViec || soKhoan);
+  // Dữ liệu đang có trong máy
+  const viecMay = docSo("danh-sach-viec") || [];
+  const thuChiMay = docSo("so-thu-chi") || [];
+  const caiDatMay = docSo("cai-dat");
+  const coDuLieuMay = viecMay.length > 0 || thuChiMay.length > 0;
 
-  if (mayChuTrong && duLieuCuCuaMay &&
-      confirm(`Trên máy đang có ${soViec} việc và ${soKhoan} khoản thu chi.\nĐưa tất cả lên tài khoản "${ten}"?`)) {
-    // Giữ dữ liệu trong máy và gửi lên
+  // 1) Cất bản sao lưu trong máy (khôi phục được ở ⚙️ Cài đặt)
+  if (coDuLieuMay) {
+    localStorage.setItem("sao-luu-may", JSON.stringify({ luc: Date.now(), viec: viecMay, thuChi: thuChiMay, caiDat: caiDatMay }));
+  }
+
+  // 2) Hỏi có gộp dữ liệu trong máy vào tài khoản không
+  //    (chỉ hỏi khi dữ liệu này chưa từng thuộc về người khác)
+  const gop = coDuLieuMay && (!nguoiTruoc || nguoiTruoc === ten) && confirm(
+    `Trên máy đang có ${viecMay.length} việc và ${thuChiMay.length} khoản thu chi.\n` +
+    `Gộp tất cả vào tài khoản "${ten}"?\n\n` +
+    `(Bấm Hủy thì máy vẫn giữ bản sao lưu, sau này khôi phục được trong ⚙️ Cài đặt.)`
+  );
+
+  // 3) Ghi dữ liệu của tài khoản vào máy
+  const giaTriTK = (phan) => (duLieu[phan] ? duLieu[phan].giaTri : null);
+  Object.keys(SO_CUA_PHAN).forEach((phan) => {
+    localStorage.removeItem("phien-ban-" + phan);
+    if (duLieu[phan]) localStorage.setItem("phien-ban-" + phan, duLieu[phan].capNhat);
+  });
+  const viecMoi = gop ? gopTheoId(giaTriTK("viec") || [], viecMay) : giaTriTK("viec");
+  const thuChiMoi = gop ? gopTheoId(giaTriTK("thu-chi") || [], thuChiMay) : giaTriTK("thu-chi");
+  const caiDatMoi = giaTriTK("cai-dat") || (gop ? caiDatMay : null);
+  [["danh-sach-viec", viecMoi], ["so-thu-chi", thuChiMoi], ["cai-dat", caiDatMoi]].forEach(([so, giaTri]) => {
+    if (giaTri) localStorage.setItem(so, JSON.stringify(giaTri));
+    else localStorage.removeItem(so);
+  });
+
+  // 4) Gộp xong thì gửi bản đã gộp lên tài khoản
+  if (gop) {
     ghiChoGui(Object.keys(SO_CUA_PHAN).filter((phan) => localStorage.getItem(SO_CUA_PHAN[phan])));
     await guiLenTaiKhoan();
   } else {
-    // Dùng dữ liệu của tài khoản
-    Object.values(SO_CUA_PHAN).forEach((so) => localStorage.removeItem(so));
-    Object.keys(SO_CUA_PHAN).forEach((phan) => {
-      localStorage.removeItem("phien-ban-" + phan);
-      if (duLieu[phan]) {
-        localStorage.setItem(SO_CUA_PHAN[phan], JSON.stringify(duLieu[phan].giaTri));
-        localStorage.setItem("phien-ban-" + phan, duLieu[phan].capNhat);
-      }
-    });
     ghiChoGui([]);
   }
-  location.reload(); // mở lại app với dữ liệu của tài khoản
+  location.reload(); // mở lại app với dữ liệu mới
+}
+
+// Khôi phục bản sao lưu trong máy: gộp vào dữ liệu hiện tại (không xóa gì)
+function khoiPhucSaoLuu() {
+  const saoLuu = docSo("sao-luu-may");
+  if (!saoLuu) return 0;
+  const truocViec = danhSachViec.length;
+  const truocThuChi = danhSachThuChi.length;
+  danhSachViec = gopTheoId(danhSachViec, (saoLuu.viec || []).map((v) => ({ gioKetThuc: "", checklist: [], ...v })));
+  danhSachThuChi = gopTheoId(danhSachThuChi, saoLuu.thuChi || []);
+  luuDanhSach();
+  luuThuChi();
+  veTatCa();
+  veThuChi();
+  return danhSachViec.length - truocViec + danhSachThuChi.length - truocThuChi;
 }
 
 // Đăng xuất: xóa dữ liệu khỏi máy này (dữ liệu vẫn còn trên tài khoản)
