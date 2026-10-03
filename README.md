@@ -9,6 +9,7 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `index.html` | Bộ khung: các nút, ô nhập |
 | `style.css` | Màu sắc, kích thước, bố cục |
 | `app.js` | "Bộ não" tab Lịch việc: thêm/sửa/xóa, lưu dữ liệu, nhắc lịch |
+| `chung/gop.js` | Gộp dữ liệu từng mục giữa các máy (app và máy chủ dùng chung) |
 | `tai-khoan.js` | Đăng nhập, đăng xuất, tự đồng bộ dữ liệu với máy chủ |
 | `cai-dat.js` | Trang ⚙️ Cài đặt: đổi mật khẩu, sửa gói màu/mục chi, quản lý tài khoản |
 | `thu-chi.js` | "Bộ não" tab Thu chi: bán preset, thu khác, chi, tổng hợp theo ngày/tháng/năm |
@@ -64,3 +65,6 @@ Làm một lần:
   (chính là `CLOUDFLARE_ACCOUNT_ID` đã lưu trong GitHub Secrets).
 - Dữ liệu mỗi người lưu trên máy chủ (Cloudflare D1), đổi máy hay cài lại app vẫn còn.
 - Mật khẩu chỉ lưu dạng đã băm (PBKDF2); sai 5 lần bị khóa 15 phút.
+- Đồng bộ **gộp từng mục** (không ghi đè cả danh sách): thêm ở máy nào cũng giữ, xóa ở máy nào thì máy khác xóa theo.
+- **Bản lưu tự động**: máy chủ cất nội dung cũ trước khi thay đổi (ngay khi có mục bị xóa, còn lại 10 phút/bản, giữ 200 bản).
+  Khôi phục trong ⚙️ Cài đặt → Sao lưu & khôi phục (chỉ thêm lại mục đang thiếu). Có thêm nút xuất/nhập file sao lưu.

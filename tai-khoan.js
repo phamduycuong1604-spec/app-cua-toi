@@ -58,6 +58,43 @@ function ghiChoGui(ds) {
   localStorage.setItem("cho-dong-bo", JSON.stringify(ds));
 }
 
+// Các phần là danh sách mục (gộp từng mục); "cai-dat" thì lấy bản mới nhất
+const PHAN_DANH_SACH = ["viec", "thu-chi"];
+const BO_QUA_KHI_SO = ["capNhatLuc", "daNhac", "daNhacGiua", "daNhacKetThuc"]; // trạng thái riêng từng máy
+
+function docSo(so) {
+  try {
+    return JSON.parse(localStorage.getItem(so));
+  } catch (loi) {
+    return null;
+  }
+}
+
+// Dữ liệu một phần trong máy, dạng { muc, daXoa }
+function docPhanTrongMay(phan) {
+  return { muc: chuanHoaPhan(docSo(SO_CUA_PHAN[phan])).muc, daXoa: docSo("da-xoa-" + phan) || [] };
+}
+function ghiPhanVaoMay(phan, { muc, daXoa }) {
+  localStorage.setItem(SO_CUA_PHAN[phan], JSON.stringify(muc));
+  localStorage.setItem("da-xoa-" + phan, JSON.stringify(daXoa));
+}
+
+// Gọi TRƯỚC khi lưu (app.js, thu-chi.js): so với bản đã lưu để biết
+// mục nào vừa thêm/sửa (đóng dấu thời gian) và mục nào vừa xóa (ghi giấy báo xóa)
+function danhDauThayDoi(phan, dsMoi) {
+  const bayGio = Date.now();
+  const cu = docPhanTrongMay(phan);
+  const theoId = new Map(cu.muc.map((x) => [x.id, x]));
+  const gon = (x) => JSON.stringify(x, (khoa, giaTri) => (BO_QUA_KHI_SO.includes(khoa) ? undefined : giaTri));
+  dsMoi.forEach((x) => {
+    const truoc = theoId.get(x.id);
+    if (!truoc || gon(truoc) !== gon(x)) x.capNhatLuc = bayGio;
+  });
+  const conLai = new Set(dsMoi.map((x) => x.id));
+  const daXoa = [...cu.daXoa, ...cu.muc.filter((x) => !conLai.has(x.id)).map((x) => ({ id: x.id, luc: bayGio }))];
+  localStorage.setItem("da-xoa-" + phan, JSON.stringify(daXoa));
+}
+
 // app.js / thu-chi.js gọi hàm này mỗi khi lưu dữ liệu
 let henGuiLen = null;
 function daThayDoi(phan) {
@@ -68,22 +105,42 @@ function daThayDoi(phan) {
   henGuiLen = setTimeout(guiLenTaiKhoan, 1500); // đợi bấm xong một loạt rồi mới gửi
 }
 
-// Gửi các phần đang chờ lên máy chủ
+// Gửi các phần đang chờ lên máy chủ. Máy chủ GỘP với bản của nó rồi trả về bản đã gộp.
+let dangGui = false;
 async function guiLenTaiKhoan() {
-  if (!veDangNhap()) return;
-  for (const phan of docChoGui()) {
-    try {
-      const giaTri = JSON.parse(localStorage.getItem(SO_CUA_PHAN[phan]) || "null");
-      const { capNhat } = await goiMayChu("/du-lieu/" + phan, { cach: "PUT", than: { giaTri } });
-      localStorage.setItem("phien-ban-" + phan, capNhat);
-      ghiChoGui(docChoGui().filter((p) => p !== phan));
-    } catch (loi) {
-      return; // mất mạng: để dành lần sau
+  if (!veDangNhap() || dangGui) return;
+  dangGui = true;
+  let coMoi = false;
+  try {
+    for (const phan of docChoGui()) {
+      const laDanhSach = PHAN_DANH_SACH.includes(phan);
+      const daGui = laDanhSach ? docPhanTrongMay(phan) : docSo(SO_CUA_PHAN[phan]);
+      const chuDaGui = JSON.stringify(daGui);
+      const kq = await goiMayChu("/du-lieu/" + phan, { cach: "PUT", than: { giaTri: daGui } });
+      localStorage.setItem("phien-ban-" + phan, kq.capNhat);
+
+      // Trong lúc gửi mà người dùng sửa tiếp → giữ "chờ gửi" để gửi lần nữa
+      const hienTai = laDanhSach ? docPhanTrongMay(phan) : docSo(SO_CUA_PHAN[phan]);
+      const suaTrongLucGui = JSON.stringify(hienTai) !== chuDaGui;
+      if (laDanhSach) {
+        const daGop = gopPhan(kq.giaTri, hienTai);
+        if (JSON.stringify(daGop.muc) !== JSON.stringify(hienTai.muc)) coMoi = true;
+        ghiPhanVaoMay(phan, daGop);
+      }
+      if (!suaTrongLucGui) ghiChoGui(docChoGui().filter((p) => p !== phan));
     }
+  } catch (loi) {
+    // mất mạng: để dành lần sau
+  }
+  dangGui = false;
+  if (coMoi) apDungDuLieuMoi();
+  if (docChoGui().length && navigator.onLine) {
+    clearTimeout(henGuiLen);
+    henGuiLen = setTimeout(guiLenTaiKhoan, 3000);
   }
 }
 
-// Tải bản mới nhất từ máy chủ (ví dụ vừa sửa trên máy khác)
+// Tải bản mới nhất từ máy chủ (ví dụ vừa sửa trên máy khác) và GỘP với bản trong máy
 async function taiVeTuTaiKhoan() {
   if (!veDangNhap()) return;
   let duLieu;
@@ -92,18 +149,29 @@ async function taiVeTuTaiKhoan() {
   } catch (loi) {
     return; // mất mạng: dùng tạm dữ liệu trong máy
   }
-  const choGui = docChoGui();
   let coMoi = false;
-  Object.keys(SO_CUA_PHAN).forEach((phan) => {
-    const tuMayChu = duLieu[phan];
-    if (!tuMayChu || choGui.includes(phan)) return; // máy này đang có sửa đổi chưa gửi → giữ của máy này
-    if (tuMayChu.capNhat > Number(localStorage.getItem("phien-ban-" + phan) || 0)) {
-      localStorage.setItem(SO_CUA_PHAN[phan], JSON.stringify(tuMayChu.giaTri));
-      localStorage.setItem("phien-ban-" + phan, tuMayChu.capNhat);
-      coMoi = true;
-    }
+  const canGui = [];
+  PHAN_DANH_SACH.forEach((phan) => {
+    const trongMay = docPhanTrongMay(phan);
+    const tuMayChu = duLieu[phan] ? chuanHoaPhan(duLieu[phan].giaTri) : { muc: [], daXoa: [] };
+    const daGop = gopPhan(tuMayChu, trongMay);
+    if (JSON.stringify(daGop.muc) !== JSON.stringify(trongMay.muc)) coMoi = true;
+    if (JSON.stringify(daGop) !== JSON.stringify(gopPhan(tuMayChu, { muc: [], daXoa: [] }))) canGui.push(phan); // máy này có thứ máy chủ chưa có
+    ghiPhanVaoMay(phan, daGop);
   });
+  // Cài đặt: lấy bản mới hơn (nếu máy này không có sửa đổi chưa gửi)
+  const caiDatMayChu = duLieu["cai-dat"];
+  if (caiDatMayChu && !docChoGui().includes("cai-dat") &&
+      caiDatMayChu.capNhat > Number(localStorage.getItem("phien-ban-cai-dat") || 0)) {
+    localStorage.setItem("cai-dat", JSON.stringify(caiDatMayChu.giaTri));
+    localStorage.setItem("phien-ban-cai-dat", caiDatMayChu.capNhat);
+    coMoi = true;
+  }
   if (coMoi) apDungDuLieuMoi();
+  if (canGui.length) {
+    ghiChoGui([...new Set([...docChoGui(), ...canGui])]);
+    guiLenTaiKhoan();
+  }
 }
 
 // Đọc lại sổ và vẽ lại màn hình (các biến/hàm này nằm trong app.js, thu-chi.js)
@@ -171,14 +239,6 @@ function gopTheoId(ds1, ds2) {
   return [...ds1, ...ds2.filter((x) => !daCo.has(x.id))];
 }
 
-function docSo(so) {
-  try {
-    return JSON.parse(localStorage.getItem(so));
-  } catch (loi) {
-    return null;
-  }
-}
-
 // Đăng nhập thành công → lấy dữ liệu của tài khoản về máy.
 // KHÔNG BAO GIỜ xóa mất dữ liệu đang có trong máy: luôn cất một bản sao lưu trước,
 // và gộp (không ghi đè) nếu người dùng đồng ý.
@@ -191,39 +251,37 @@ async function batDauPhienMoi({ ve, ten, quanTri }) {
   const duLieu = await goiMayChu("/du-lieu");
 
   // Dữ liệu đang có trong máy
-  const viecMay = docSo("danh-sach-viec") || [];
-  const thuChiMay = docSo("so-thu-chi") || [];
+  const viecMay = docPhanTrongMay("viec");
+  const thuChiMay = docPhanTrongMay("thu-chi");
   const caiDatMay = docSo("cai-dat");
-  const coDuLieuMay = viecMay.length > 0 || thuChiMay.length > 0;
+  const coDuLieuMay = viecMay.muc.length > 0 || thuChiMay.muc.length > 0;
 
   // 1) Cất bản sao lưu trong máy (khôi phục được ở ⚙️ Cài đặt)
   if (coDuLieuMay) {
-    localStorage.setItem("sao-luu-may", JSON.stringify({ luc: Date.now(), viec: viecMay, thuChi: thuChiMay, caiDat: caiDatMay }));
+    localStorage.setItem("sao-luu-may", JSON.stringify({ luc: Date.now(), viec: viecMay.muc, thuChi: thuChiMay.muc, caiDat: caiDatMay }));
   }
 
   // 2) Hỏi có gộp dữ liệu trong máy vào tài khoản không
   //    (chỉ hỏi khi dữ liệu này chưa từng thuộc về người khác)
   const gop = coDuLieuMay && (!nguoiTruoc || nguoiTruoc === ten) && confirm(
-    `Trên máy đang có ${viecMay.length} việc và ${thuChiMay.length} khoản thu chi.\n` +
+    `Trên máy đang có ${viecMay.muc.length} việc và ${thuChiMay.muc.length} khoản thu chi.\n` +
     `Gộp tất cả vào tài khoản "${ten}"?\n\n` +
     `(Bấm Hủy thì máy vẫn giữ bản sao lưu, sau này khôi phục được trong ⚙️ Cài đặt.)`
   );
 
-  // 3) Ghi dữ liệu của tài khoản vào máy
-  const giaTriTK = (phan) => (duLieu[phan] ? duLieu[phan].giaTri : null);
+  // 3) Ghi dữ liệu của tài khoản vào máy (gộp thêm dữ liệu trong máy nếu đồng ý)
+  const rong = { muc: [], daXoa: [] };
+  ghiPhanVaoMay("viec", gopPhan(duLieu.viec ? duLieu.viec.giaTri : rong, gop ? viecMay : rong));
+  ghiPhanVaoMay("thu-chi", gopPhan(duLieu["thu-chi"] ? duLieu["thu-chi"].giaTri : rong, gop ? thuChiMay : rong));
+  const caiDatMoi = duLieu["cai-dat"] ? duLieu["cai-dat"].giaTri : (gop ? caiDatMay : null);
+  if (caiDatMoi) localStorage.setItem("cai-dat", JSON.stringify(caiDatMoi));
+  else localStorage.removeItem("cai-dat");
   Object.keys(SO_CUA_PHAN).forEach((phan) => {
-    localStorage.removeItem("phien-ban-" + phan);
     if (duLieu[phan]) localStorage.setItem("phien-ban-" + phan, duLieu[phan].capNhat);
-  });
-  const viecMoi = gop ? gopTheoId(giaTriTK("viec") || [], viecMay) : giaTriTK("viec");
-  const thuChiMoi = gop ? gopTheoId(giaTriTK("thu-chi") || [], thuChiMay) : giaTriTK("thu-chi");
-  const caiDatMoi = giaTriTK("cai-dat") || (gop ? caiDatMay : null);
-  [["danh-sach-viec", viecMoi], ["so-thu-chi", thuChiMoi], ["cai-dat", caiDatMoi]].forEach(([so, giaTri]) => {
-    if (giaTri) localStorage.setItem(so, JSON.stringify(giaTri));
-    else localStorage.removeItem(so);
+    else localStorage.removeItem("phien-ban-" + phan);
   });
 
-  // 4) Gộp xong thì gửi bản đã gộp lên tài khoản
+  // 4) Gộp xong thì gửi lên tài khoản
   if (gop) {
     ghiChoGui(Object.keys(SO_CUA_PHAN).filter((phan) => localStorage.getItem(SO_CUA_PHAN[phan])));
     await guiLenTaiKhoan();
@@ -233,19 +291,28 @@ async function batDauPhienMoi({ ve, ten, quanTri }) {
   location.reload(); // mở lại app với dữ liệu mới
 }
 
-// Khôi phục bản sao lưu trong máy: gộp vào dữ liệu hiện tại (không xóa gì)
+// Thêm lại các mục đã mất (mục nào đang có thì bỏ qua, KHÔNG xóa gì). Trả về số mục thêm được.
+function themMucDaMat(phan, muc) {
+  const dangCo = new Set((phan === "viec" ? danhSachViec : danhSachThuChi).map((x) => x.id));
+  const moi = (muc || []).filter((x) => x && x.id && !dangCo.has(x.id)).map((x) => ({ ...x }));
+  if (!moi.length) return 0;
+  if (phan === "viec") {
+    danhSachViec = [...danhSachViec, ...moi.map((v) => ({ gioKetThuc: "", checklist: [], ...v }))];
+    luuDanhSach();
+    veTatCa();
+  } else {
+    danhSachThuChi = [...danhSachThuChi, ...moi];
+    luuThuChi();
+    veThuChi();
+  }
+  return moi.length;
+}
+
+// Khôi phục bản sao lưu cất trong máy lúc đăng nhập
 function khoiPhucSaoLuu() {
   const saoLuu = docSo("sao-luu-may");
   if (!saoLuu) return 0;
-  const truocViec = danhSachViec.length;
-  const truocThuChi = danhSachThuChi.length;
-  danhSachViec = gopTheoId(danhSachViec, (saoLuu.viec || []).map((v) => ({ gioKetThuc: "", checklist: [], ...v })));
-  danhSachThuChi = gopTheoId(danhSachThuChi, saoLuu.thuChi || []);
-  luuDanhSach();
-  luuThuChi();
-  veTatCa();
-  veThuChi();
-  return danhSachViec.length - truocViec + danhSachThuChi.length - truocThuChi;
+  return themMucDaMat("viec", saoLuu.viec) + themMucDaMat("thu-chi", saoLuu.thuChi);
 }
 
 // Đăng xuất: xóa dữ liệu khỏi máy này (dữ liệu vẫn còn trên tài khoản)
@@ -265,7 +332,7 @@ async function dangXuat() {
   [
     ...Object.values(SO_CUA_PHAN),
     ...Object.keys(SO_CUA_PHAN).map((phan) => "phien-ban-" + phan),
-    "cho-dong-bo", "ve-dang-nhap", "la-quan-tri", "link-sheet",
+    "cho-dong-bo", "ve-dang-nhap", "la-quan-tri", "link-sheet", "da-xoa-viec", "da-xoa-thu-chi",
   ].forEach((khoa) => localStorage.removeItem(khoa));
   location.reload();
 }
@@ -284,4 +351,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!document.hidden) guiLenTaiKhoan().then(taiVeTuTaiKhoan);
   });
   window.addEventListener("online", guiLenTaiKhoan);
+  // Đang mở app thì cứ 1 phút lấy bản mới một lần (thấy ngay thay đổi từ máy khác)
+  setInterval(() => {
+    if (!document.hidden) taiVeTuTaiKhoan();
+  }, 60000);
 });

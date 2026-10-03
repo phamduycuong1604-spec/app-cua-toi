@@ -34,6 +34,8 @@ function moCaiDat() {
   veSuaGoiMau();
   veSuaMucChi();
   if (daDangNhap && toi.quanTri) taiDanhSachNguoiDung();
+  if (daDangNhap) taiDanhSachBanLuu();
+  else cd("ban-luu").innerHTML = "";
 
   manCaiDat.classList.remove("an");
   manCaiDat.scrollTop = 0;
@@ -68,6 +70,104 @@ cd("khoi-phuc").onclick = () => {
   if (!confirm("Gộp bản sao lưu trên máy vào dữ liệu hiện tại?")) return;
   const soMoi = khoiPhucSaoLuu();
   alert(soMoi ? `Đã khôi phục ${soMoi} mục! Dữ liệu sẽ tự gửi lên tài khoản.` : "Mọi mục trong bản sao lưu đều đã có sẵn, không cần thêm gì.");
+};
+
+
+// ----- 1b. BẢN LƯU TỰ ĐỘNG TRÊN MÁY CHỦ + XUẤT/NHẬP FILE -----
+
+const TEN_PHAN = { viec: "Lịch việc", "thu-chi": "Thu chi", "cai-dat": "Cài đặt" };
+
+async function taiDanhSachBanLuu() {
+  const khung = cd("ban-luu");
+  khung.innerHTML = `<p class="tom-tat">Đang tải bản lưu…</p>`;
+  let banLuu;
+  try {
+    ({ banLuu } = await goiMayChu("/du-lieu/lich-su"));
+  } catch (loi) {
+    khung.innerHTML = `<p class="tom-tat">Không tải được danh sách bản lưu (kiểm tra mạng).</p>`;
+    return;
+  }
+  khung.innerHTML = "";
+  if (!banLuu.length) {
+    khung.innerHTML = `<p class="tom-tat">Chưa có bản lưu nào. Bản lưu đầu tiên sẽ được cất khi dữ liệu thay đổi.</p>`;
+    return;
+  }
+  banLuu.slice(0, 20).forEach((b) => {
+    const dong = document.createElement("div");
+    dong.className = "dong-nguoi";
+    const ten = document.createElement("b");
+    ten.textContent = new Date(b.luc).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) + " ";
+    const phu = document.createElement("small");
+    phu.textContent = "· " + TEN_PHAN[b.phan] + (b.soMuc !== null ? ` · ${b.soMuc} mục` : "");
+    ten.appendChild(phu);
+    const nut = document.createElement("button");
+    nut.className = "nut-nho";
+    nut.textContent = "Khôi phục";
+    nut.onclick = () => khoiPhucBanLuu(b);
+    dong.append(ten, nut);
+    khung.appendChild(dong);
+  });
+}
+
+async function khoiPhucBanLuu(b) {
+  if (!confirm(`Khôi phục bản lưu ${TEN_PHAN[b.phan]} lúc ${new Date(b.luc).toLocaleString("vi-VN")}?\nChỉ thêm lại những mục đang thiếu, không xóa gì.`)) return;
+  try {
+    const { phan, giaTri } = await goiMayChu("/du-lieu/lich-su/" + b.ma);
+    if (phan === "cai-dat") {
+      caiDat = { ...caiDat, ...giaTri };
+      luuCaiDat();
+      moCaiDat();
+      alert("Đã khôi phục cài đặt (gói màu, mục chi).");
+      return;
+    }
+    const soMoi = themMucDaMat(phan, chuanHoaPhan(giaTri).muc);
+    alert(soMoi ? `Đã khôi phục ${soMoi} mục ${TEN_PHAN[phan]}!` : "Bản lưu này không có mục nào đang thiếu.");
+  } catch (loi) {
+    alert(loi.message);
+  }
+}
+
+// Xuất toàn bộ dữ liệu ra 1 file (lưu vào Tệp hoặc gửi Zalo cho chính mình)
+cd("xuat-file").onclick = async () => {
+  const duLieu = {
+    app: "PHAHA",
+    taiKhoan: thongTinToi().ten || null,
+    luc: new Date().toISOString(),
+    viec: danhSachViec,
+    thuChi: danhSachThuChi,
+    caiDat,
+  };
+  const ngay = homNay();
+  const file = new File([JSON.stringify(duLieu, null, 1)], `phaha-sao-luu-${ngay}.json`, { type: "application/json" });
+  // iPhone/Android: mở bảng Chia sẻ (Lưu vào Tệp, Zalo...); máy tính: tải file về
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Sao lưu PHAHA " + ngay });
+      return;
+    } catch (loi) {
+      if (loi.name === "AbortError") return;
+    }
+  }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(file);
+  link.download = file.name;
+  link.click();
+};
+
+// Nhập file sao lưu: thêm lại các mục còn thiếu
+cd("nhap-file").onclick = () => cd("o-file").click();
+cd("o-file").onchange = async () => {
+  const file = cd("o-file").files[0];
+  cd("o-file").value = "";
+  if (!file) return;
+  try {
+    const duLieu = JSON.parse(await file.text());
+    if (duLieu.app !== "PHAHA") throw new Error("Đây không phải file sao lưu của PHAHA");
+    const soMoi = themMucDaMat("viec", duLieu.viec) + themMucDaMat("thu-chi", duLieu.thuChi);
+    alert(soMoi ? `Đã thêm lại ${soMoi} mục từ file sao lưu!` : "Mọi mục trong file đều đã có sẵn.");
+  } catch (loi) {
+    alert("Không đọc được file: " + loi.message);
+  }
 };
 
 

@@ -15,6 +15,12 @@ const DU_LIEU_TOI_DA = 1500000;              // mỗi phần tối đa ~1,5 MB
 const SAI_TOI_DA = 5;                        // sai mật khẩu 5 lần...
 const KHOA_SAI_TRONG = 15 * 60 * 1000;       // ...thì khóa 15 phút
 
+import gop from "../../chung/gop.js";
+
+const LUU_LICH_SU_MOI = 10 * 60 * 1000;     // có thay đổi thì cứ 10 phút cất 1 bản lưu...
+                                             // ...riêng khi có mục bị XÓA thì cất ngay
+const SO_BAN_LUU_TOI_DA = 200;               // giữ 200 bản lưu gần nhất mỗi phần
+
 const maHoa = new TextEncoder();
 
 export async function taoBangTaiKhoan(env) {
@@ -27,6 +33,9 @@ export async function taoBangTaiKhoan(env) {
       "CREATE TABLE IF NOT EXISTS du_lieu (ten TEXT, phan TEXT, gia_tri TEXT, cap_nhat INTEGER, PRIMARY KEY (ten, phan))"
     ),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS dang_nhap_sai (ten TEXT, luc INTEGER)"),
+    // Bản lưu tự động: cất nội dung CŨ trước khi bị thay đổi
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS lich_su (ten TEXT, phan TEXT, gia_tri TEXT, luc INTEGER)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS lich_su_theo_nguoi ON lich_su (ten, phan, luc)"),
   ]);
 }
 
@@ -245,6 +254,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
         env.DB.prepare("DELETE FROM nguoi_dung WHERE ten = ?1").bind(ten),
         env.DB.prepare("DELETE FROM phien WHERE ten = ?1").bind(ten),
         env.DB.prepare("DELETE FROM du_lieu WHERE ten = ?1").bind(ten),
+        env.DB.prepare("DELETE FROM lich_su WHERE ten = ?1").bind(ten),
       ]);
       return traLoi({ ok: true });
     }
@@ -260,6 +270,32 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
       return traLoi(ketQua);
     }
 
+    // Danh sách bản lưu tự động (không kèm nội dung)
+    if (p === "GET /du-lieu/lich-su") {
+      const nguoi = await xacThuc(yeuCau, env);
+      const { results } = await env.DB.prepare(
+        "SELECT rowid AS ma, phan, luc, gia_tri FROM lich_su WHERE ten = ?1 ORDER BY luc DESC LIMIT 60"
+      ).bind(nguoi.ten).all();
+      return traLoi({
+        banLuu: results.map((r) => {
+          const giaTri = JSON.parse(r.gia_tri);
+          const soMuc = r.phan === "cai-dat" ? null : gop.chuanHoaPhan(giaTri).muc.length;
+          return { ma: r.ma, phan: r.phan, luc: r.luc, soMuc };
+        }),
+      });
+    }
+
+    // Nội dung một bản lưu
+    const khopBanLuu = /^GET \/du-lieu\/lich-su\/(\d+)$/.exec(p);
+    if (khopBanLuu) {
+      const nguoi = await xacThuc(yeuCau, env);
+      const dong = await env.DB.prepare("SELECT phan, gia_tri, luc FROM lich_su WHERE rowid = ?1 AND ten = ?2")
+        .bind(Number(khopBanLuu[1]), nguoi.ten).first();
+      if (!dong) throw new LoiNguoiDung("Không tìm thấy bản lưu", 404);
+      return traLoi({ phan: dong.phan, luc: dong.luc, giaTri: JSON.parse(dong.gia_tri) });
+    }
+
+    // Lưu dữ liệu: GỘP với bản trên máy chủ (không ghi đè), cất bản cũ vào lịch sử
     const khopLuu = /^PUT \/du-lieu\/([a-z-]+)$/.exec(p);
     if (khopLuu) {
       const nguoi = await xacThuc(yeuCau, env);
@@ -267,12 +303,50 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
       if (!CAC_PHAN_DU_LIEU.includes(phan)) throw new LoiNguoiDung("Không có phần dữ liệu này", 404);
       const chu = await yeuCau.text();
       if (chu.length > DU_LIEU_TOI_DA) throw new LoiNguoiDung("Dữ liệu quá lớn", 413);
-      const giaTri = JSON.parse(chu).giaTri;
-      const capNhat = Date.now();
-      await env.DB.prepare(
-        "INSERT INTO du_lieu VALUES (?1, ?2, ?3, ?4) ON CONFLICT(ten, phan) DO UPDATE SET gia_tri = ?3, cap_nhat = ?4"
-      ).bind(nguoi.ten, phan, JSON.stringify(giaTri), capNhat).run();
-      return traLoi({ capNhat });
+      const giaTriGuiLen = JSON.parse(chu).giaTri;
+
+      // Thử vài lần phòng khi 2 máy gửi cùng lúc (mỗi lần đọc lại bản mới nhất rồi gộp)
+      for (let lan = 0; lan < 5; lan++) {
+        const dong = await env.DB.prepare("SELECT gia_tri, cap_nhat FROM du_lieu WHERE ten = ?1 AND phan = ?2")
+          .bind(nguoi.ten, phan).first();
+        const giaTriCu = dong ? JSON.parse(dong.gia_tri) : null;
+        // Cài đặt: lấy bản mới; công việc / thu chi: gộp từng mục
+        const giaTriMoi = phan === "cai-dat" ? giaTriGuiLen : gop.gopPhan(giaTriCu, giaTriGuiLen);
+        const capNhat = Math.max(Date.now(), dong ? dong.cap_nhat + 1 : 0);
+
+        let ketQua;
+        if (!dong) {
+          ketQua = await env.DB.prepare("INSERT OR IGNORE INTO du_lieu VALUES (?1, ?2, ?3, ?4)")
+            .bind(nguoi.ten, phan, JSON.stringify(giaTriMoi), capNhat).run();
+        } else {
+          ketQua = await env.DB.prepare(
+            "UPDATE du_lieu SET gia_tri = ?3, cap_nhat = ?4 WHERE ten = ?1 AND phan = ?2 AND cap_nhat = ?5"
+          ).bind(nguoi.ten, phan, JSON.stringify(giaTriMoi), capNhat, dong.cap_nhat).run();
+        }
+        if (!ketQua.meta.changes) continue; // máy khác vừa ghi xen vào → làm lại
+
+        // Cất bản CŨ vào lịch sử: ngay lập tức nếu có mục bị xóa, còn lại tối đa 10 phút một bản
+        if (dong && dong.gia_tri !== JSON.stringify(giaTriMoi)) {
+          let coMucBiXoa = false;
+          if (phan !== "cai-dat") {
+            const conLai = new Set(giaTriMoi.muc.map((x) => x.id));
+            coMucBiXoa = gop.chuanHoaPhan(giaTriCu).muc.some((x) => !conLai.has(x.id));
+          }
+          const ganNhat = await env.DB.prepare("SELECT MAX(luc) AS luc FROM lich_su WHERE ten = ?1 AND phan = ?2")
+            .bind(nguoi.ten, phan).first("luc");
+          if (coMucBiXoa || !ganNhat || Date.now() - ganNhat > LUU_LICH_SU_MOI) {
+            await env.DB.batch([
+              env.DB.prepare("INSERT INTO lich_su VALUES (?1, ?2, ?3, ?4)").bind(nguoi.ten, phan, dong.gia_tri, Date.now()),
+              env.DB.prepare(
+                "DELETE FROM lich_su WHERE ten = ?1 AND phan = ?2 AND rowid NOT IN " +
+                  "(SELECT rowid FROM lich_su WHERE ten = ?1 AND phan = ?2 ORDER BY luc DESC LIMIT ?3)"
+              ).bind(nguoi.ten, phan, SO_BAN_LUU_TOI_DA),
+            ]);
+          }
+        }
+        return traLoi({ capNhat, giaTri: giaTriMoi });
+      }
+      throw new LoiNguoiDung("Máy chủ đang bận, thử lại sau ít giây", 409);
     }
 
     return null;
