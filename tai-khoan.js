@@ -8,6 +8,8 @@
 //   chạy sau khi mọi file đã tải xong (sự kiện DOMContentLoaded)
 // =====================================================
 
+const PHIEN_BAN_APP = "17"; // tăng mỗi lần sửa app, để biết điện thoại đã nhận bản mới chưa
+
 // Có máy chủ thì mới dùng tài khoản (may-chu.js)
 const CO_TAI_KHOAN = typeof DIA_CHI_MAY_CHU === "string" && DIA_CHI_MAY_CHU !== "";
 
@@ -28,6 +30,7 @@ function thongTinToi() {
 async function goiMayChu(duongDan, { cach = "GET", than } = {}) {
   const ketQua = await fetch(DIA_CHI_MAY_CHU + duongDan, {
     method: cach,
+    cache: "no-store", // luôn lấy bản mới nhất từ máy chủ
     headers: {
       "Content-Type": "application/json",
       ...(veDangNhap() ? { Authorization: "Bearer " + veDangNhap() } : {}),
@@ -131,13 +134,39 @@ async function guiLenTaiKhoan() {
     }
   } catch (loi) {
     // mất mạng: để dành lần sau
+    localStorage.setItem("dong-bo-loi", new Date().toLocaleTimeString("vi-VN") + " · " + loi.message);
   }
   dangGui = false;
+  ghiTinhTrang(docChoGui().length ? "gửi" : "gửi-xong");
   if (coMoi) apDungDuLieuMoi();
   if (docChoGui().length && navigator.onLine) {
     clearTimeout(henGuiLen);
     henGuiLen = setTimeout(guiLenTaiKhoan, 3000);
   }
+}
+
+// Ghi lại lần đồng bộ thành công gần nhất (xem trong ⚙️ Cài đặt)
+function ghiTinhTrang(viec) {
+  if (viec === "gửi") return;
+  localStorage.setItem(viec === "tai" ? "dong-bo-tai-luc" : "dong-bo-gui-luc", Date.now());
+  localStorage.removeItem("dong-bo-loi");
+}
+
+function moTaTinhTrang() {
+  const gio = (khoa) => {
+    const luc = Number(localStorage.getItem(khoa));
+    return luc ? new Date(luc).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit", day: "2-digit", month: "2-digit" }) : "chưa có";
+  };
+  const choGui = docChoGui();
+  const dong = [
+    `Tải về lần cuối: ${gio("dong-bo-tai-luc")}`,
+    `Gửi lên lần cuối: ${gio("dong-bo-gui-luc")}`,
+    choGui.length ? `⏳ Đang chờ gửi: ${choGui.join(", ")}` : "✅ Không còn gì chờ gửi",
+  ];
+  const loi = localStorage.getItem("dong-bo-loi");
+  if (loi) dong.push("⚠️ Lỗi gần nhất: " + loi);
+  dong.push(`Phiên bản app: ${PHIEN_BAN_APP}`);
+  return dong.join("\n");
 }
 
 // Tải bản mới nhất từ máy chủ (ví dụ vừa sửa trên máy khác) và GỘP với bản trong máy
@@ -147,8 +176,10 @@ async function taiVeTuTaiKhoan() {
   try {
     duLieu = await goiMayChu("/du-lieu");
   } catch (loi) {
+    localStorage.setItem("dong-bo-loi", new Date().toLocaleTimeString("vi-VN") + " · " + loi.message);
     return; // mất mạng: dùng tạm dữ liệu trong máy
   }
+  ghiTinhTrang("tai");
   let coMoi = false;
   const canGui = [];
   PHAN_DANH_SACH.forEach((phan) => {
@@ -333,6 +364,7 @@ async function dangXuat() {
     ...Object.values(SO_CUA_PHAN),
     ...Object.keys(SO_CUA_PHAN).map((phan) => "phien-ban-" + phan),
     "cho-dong-bo", "ve-dang-nhap", "la-quan-tri", "link-sheet", "da-xoa-viec", "da-xoa-thu-chi",
+    "dong-bo-tai-luc", "dong-bo-gui-luc", "dong-bo-loi",
   ].forEach((khoa) => localStorage.removeItem(khoa));
   location.reload();
 }
