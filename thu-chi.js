@@ -48,13 +48,14 @@ let caiDat = docCaiDat();
 
 function docThuChi() {
   try {
-    return JSON.parse(localStorage.getItem(SO_THU_CHI)) || [];
+    return chuanHoaPhan(JSON.parse(localStorage.getItem(SO_THU_CHI))).muc;
   } catch (loi) {
     return [];
   }
 }
 
 function luuThuChi() {
+  danhDauThayDoi("thu-chi", danhSachThuChi); // ghi nhận khoản nào vừa thêm/sửa/xóa (tai-khoan.js)
   localStorage.setItem(SO_THU_CHI, JSON.stringify(danhSachThuChi));
   daThayDoi("thu-chi"); // gửi lên tài khoản (tai-khoan.js)
 }

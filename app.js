@@ -18,7 +18,7 @@ const TEN_SO = "danh-sach-viec";
 
 function docDanhSach() {
   try {
-    const ds = JSON.parse(localStorage.getItem(TEN_SO)) || [];
+    const ds = chuanHoaPhan(JSON.parse(localStorage.getItem(TEN_SO))).muc;
     // Việc tạo từ bản cũ chưa có giờ kết thúc / checklist thì bổ sung cho đủ
     return ds.map((v) => ({ gioKetThuc: "", checklist: [], ...v }));
   } catch (loi) {
@@ -27,6 +27,7 @@ function docDanhSach() {
 }
 
 function luuDanhSach() {
+  danhDauThayDoi("viec", danhSachViec); // ghi nhận việc nào vừa thêm/sửa/xóa (tai-khoan.js)
   localStorage.setItem(TEN_SO, JSON.stringify(danhSachViec));
   dongBoMayChu(); // gửi lịch nhắc mới lên máy chủ (nếu đã bật)
   daThayDoi("viec"); // gửi dữ liệu lên tài khoản (tai-khoan.js)

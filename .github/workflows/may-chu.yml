@@ -8,7 +8,7 @@ name: Triển khai máy chủ nhắc giờ
 on:
   push:
     branches: [main]
-    paths: ["may-chu/**", ".github/workflows/may-chu.yml"]
+    paths: ["may-chu/**", "chung/**", ".github/workflows/may-chu.yml"]
   workflow_dispatch: # cho phép bấm chạy tay trong mục Actions
 
 permissions:
