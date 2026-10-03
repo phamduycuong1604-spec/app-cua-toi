@@ -698,5 +698,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .nut-nho.do { background: var(--hong-nhat); color: var(--hong-dam); }
 
+.tinh-trang { white-space: pre-line; margin: 0 0 10px; line-height: 1.6; }
+
 /* Dùng để ẩn một phần tử */
 .an { display: none !important; }

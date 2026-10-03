@@ -17,6 +17,7 @@ function moCaiDat() {
   const daDangNhap = CO_TAI_KHOAN && veDangNhap();
   cd("phan-tai-khoan").classList.toggle("an", !daDangNhap);
   cd("phan-quan-tri").classList.toggle("an", !(daDangNhap && toi.quanTri));
+  cd("dong-bo").textContent = daDangNhap ? moTaTinhTrang() : "";
   cd("ten").textContent = daDangNhap ? `Đang đăng nhập: ${toi.ten}${toi.quanTri ? " (quản trị viên)" : ""}` : "";
   cd("mk-cu").value = cd("mk-moi").value = "";
 
@@ -59,6 +60,17 @@ cd("doi-mk").onclick = async () => {
   } catch (loi) {
     alert(loi.message);
   }
+};
+
+cd("dong-bo-ngay").onclick = async () => {
+  const nut = cd("dong-bo-ngay");
+  nut.disabled = true;
+  nut.textContent = "Đang đồng bộ…";
+  await guiLenTaiKhoan();
+  await taiVeTuTaiKhoan();
+  cd("dong-bo").textContent = moTaTinhTrang();
+  nut.textContent = "🔄 Đồng bộ ngay";
+  nut.disabled = false;
 };
 
 cd("dang-xuat").onclick = () => {

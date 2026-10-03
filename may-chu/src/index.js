@@ -61,6 +61,7 @@ function traLoi(duLieu, maTrangThai = 200) {
     status: maTrangThai,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store", // không cho điện thoại giữ bản cũ
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
