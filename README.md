@@ -19,6 +19,7 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `may-chu.js` | Địa chỉ máy chủ nhắc giờ (tự động điền) |
 | `may-chu/` | Máy chủ nhắc giờ chạy trên Cloudflare: gửi thông báo kể cả khi app tắt |
 | `.github/workflows/may-chu.yml` | Tự động đưa máy chủ lên Cloudflare |
+| `dich-video/` | App **PhaHa lồng tiếng**: video tiếng Trung → dịch → lồng tiếng Việt (xem mục bên dưới) |
 
 ## Khi sửa code
 
@@ -68,3 +69,16 @@ Làm một lần:
 - Đồng bộ **gộp từng mục** (không ghi đè cả danh sách): thêm ở máy nào cũng giữ, xóa ở máy nào thì máy khác xóa theo.
 - **Bản lưu tự động**: máy chủ cất nội dung cũ trước khi thay đổi (ngay khi có mục bị xóa, còn lại 10 phút/bản, giữ 200 bản).
   Khôi phục trong ⚙️ Cài đặt → Sao lưu & khôi phục (chỉ thêm lại mục đang thiếu). Có thêm nút xuất/nhập file sao lưu.
+
+## PhaHa lồng tiếng (thư mục `dich-video/`)
+
+Mở: `https://phamduycuong1604-spec.github.io/app-cua-toi/dich-video/`
+
+1. Lấy mã Gemini miễn phí: https://aistudio.google.com/apikey → **Create API key** → sao chép.
+2. Mở app → ⚙️ → dán mã → chọn giọng → **Lưu**.
+3. Chọn video → **Bắt đầu**. App tự: tách tiếng → Gemini nghe tiếng Trung & dịch → Gemini đọc tiếng Việt → ghép vào video.
+4. Sửa câu dịch nếu muốn → **Làm lại**. Xong bấm **Lưu video** → **Lưu video** (vào Ảnh).
+
+- Hình giữ nguyên, chỉ thay tiếng (giữ lại nhạc gốc nhỏ, chỉnh trong ⚙️).
+- Mã miễn phí có giới hạn lượt; hết lượt app tự chờ, hết lượt trong ngày thì báo.
+- Video nặng (trên ~300MB) có thể làm điện thoại bị đơ.
