@@ -1130,32 +1130,42 @@ function taoWav2(L, R, tanSo) {
 // =====================================================
 // GỌI GEMINI (tự chờ khi hết lượt/phút, tự tìm mô hình còn dùng được)
 // =====================================================
+// Mỗi loại Gemini có lượt miễn phí riêng → loại này quá tải/hết lượt thì chuyển loại khác
 const MO_HINH = {
-  nghe: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"],
+  nghe: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
   doc: ["gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts", "gemini-2.5-pro-preview-tts"],
 };
 const moHinhDung = {}; // mô hình đã chạy được
+const moHinhNghi = new Set(); // mô hình đang quá tải hoặc hết lượt hôm nay → bỏ qua
 
 async function goiGemini(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   if (tuChon) return goiMoHinh(tuChon, noiDung, loai);
-  if (moHinhDung[loai]) return goiMoHinh(moHinhDung[loai], noiDung, loai);
-  let ds = [...MO_HINH[loai]];
-  let daHoi = false;
+  let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
+  let daHoi = false, loiCuoi = null;
   for (let i = 0; i < ds.length; i++) {
+    if (moHinhNghi.has(ds[i])) continue;
     try {
       const kq = await goiMoHinh(ds[i], noiDung, loai);
       moHinhDung[loai] = ds[i];
       return kq;
     } catch (loi) {
-      if (loi.status !== 404) throw loi;
-      // Hết danh sách: hỏi Google xem hiện có mô hình nào
-      if (i === ds.length - 1 && !daHoi) {
-        daHoi = true;
-        ds = ds.concat(await timMoHinh(loai));
+      if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
+      loiCuoi = loi;
+      if (loi.doiMoHinh) {
+        moHinhNghi.add(ds[i]);
+        if (moHinhDung[loai] === ds[i]) delete moHinhDung[loai];
+        nhat(`↪️ Bỏ qua ${ds[i]} (${loi.message === "HET_NGAY" ? "hết lượt miễn phí hôm nay" : "đang quá tải"}), thử loại Gemini khác`);
       }
     }
+    // Hết danh sách: hỏi Google xem hiện có mô hình nào khác
+    if (i === ds.length - 1 && !daHoi) {
+      daHoi = true;
+      ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t)));
+    }
   }
+  if (loiCuoi?.message === "HET_NGAY") throw loiCuoi;
+  if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }
 
@@ -1222,18 +1232,21 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       continue;
     }
     if (r.status === 429) {
-      if (/per ?day|PerDay/i.test(thongBao)) {
-        const e = new Error("HET_NGAY");
-        e.chiTiet = thongBao;
-        throw e;
+      const chiTiet = JSON.stringify(j.error?.details || "");
+      const giay = Number(/(\d+(?:\.\d+)?)s/.exec(j.error?.details?.find((d) => d.retryDelay)?.retryDelay || "")?.[1]);
+      const quota = /quotaId\":\"([^\"]+)/.exec(chiTiet)?.[1];
+      if (quota) nhat(`Giới hạn bị chạm: ${quota}${giay ? `, Google bảo chờ ${giay} giây` : ""}`);
+      // Hết lượt trong ngày (hoặc phải chờ quá lâu) → đổi sang loại Gemini khác
+      if (/per ?day|PerDay/i.test(thongBao + chiTiet) || !giay || giay > 60 || lan >= 3) {
+        throw Object.assign(new Error("HET_NGAY"), { chiTiet: thongBao, doiMoHinh: true });
       }
-      if (lan < 10) {
-        const giay = Number(/(\d+(?:\.\d+)?)s/.exec(
-          j.error?.details?.find((d) => d.retryDelay)?.retryDelay || ""
-        )?.[1]) || 15 * (lan + 1);
-        await cho(giay + 1, loai === "nghe" ? "dich" : "long");
-        continue;
-      }
+      await cho(giay + 1, loai === "nghe" ? "dich" : "long");
+      continue;
+    }
+    // Quá tải (503): thử lại 1 lần, vẫn quá tải thì đổi loại Gemini khác
+    if (r.status === 503) {
+      if (lan < 1) { await cho(3); continue; }
+      throw Object.assign(new Error("Gemini đang quá tải"), { status: 503, doiMoHinh: true });
     }
     if (r.status >= 500 && lan < 3) { await cho(5); continue; }
     const e = new Error(thongBao);
