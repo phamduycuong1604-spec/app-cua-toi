@@ -143,8 +143,9 @@ function moCaiDat() {
     $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
     veDsGiong(dv);
     const da = kyTuThang(dv), toiDa = DICH_VU[dv].mienPhi;
-    $("chu-ky-tu-" + dv).textContent =
-      `Tháng này đã dùng ${da.toLocaleString("vi-VN")} / ${toiDa.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
+    $("chu-ky-tu-" + dv).textContent = dv === "gc"
+      ? "Tháng này (đếm trên máy này): " + Object.entries(LOAI_GC).map(([k, l]) => `${l.ten} ${kyTuThang("gc-" + k).toLocaleString("vi-VN")}/${(l.mienPhi / 1e6).toLocaleString("vi-VN")} triệu`).join(" · ") + ". Hết loại này app tự chuyển loại khác."
+      : `Tháng này đã dùng ${da.toLocaleString("vi-VN")} / ${toiDa.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
   }
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-dp-groq").value = caiDat.dp.groq;
@@ -830,7 +831,7 @@ const DICH_VU = {
 async function docCau(chu, dv = caiDat.dichVu) {
   chu = chu.trim();
   const c = caiDat.dv[dv];
-  const khoa = [dv, dv === "gemini" ? caiDat.giong : c.giong, dv === "el" ? c.mh : "", chu].join("|");
+  const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong, dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
   const kq = await DICH_VU[dv].doc(chu);
   let mau = Float32Array.from(kq.pcm, (v) => v / 32768);
@@ -918,13 +919,40 @@ async function layGiongGc() {
     }));
 }
 
+// Google miễn phí theo từng loại giọng mỗi tháng: Chirp3-HD 1 triệu, Neural2 1 triệu, WaveNet 4 triệu, Standard 4 triệu ký tự
+const LOAI_GC = { hd: { ten: "Chirp 3 HD", mienPhi: 1000000 }, n2: { ten: "Neural2", mienPhi: 1000000 }, wn: { ten: "WaveNet", mienPhi: 4000000 }, st: { ten: "Standard", mienPhi: 4000000 } };
+const loaiGc = (ten) => (/Chirp/.test(ten) ? "hd" : /Neural2/.test(ten) ? "n2" : /Wavenet/i.test(ten) ? "wn" : "st");
+let giongGcLanNay = null; // giọng Google dùng cho cả video đang làm
+
+// Chọn giọng Google cho cả video: loại đang chọn sắp hết mức miễn phí tháng này
+// thì đổi sang loại khác còn lượt (ưu tiên cùng giới tính), để vẫn miễn phí
+function chonGiongGc(soKyTu) {
+  const chon = caiDat.dv.gc.giong;
+  const conLuot = (ten) => kyTuThang("gc-" + loaiGc(ten)) + soKyTu <= LOAI_GC[loaiGc(ten)].mienPhi * 0.97;
+  if (conLuot(chon)) return chon;
+  const ds = caiDat.dv.gc.ds || [];
+  const gioi = (ten) => (/· Nam ·/.test(ds.find((g) => g.ten === ten)?.nhan || "") ? "nam" : "nu");
+  const thuTu = ["hd", "n2", "wn", "st"];
+  const thay = ds
+    .filter((g) => g.ten !== chon && conLuot(g.ten))
+    .sort((a, b) => (gioi(b.ten) === gioi(chon)) - (gioi(a.ten) === gioi(chon)) || thuTu.indexOf(loaiGc(a.ten)) - thuTu.indexOf(loaiGc(b.ten)))[0];
+  if (thay) {
+    nhat(`Giọng ${LOAI_GC[loaiGc(chon)].ten} sắp hết mức miễn phí tháng này → video này đọc bằng ${thay.ten.replace("vi-VN-", "")} (${LOAI_GC[loaiGc(thay.ten)].ten}, vẫn miễn phí)`);
+    return thay.ten;
+  }
+  nhat("⚠️ Mọi giọng Google đã quá mức miễn phí tháng này (đếm trên máy này) – Google sẽ tính tiền rất ít (~100.000đ/1 triệu ký tự với WaveNet)");
+  return chon;
+}
+
 async function docGoogleCloud(chu) {
+  const giong = giongGcLanNay || caiDat.dv.gc.giong;
   const j = await goiGc("/text:synthesize", {
     input: { text: chu },
-    voice: { languageCode: "vi-VN", name: caiDat.dv.gc.giong },
+    voice: { languageCode: "vi-VN", name: giong },
     audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: TAN_SO_DOC },
   });
   congKyTu("gc", chu.length);
+  congKyTu("gc-" + loaiGc(giong), chu.length);
   return docWav(tuBase64(j.audioContent));
 }
 
@@ -1038,6 +1066,14 @@ function dvDocDung() {
 // Đọc cả video bằng 1 giọng; giọng đó hết lượt/hỏng thì đọc lại TOÀN BỘ bằng dịch vụ kế tiếp
 // (không trộn 2 giọng trong 1 video)
 async function longTieng() {
+  try {
+    return await longTiengThu();
+  } finally {
+    giongGcLanNay = null;
+  }
+}
+
+async function longTiengThu() {
   let loiCuoi;
   const ds = dvDocDung();
   for (let i = 0; i < ds.length; i++) {
@@ -1057,6 +1093,7 @@ async function longTiengBang(dv) {
   let xong = 0, hong = false;
   const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()), dv);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
+  giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;
   // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
