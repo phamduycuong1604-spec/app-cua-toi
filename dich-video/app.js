@@ -13,7 +13,7 @@ const API = "https://generativelanguage.googleapis.com/v1beta";
 const LOI_FFMPEG = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
 const TAN_SO_NGHE = 16000; // âm thanh gửi đi nghe: 16.000 mẫu/giây, 1 kênh
 const TAN_SO_DOC = 24000; // giọng đọc Gemini trả về
-const DOAN_NGHE = 300; // mỗi lần gửi tối đa 5 phút âm thanh
+const DOAN_NGHE = 90; // mỗi lần gửi khoảng 1,5 phút âm thanh (đoạn ngắn trả lời nhanh, gửi song song)
 const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,6 lần
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
@@ -588,52 +588,82 @@ async function tachTieng() {
 // GEMINI: NGHE & DỊCH
 // =====================================================
 async function ngheVaDich(pcm) {
-  const moiDoan = DOAN_NGHE * TAN_SO_NGHE;
-  const soDoan = Math.ceil(pcm.length / moiDoan);
-  const ketQua = [];
-  for (let d = 0; d < soDoan; d++) {
-    ghiChu("dich", soDoan > 1 ? `Đoạn ${d + 1}/${soDoan}…` : "Đang nghe…");
-    const mau = pcm.subarray(d * moiDoan, (d + 1) * moiDoan);
-    const batDau = d * DOAN_NGHE;
-    const dai = mau.length / TAN_SO_NGHE;
-    const duLieu = await sangBase64(taoWav(mau, TAN_SO_NGHE));
-    const tl = await goiGemini("nghe", {
-      contents: [{
-        parts: [
-          { inlineData: { mimeType: "audio/wav", data: duLieu } },
-          { text: loiNhacDich(dai) },
-        ],
-      }],
-      generationConfig: {
-        temperature: 0.3,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "ARRAY",
-          items: {
-            type: "OBJECT",
-            properties: {
-              start: { type: "NUMBER" },
-              end: { type: "NUMBER" },
-              zh: { type: "STRING" },
-              vi: { type: "STRING" },
-            },
-            required: ["start", "end", "zh", "vi"],
-          },
-        },
-      },
-    });
-    let ds;
-    try { ds = JSON.parse(layChu(tl)); } catch { throw new Error("Gemini trả lời không đúng dạng, bấm Bắt đầu để thử lại."); }
-    for (const c of Array.isArray(ds) ? ds : []) {
-      let s = Number(c.start), e = Number(c.end);
-      if (!isFinite(s) || !String(c.vi || "").trim()) continue;
-      s = Math.max(0, Math.min(s, dai));
-      if (!isFinite(e) || e <= s) e = s + 2;
-      e = Math.min(e, dai);
-      ketQua.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: String(c.zh || ""), vi: String(c.vi).trim() });
+  // Chia đoạn, cắt ở chỗ yên lặng nhất gần ranh giới để không cắt ngang câu nói
+  const moc = [0];
+  const moiDoan = DOAN_NGHE * TAN_SO_NGHE, khung = TAN_SO_NGHE / 10;
+  while (pcm.length - moc[moc.length - 1] > moiDoan * 1.3) {
+    const ranh = moc[moc.length - 1] + moiDoan;
+    let tot = ranh, nhoNhat = Infinity;
+    for (let a = ranh - 20 * TAN_SO_NGHE; a < ranh; a += khung) {
+      let e = 0;
+      for (let k = a; k < a + khung; k += 4) e += pcm[k] * pcm[k];
+      if (e < nhoNhat) { nhoNhat = e; tot = a + khung / 2; }
     }
+    moc.push(tot);
+  }
+  moc.push(pcm.length);
+  const soDoan = moc.length - 1;
+  const ketQua = [];
+  let xong = 0;
+  const batDauCho = Date.now();
+  const baoTienDo = () => ghiChu("dich", `${soDoan > 1 ? `Xong ${xong}/${soDoan} đoạn · ` : "Đang nghe… "}${Math.round((Date.now() - batDauCho) / 1000)} giây`);
+  baoTienDo();
+  const dongHoCho = setInterval(baoTienDo, 1000);
+  try {
+    const hang = Array.from({ length: soDoan }, (_, d) => d);
+    await Promise.all([0, 1, 2].map(async () => {
+      while (hang.length) {
+        const d = hang.shift();
+        ketQua.push(...(await ngheMotDoan(pcm.subarray(moc[d], moc[d + 1]), moc[d] / TAN_SO_NGHE)));
+        xong++;
+      }
+    }));
+  } finally {
+    clearInterval(dongHoCho);
   }
   return ketQua.sort((a, b) => a.start - b.start);
+}
+
+async function ngheMotDoan(mau, batDau) {
+  const dai = mau.length / TAN_SO_NGHE;
+  const duLieu = await sangBase64(taoWav(mau, TAN_SO_NGHE));
+  const tl = await goiGemini("nghe", {
+    contents: [{
+      parts: [
+        { inlineData: { mimeType: "audio/wav", data: duLieu } },
+        { text: loiNhacDich(dai) },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.3,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            start: { type: "NUMBER" },
+            end: { type: "NUMBER" },
+            zh: { type: "STRING" },
+            vi: { type: "STRING" },
+          },
+          required: ["start", "end", "zh", "vi"],
+        },
+      },
+    },
+  });
+  let ds;
+  try { ds = JSON.parse(layChu(tl)); } catch { throw new Error("Gemini trả lời không đúng dạng, bấm Bắt đầu để thử lại."); }
+  const ra = [];
+  for (const c of Array.isArray(ds) ? ds : []) {
+    let s = Number(c.start), e = Number(c.end);
+    if (!isFinite(s) || !String(c.vi || "").trim()) continue;
+    s = Math.max(0, Math.min(s, dai));
+    if (!isFinite(e) || e <= s) e = s + 2;
+    e = Math.min(e, dai);
+    ra.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: String(c.zh || ""), vi: String(c.vi).trim() });
+  }
+  return ra;
 }
 
 function loiNhacDich(dai) {
@@ -1023,22 +1053,43 @@ async function timMoHinh(loai) {
   }
 }
 
+let khongTatSuyNghi = false; // mô hình không cho tắt chế độ "suy nghĩ"
 async function goiMoHinh(moHinh, noiDung, loai) {
+  let quaLau = 0;
   for (let lan = 0; ; lan++) {
+    // Nghe & dịch: tắt chế độ "suy nghĩ" của Gemini để trả lời nhanh hơn nhiều
+    const guiDi = loai === "nghe" && !khongTatSuyNghi
+      ? { ...noiDung, generationConfig: { ...noiDung.generationConfig, thinkingConfig: { thinkingBudget: 0 } } }
+      : noiDung;
+    // Chờ quá lâu thì huỷ, gửi lại (tránh treo mãi khi mạng chập chờn)
+    const huy = new AbortController();
+    const hen = setTimeout(() => huy.abort(), (loai === "nghe" ? 180 : 60) * 1000);
     let r;
     try {
       r = await fetch(`${API}/models/${moHinh}:generateContent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": caiDat.khoa },
-        body: JSON.stringify(noiDung),
+        body: JSON.stringify(guiDi),
+        signal: huy.signal,
       });
+      if (r.ok) return await r.json();
     } catch {
+      clearTimeout(hen);
+      if (huy.signal.aborted) {
+        if (++quaLau <= 2) continue;
+        throw new Error("Gemini trả lời quá lâu. Kiểm tra mạng rồi bấm Bắt đầu để thử lại.");
+      }
       if (lan < 3) { await cho(3); continue; }
       throw new Error("Mất kết nối mạng khi gọi Gemini.");
+    } finally {
+      clearTimeout(hen);
     }
-    if (r.ok) return r.json();
     const j = await r.json().catch(() => ({}));
     const thongBao = j.error?.message || r.statusText;
+    if (r.status === 400 && guiDi !== noiDung && /thinking/i.test(thongBao)) {
+      khongTatSuyNghi = true;
+      continue;
+    }
     if (r.status === 429) {
       if (/per ?day|PerDay/i.test(thongBao)) {
         const e = new Error("HET_NGAY");
