@@ -188,7 +188,7 @@ function layTuForm() {
 
 function hienDichVu() {
   const chon = $("o-dich-vu").value;
-  for (const dv of [...CAC_DV, "gemini"]) $("phan-" + dv).classList.toggle("an", dv !== chon);
+  for (const dv of [...CAC_DV, "gemini", "may"]) $("phan-" + dv).classList.toggle("an", dv !== chon);
 }
 $("o-dich-vu").addEventListener("change", hienDichVu);
 
@@ -463,7 +463,7 @@ async function chay(lamTuDau) {
     moCaiDat();
     return;
   }
-  if (caiDat.dichVu !== "gemini" && !caiDat.dv[caiDat.dichVu].giong) {
+  if (CAC_DV.includes(caiDat.dichVu) && !caiDat.dv[caiDat.dichVu].giong) {
     alert(`Chưa chọn giọng ${DICH_VU[caiDat.dichVu].ten}. Mở Cài đặt → bấm “Tải danh sách giọng”.`);
     moCaiDat();
     return;
@@ -826,12 +826,51 @@ const DICH_VU = {
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure },
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven },
   gemini: { ten: "Gemini", doc: docGemini },
+  may: { ten: "Giọng máy", doc: docMay },
 };
+
+// ----- Giọng máy: đọc ngay trên điện thoại (doc-may.js), miễn phí, không giới hạn -----
+let thoDocMay = null, soYeuCauMay = 0;
+const choDocMay = new Map();
+function docMay(chu) {
+  if (!thoDocMay) {
+    thoDocMay = new Worker(new URL("./doc-may.js", import.meta.url));
+    thoDocMay.onmessage = ({ data: d }) => {
+      if (d.loai === "nhat") { nhat("Giọng máy: " + d.chu); ghiChu("long", "Giọng máy: " + d.chu); return; }
+      const cho = choDocMay.get(d.id);
+      if (!cho) return;
+      choDocMay.delete(d.id);
+      if (d.loi) cho.hong(new Error("Giọng máy bị lỗi: " + d.loi));
+      else cho.xong({ pcm: d.pcm, tanSo: d.tanSo });
+    };
+    thoDocMay.onerror = (e) => {
+      for (const c of choDocMay.values()) c.hong(new Error("Giọng máy bị lỗi: " + (e.message || "không tải được")));
+      choDocMay.clear();
+      thoDocMay = null;
+    };
+  }
+  return new Promise((xong, hong) => {
+    const id = ++soYeuCauMay;
+    choDocMay.set(id, { xong, hong });
+    thoDocMay.postMessage({ id, chu });
+  });
+}
+
+// Dịch vụ đọc hết lượt tháng này (ElevenLabs…) → nhớ lại, lần sau bỏ qua luôn
+function dvHetThang(dv) {
+  const d = docLuu("phaha-dv-het-thang");
+  return d[dv] === thangNay();
+}
+function ghiDvHetThang(dv) {
+  const d = docLuu("phaha-dv-het-thang");
+  d[dv] = thangNay();
+  try { localStorage.setItem("phaha-dv-het-thang", JSON.stringify(d)); } catch {}
+}
 
 async function docCau(chu, dv = caiDat.dichVu) {
   chu = chu.trim();
-  const c = caiDat.dv[dv];
-  const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong, dv === "el" ? c.mh : "", chu].join("|");
+  const c = caiDat.dv[dv] || {};
+  const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
   const kq = await DICH_VU[dv].doc(chu);
   let mau = Float32Array.from(kq.pcm, (v) => v / 32768);
@@ -1059,8 +1098,13 @@ function dvDocDung() {
     az: () => !!(caiDat.dv.az.khoa && caiDat.dv.az.giong),
     el: () => !!(caiDat.dv.el.khoa && caiDat.dv.el.giong),
     gemini: () => !!caiDat.khoa,
+    may: () => true,
   };
-  return [...new Set([caiDat.dichVu, "gc", "az", "gemini", "el"])].filter((dv) => dv === caiDat.dichVu || co[dv]());
+  // Giọng máy luôn có, đứng cuối cùng làm lớp dự phòng
+  const ds = [...new Set([caiDat.dichVu, "gc", "az", "gemini", "el", "may"])].filter((dv) => dv === caiDat.dichVu || co[dv]());
+  const conLai = ds.filter((dv) => !dvHetThang(dv));
+  if (conLai.length < ds.length) nhat(`Bỏ qua ${ds.filter(dvHetThang).map((dv) => DICH_VU[dv].ten).join(", ")} (đã hết lượt tháng này)`);
+  return conLai.length ? conLai : ds;
 }
 
 // Đọc cả video bằng 1 giọng; giọng đó hết lượt/hỏng thì đọc lại TOÀN BỘ bằng dịch vụ kế tiếp
@@ -1082,6 +1126,7 @@ async function longTiengThu() {
       return await longTiengBang(ds[i]);
     } catch (loi) {
       loiCuoi = loi;
+      if (loi.hetLuot && ds[i] === "el") ghiDvHetThang("el");
       if (i < ds.length - 1) nhat(`↪️ Đọc bằng ${DICH_VU[ds[i]].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${DICH_VU[ds[i + 1]].ten}`);
     }
   }
@@ -1097,7 +1142,7 @@ async function longTiengBang(dv) {
   // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
-  const soLuong = dv === "el" ? 2 : 3;
+  const soLuong = dv === "el" ? 2 : dv === "may" ? 1 : 3;
   await Promise.all(Array.from({ length: soLuong }, async () => {
     while (hang.length && !hong) {
       const i = hang.shift();

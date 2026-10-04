@@ -2,3 +2,8 @@ Mô hình AI tách nhạc nền (MDX-Net) từ dự án Ultimate Vocal Remover �
 Nguồn: https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models
 - UVR_MDXNET_9482.onnx        (kiểu "Nhanh": đoán giọng, nhạc nền = gốc − giọng)
 - UVR-MDX-NET-Inst_HQ_4.onnx  (kiểu "Kỹ": đoán thẳng nhạc nền)
+
+Giọng đọc máy tiếng Việt (Piper, vi_VN-vais1000-medium) – lấy từ bộ mô hình của sherpa-onnx / rhasspy piper-voices.
+Dữ liệu huấn luyện: VAIS-1000 Vietnamese Speech Synthesis Corpus (giấy phép CC BY 4.0,
+https://ieee-dataport.org/documents/vais-1000-vietnamese-speech-synthesis-corpus).
+- vi_VN-vais1000-medium.onnx, vi_VN-vais1000-medium.onnx.json
