@@ -490,7 +490,7 @@ async function chay(lamTuDau) {
     buoc("tai", "dang");
     await taiFfmpeg();
     buoc("tai", "xong");
-    const thongTin = await ganVideo();
+    let thongTin = await ganVideo();
 
     if (lamTuDau) {
       buocDang = "tach";
@@ -532,6 +532,12 @@ async function chay(lamTuDau) {
     buoc("long", "dang");
     const tiengViet = await longTieng();
     buoc("long", "xong");
+
+    // Bộ xử lý video có thể đã được tắt để nhường bộ nhớ cho AI tách nhạc → bật lại
+    if (!ff) {
+      await taiFfmpeg();
+      thongTin = await ganVideo();
+    }
 
     buocDang = "ve";
     let hinh = null;
@@ -586,6 +592,12 @@ async function giuManHinh() {
 // =====================================================
 // BỘ XỬ LÝ VIDEO (ffmpeg chạy trong trình duyệt)
 // =====================================================
+function tatFfmpeg() {
+  try { ff?.terminate(); } catch {}
+  ff = null;
+  duongDanVideo = null;
+}
+
 async function taiFfmpeg() {
   if (ff) return;
   const moi = new FFmpeg();
@@ -1144,6 +1156,9 @@ async function tachNhacNen() {
   const n = i16.length >> 1;
   const L = new Float32Array(n), R = new Float32Array(n);
   for (let i = 0; i < n; i++) { L[i] = i16[2 * i] / 32768; R[i] = i16[2 * i + 1] / 32768; }
+  // iPhone ít bộ nhớ: tạm tắt bộ xử lý video trong lúc AI chạy, xuất video sẽ bật lại
+  tatFfmpeg();
+  nhat("Tạm tắt bộ xử lý video để nhường bộ nhớ cho AI tách nhạc");
   thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
   nhat(`Tách nhạc: ${dongHo(n / 44100)} âm thanh, kiểu ${caiDat.mhTach}`);
   let mocPhanTram = -1;
@@ -1162,11 +1177,14 @@ async function tachNhacNen() {
         nhat(`Tách nhạc chạy bằng: ${d.may === "webgpu" ? "chip đồ hoạ (WebGPU)" : "CPU (WASM, chậm)"}`);
       }
       else if (d.loai === "xong") xong(d);
-      else if (d.loai === "loi") hong(new Error("Tách nhạc bị lỗi: " + d.chu));
+      else if (d.loai === "loi") { thoTach?.terminate(); thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + d.chu)); }
     };
     thoTach.onerror = (e) => { thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + (e.message || "không tải được AI"))); };
     thoTach.postMessage({ L, R, loai: caiDat.mhTach }, [L.buffer, R.buffer]);
   });
+  // Tách xong thì tắt AI để trả bộ nhớ cho bước dựng hình/xuất video
+  thoTach?.terminate();
+  thoTach = null;
   return taoWav2(kq.L, kq.R, 44100);
 }
 
@@ -1277,7 +1295,8 @@ async function timMoHinh(loai) {
   }
 }
 
-const khongTatSuyNghi = new Set(); // các mô hình không nhận tuỳ chọn tắt "suy nghĩ"
+// các mô hình không nhận tuỳ chọn tắt "suy nghĩ" (lưu trên máy để lần sau khỏi thử)
+const khongTatSuyNghi = new Set(Array.isArray(docLuu("phaha-dv-khong-tat-suy-nghi")) ? docLuu("phaha-dv-khong-tat-suy-nghi") : []);
 async function goiMoHinh(moHinh, noiDung, loai) {
   let quaLau = 0;
   for (let lan = 0; ; lan++) {
@@ -1324,6 +1343,7 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     nhat(`⚠️ Gemini ${moHinh}: mã ${r.status} sau ${thoiGian()} · ${String(thongBao).slice(0, 150)}`);
     if (r.status === 400 && guiDi !== noiDung && /thinking|invalid argument/i.test(thongBao)) {
       khongTatSuyNghi.add(moHinh);
+      try { localStorage.setItem("phaha-dv-khong-tat-suy-nghi", JSON.stringify([...khongTatSuyNghi])); } catch {}
       nhat(`${moHinh} không nhận tuỳ chọn tắt suy nghĩ → gửi lại không kèm`);
       continue;
     }
