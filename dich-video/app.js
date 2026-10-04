@@ -485,14 +485,24 @@ async function chay(lamTuDau) {
     }
 
     buocDang = "nhac";
-    let wavNen = null;
-    if (caiDat.tachNhac && thongTin.coTieng) {
+    let wavNen = null, giamTheoLoi = false;
+    if (caiDat.tachNhac && thongTin.coTieng && caiDat.mhTach === "giam") {
+      giamTheoLoi = true;
+      buoc("nhac", "bo", "Giảm tiếng gốc lúc có lời (không dùng AI)");
+    } else if (caiDat.tachNhac && thongTin.coTieng) {
       buoc("nhac", "dang");
-      if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
-        nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await tachNhacNen() };
+      try {
+        if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
+          nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await tachNhacNen() };
+        }
+        wavNen = nhacNen.wav;
+        buoc("nhac", "xong");
+      } catch (loi) {
+        // AI không chạy được trên máy này → vẫn làm tiếp, chỉ giảm tiếng gốc lúc có lời
+        nhat("Tách nhạc hỏng: " + (loi?.message || loi));
+        giamTheoLoi = true;
+        buoc("nhac", "loi", "AI không chạy được trên máy này → chuyển sang giảm tiếng gốc lúc có lời");
       }
-      wavNen = nhacNen.wav;
-      buoc("nhac", "xong");
     } else buoc("nhac", "bo", "Không bật");
 
     buocDang = "long";
@@ -527,7 +537,7 @@ async function chay(lamTuDau) {
 
     buocDang = "xuat";
     buoc("xuat", "dang");
-    videoKetQua = await xuatVideo(tiengViet, thongTin, wavNen, hinh);
+    videoKetQua = await xuatVideo(tiengViet, thongTin, wavNen, hinh, giamTheoLoi);
     buoc("xuat", "xong", `${(videoKetQua.size / 1048576).toFixed(1)}MB`);
 
     nhat(`🎉 HOÀN TẤT · tổng ${((Date.now() - mocNhat) / 1000).toFixed(0)} giây · ${(videoKetQua.size / 1048576).toFixed(1)}MB`);
@@ -994,7 +1004,7 @@ async function longTieng() {
 // =====================================================
 // XUẤT VIDEO: ghép hình (gốc hoặc đã chèn chữ/logo) với tiếng mới
 // =====================================================
-async function xuatVideo(wav, tt, wavNen, hinh) {
+async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
   const tiengLong = "/long-tieng.wav", tepNen = "/nhac-nen.wav";
   const ra = "/ket-qua.mp4";
   await ff.writeFile(tiengLong, wav);
@@ -1007,6 +1017,10 @@ async function xuatVideo(wav, tt, wavNen, hinh) {
     thamSo.push("-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
     chonAm = "[am]";
     soVao++;
+  } else if (giamTheoLoi) {
+    // Không tách được nhạc: lúc có lời thoại thì gần như tắt tiếng gốc, lúc khác giữ nhạc nền
+    thamSo.push("-filter_complex", `[0:a:0]volume='${bieuThucGiam()}':eval=frame[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    chonAm = "[am]";
   } else if (tt.coTieng && caiDat.amGoc > 0) {
     thamSo.push("-filter_complex", `[0:a:0]volume=${caiDat.amGoc / 100}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
     chonAm = "[am]";
@@ -1065,7 +1079,9 @@ async function tachNhacNen() {
         ghiChu("nhac", d.chu);
         const pt = Number(/(\d+)%/.exec(d.chu)?.[1]);
         const nac = Math.floor(pt / 25);
-        if (isFinite(pt) && (nac !== mocPhanTram || /^Đang/.test(d.chu))) { mocPhanTram = nac; nhat("Tách nhạc: " + d.chu); }
+        if (!isFinite(pt) || nac !== mocPhanTram) { if (isFinite(pt)) mocPhanTram = nac; nhat("Tách nhạc: " + d.chu); }
+      } else if (d.loai === "nhat") {
+        nhat("Tách nhạc: " + d.chu);
       } else if (d.loai === "may") {
         ghiChu("nhac", d.may === "webgpu" ? "Đang tách bằng chip đồ hoạ…" : "Đang tách bằng CPU (chậm hơn)…");
         nhat(`Tách nhạc chạy bằng: ${d.may === "webgpu" ? "chip đồ hoạ (WebGPU)" : "CPU (WASM, chậm)"}`);
@@ -1077,6 +1093,21 @@ async function tachNhacNen() {
     thoTach.postMessage({ L, R, loai: caiDat.mhTach }, [L.buffer, R.buffer]);
   });
   return taoWav2(kq.L, kq.R, 44100);
+}
+
+// Âm lượng tiếng gốc theo thời gian: gần như tắt trong các câu thoại, bình thường ở chỗ khác
+function bieuThucGiam() {
+  const doan = [];
+  for (const c of cacCau) {
+    const a = Math.max(0, c.start - 0.15), b = c.end + 0.15;
+    const cuoi = doan[doan.length - 1];
+    if (cuoi && a <= cuoi[1] + 0.3) cuoi[1] = Math.max(cuoi[1], b);
+    else doan.push([a, b]);
+  }
+  const cao = (caiDat.amNen / 100).toFixed(2);
+  if (!doan.length) return cao;
+  const trong = doan.map(([a, b]) => `between(t,${a.toFixed(2)},${b.toFixed(2)})`).join("+");
+  return `if(gt(${trong},0),0.03,${cao})`;
 }
 
 function taoWav2(L, R, tanSo) {

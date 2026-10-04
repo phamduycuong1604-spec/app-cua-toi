@@ -3,58 +3,86 @@
 // Dùng mô hình AI MDX-Net của dự án Ultimate Vocal Remover (giấy phép MIT).
 // Nhận: âm thanh 2 kênh 44.100 mẫu/giây → Trả: nhạc nền (đã bỏ giọng).
 // =====================================================
-import * as ort from "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.webgpu.min.mjs";
-
-ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
-ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+const CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
 
 const MO_HINH = {
   // giong: true = mô hình đoán GIỌNG, nhạc nền = gốc − giọng; false = đoán thẳng NHẠC NỀN
-  nhanh: { tep: "mo-hinh/UVR_MDXNET_9482.onnx", nfft: 6144, dimF: 2048, bu: 1.035, giong: true },
-  ky: { tep: "mo-hinh/UVR-MDX-NET-Inst_HQ_4.onnx", nfft: 5120, dimF: 2560, bu: 1.019, giong: false },
+  nhanh: { tep: "mo-hinh/UVR_MDXNET_9482.onnx", co: 29704436, nfft: 6144, dimF: 2048, bu: 1.035, giong: true },
+  ky: { tep: "mo-hinh/UVR-MDX-NET-Inst_HQ_4.onnx", co: 59074342, nfft: 5120, dimF: 2560, bu: 1.019, giong: false },
 };
 const HOP = 1024, DIM_T = 256;
 const CHUNK = HOP * (DIM_T - 1);
 
 const bao = (tin) => self.postMessage(tin);
-let phien = null, phienTen = "";
+const ghi = (chu) => bao({ loai: "nhat", chu });
+let ort = null, phien = null, phienTen = "", may = "";
 
 self.onmessage = async (e) => {
   const { L, R, loai } = e.data;
   try {
     const mh = MO_HINH[loai] || MO_HINH.nhanh;
     if (phienTen !== loai) {
-      const du = await taiMoHinh(mh.tep);
+      const du = await taiMoHinh(mh);
       bao({ loai: "tien-do", chu: "Đang khởi động AI…" });
-      phien = null;
-      for (const ep of ["webgpu", "wasm"]) {
-        if (ep === "webgpu" && !navigator.gpu) continue;
-        try {
-          phien = await ort.InferenceSession.create(du, { executionProviders: [ep], graphOptimizationLevel: "all" });
-          bao({ loai: "may", may: ep });
-          break;
-        } catch (loi) {
-          console.warn("Không dùng được", ep, loi);
-        }
-      }
-      if (!phien) throw new Error("Điện thoại không chạy được AI tách nhạc.");
+      ({ ort, phien, may } = await taoPhien(du, false));
       phienTen = loai;
     }
-    const [nL, nR] = await tach(L, R, mh);
+    let kq;
+    try {
+      kq = await tach(L, R, mh);
+    } catch (loi) {
+      // Chip đồ hoạ khởi động được nhưng chạy lỗi → chuyển sang CPU, làm lại
+      if (may !== "webgpu") throw loi;
+      ghi(`chip đồ hoạ chạy lỗi (${String(loi?.message || loi).slice(0, 150)}), chuyển sang CPU`);
+      ({ ort, phien, may } = await taoPhien(await taiMoHinh(mh), true));
+      kq = await tach(L, R, mh);
+    }
+    const [nL, nR] = kq;
     self.postMessage({ loai: "xong", L: nL, R: nR }, [nL.buffer, nR.buffer]);
   } catch (loi) {
     bao({ loai: "loi", chu: String(loi?.message || loi) });
   }
 };
 
+// Thử chip đồ hoạ trước, hỏng thì dùng CPU. Mỗi cách nạp một bộ chạy AI riêng,
+// để cách này hỏng không kéo cách kia hỏng theo.
+async function taoPhien(du, chiCpu) {
+  const cacCach = [];
+  if (navigator.gpu && !chiCpu) cacCach.push({ goi: "ort.webgpu.min.mjs", ep: "webgpu" });
+  cacCach.push({ goi: "ort.wasm.min.mjs", ep: "wasm" });
+  const loi = [];
+  for (const { goi, ep } of cacCach) {
+    try {
+      const o = await import(CDN + goi);
+      o.env.wasm.wasmPaths = CDN;
+      o.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+      const bd = Date.now();
+      const p = await o.InferenceSession.create(du, { executionProviders: [ep], graphOptimizationLevel: "all" });
+      ghi(`khởi động bằng ${ep} mất ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
+      bao({ loai: "may", may: ep });
+      return { ort: o, phien: p, may: ep };
+    } catch (l) {
+      const chu = String(l?.message || l).slice(0, 200);
+      loi.push(`${ep}: ${chu}`);
+      ghi(`không chạy được bằng ${ep}: ${chu}`);
+    }
+  }
+  throw new Error("Điện thoại không chạy được AI tách nhạc (" + loi.join(" | ") + ")");
+}
+
 // Tải mô hình 1 lần, cất vào kho của trình duyệt cho lần sau
-async function taiMoHinh(tep) {
-  const diaChi = new URL(tep, self.location.href).href;
+async function taiMoHinh(mh) {
+  const diaChi = new URL(mh.tep, self.location.href).href;
   let kho = null;
   try { kho = await caches.open("phaha-mo-hinh"); } catch {}
-  const daCo = await kho?.match(diaChi);
-  if (daCo) return new Uint8Array(await daCo.arrayBuffer());
-  const r = await fetch(diaChi);
+  const daCo = await kho?.match(diaChi).catch(() => null);
+  if (daCo) {
+    const du = new Uint8Array(await daCo.arrayBuffer());
+    if (du.length === mh.co) { ghi(`dùng mô hình đã lưu (${(du.length / 1048576).toFixed(1)}MB)`); return du; }
+    ghi(`mô hình đã lưu bị thiếu (${du.length} byte), tải lại`);
+    await kho.delete(diaChi).catch(() => {});
+  }
+  const r = await fetch(diaChi, { cache: "no-store" });
   if (!r.ok) throw new Error("Không tải được mô hình AI tách nhạc.");
   const tong = Number(r.headers.get("content-length")) || 0;
   const doc = r.body.getReader();
@@ -70,6 +98,8 @@ async function taiMoHinh(tep) {
   const du = new Uint8Array(da);
   let o = 0;
   for (const m of manh) { du.set(m, o); o += m.length; }
+  if (du.length !== mh.co) throw new Error(`Tải mô hình AI không đủ (${du.length}/${mh.co} byte). Kiểm tra mạng rồi thử lại.`);
+  ghi(`đã tải mô hình ${(du.length / 1048576).toFixed(1)}MB`);
   try { await kho?.put(diaChi, new Response(du.slice(), { headers: { "Content-Type": "application/octet-stream" } })); } catch {}
   return du;
 }
