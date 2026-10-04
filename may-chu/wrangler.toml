@@ -11,3 +11,7 @@ crons = ["* * * * *"]
 # Cơ sở dữ liệu D1 (lần đầu triển khai Cloudflare sẽ tự tạo)
 [[d1_databases]]
 binding = "DB"
+
+# AI của Cloudflare (Whisper nghe tiếng Trung, mô hình dịch) cho trang dịch video – miễn phí 10.000 neuron/ngày
+[ai]
+binding = "AI"

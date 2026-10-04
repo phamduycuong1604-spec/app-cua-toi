@@ -94,6 +94,11 @@ Làm 1 lần:
 4. Mở app → ⚙️ → dán mã Gemini → **Tải danh sách giọng** → chọn giọng → **Nghe thử** → **Lưu**.
    (Nếu báo mã bị giới hạn: tạo mã mới ở Google Cloud → Credentials, dán vào ô “Mã Google Cloud”.)
 
+**Dự phòng khi Gemini hết lượt** (⚙️ → 🔁, file `dich-video/du-phong.js`): tự chuyển lần lượt
+Groq (Whisper nghe + Qwen/Llama dịch) → Cloudflare (AI của máy chủ PHAHA, cần đăng nhập app PHAHA,
+file `may-chu/src/ai.js`) → Azure (Speech nghe, Translator dịch) → OpenRouter (mô hình miễn phí, chỉ dịch).
+Trình duyệt bị chặn gọi thẳng dịch vụ nào thì app đi vòng qua máy chủ PHAHA (`/ai/chuyen`).
+
 Thẻ **🎛️ Tuỳ chỉnh video** (hiện sau khi chọn video, có ô xem thử):
 - **Tách nhạc nền** (AI chạy ngay trên máy, file `dich-video/tach-nhac.js`, mô hình trong `dich-video/mo-hinh/`):
   bỏ giọng Trung gốc, giữ nhạc nền. Lần đầu tải mô hình (Nhanh 28MB / Kỹ 56MB) + bộ chạy AI (~21MB).

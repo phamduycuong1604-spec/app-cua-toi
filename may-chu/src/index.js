@@ -13,6 +13,7 @@
 // =====================================================
 
 import { taoBangTaiKhoan, xuLyTaiKhoan } from "./tai-khoan.js";
+import { xuLyAi } from "./ai.js";
 
 const LIEN_HE = "https://phamduycuong1604-spec.github.io/app-cua-toi/";
 const TOI_DA_LAN_NHAC = 1000;      // mỗi điện thoại gửi lên tối đa bấy nhiêu lần nhắc
@@ -25,6 +26,10 @@ export default {
     try {
       await taoBang(env);
       const duongDan = new URL(yeuCau.url).pathname;
+
+      // AI cho trang dịch video (xem ai.js)
+      const ketQuaAi = await xuLyAi(yeuCau, env, duongDan, traLoi);
+      if (ketQuaAi) return ketQuaAi;
 
       // Tài khoản và dữ liệu người dùng (xem tai-khoan.js)
       const ketQuaTaiKhoan = await xuLyTaiKhoan(yeuCau, env, duongDan, traLoi);
@@ -63,8 +68,8 @@ function traLoi(duLieu, maTrangThai = 200) {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store", // không cho điện thoại giữ bản cũ
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Ve, X-Dich-Den, Ocp-Apim-Subscription-Key, HTTP-Referer, X-Title",
     },
   });
 }
