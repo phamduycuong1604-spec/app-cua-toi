@@ -17,7 +17,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "" },
+  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gcloud", khoaGc: "", giongGc: "", dsGiongGc: [] },
   docLuu("phaha-dv-cai-dat")
 );
 function docLuu(ten) {
@@ -25,6 +25,16 @@ function docLuu(ten) {
 }
 function luuCaiDat() {
   try { localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(caiDat)); } catch {}
+}
+// Đếm số ký tự đã gửi Google Cloud đọc trong tháng (để biết còn trong mức miễn phí)
+const MIEN_PHI_GC = 1000000;
+function thangNay() { return new Date().toISOString().slice(0, 7); }
+function kyTuThang() {
+  const d = docLuu("phaha-dv-ky-tu");
+  return d.thang === thangNay() ? d.so : 0;
+}
+function congKyTu(n) {
+  try { localStorage.setItem("phaha-dv-ky-tu", JSON.stringify({ thang: thangNay(), so: kyTuThang() + n })); } catch {}
 }
 
 // ----- TRẠNG THÁI -----
@@ -63,6 +73,12 @@ $("nut-cai-dat").addEventListener("click", moCaiDat);
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-giong").value = caiDat.giong;
+  $("o-dich-vu").value = caiDat.dichVu;
+  $("o-khoa-gc").value = caiDat.khoaGc;
+  veDsGiongGc();
+  hienDichVu();
+  $("chu-ky-tu").textContent =
+    `Tháng này đã dùng ${kyTuThang().toLocaleString("vi-VN")} / ${MIEN_PHI_GC.toLocaleString("vi-VN")} ký tự miễn phí (đếm trên máy này).`;
   $("o-am-goc").value = caiDat.amGoc;
   $("chu-am-goc").textContent = caiDat.amGoc + "%";
   $("o-mh-nghe").value = caiDat.mhNghe;
@@ -70,13 +86,65 @@ function moCaiDat() {
   $("hop-cai-dat").showModal();
 }
 $("o-am-goc").addEventListener("input", (e) => ($("chu-am-goc").textContent = e.target.value + "%"));
-$("hop-cai-dat").addEventListener("close", () => {
+$("hop-cai-dat").addEventListener("close", layTuForm);
+function layTuForm() {
+  caiDat.dichVu = $("o-dich-vu").value;
+  caiDat.khoaGc = $("o-khoa-gc").value.trim();
+  caiDat.giongGc = $("o-giong-gc").value || caiDat.giongGc;
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.amGoc = Number($("o-am-goc").value);
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
   caiDat.mhDoc = $("o-mh-doc").value.trim();
   luuCaiDat();
+}
+
+function hienDichVu() {
+  const gc = $("o-dich-vu").value === "gcloud";
+  $("phan-gcloud").classList.toggle("an", !gc);
+  $("phan-gemini").classList.toggle("an", gc);
+}
+$("o-dich-vu").addEventListener("change", hienDichVu);
+
+function veDsGiongGc() {
+  const o = $("o-giong-gc");
+  if (!caiDat.dsGiongGc.length) return;
+  o.innerHTML = "";
+  for (const g of caiDat.dsGiongGc) o.add(new Option(g.nhan, g.ten));
+  o.value = caiDat.giongGc || caiDat.dsGiongGc[0].ten;
+}
+
+$("nut-tai-giong").addEventListener("click", async () => {
+  layTuForm();
+  const nut = $("nut-tai-giong");
+  nut.disabled = true;
+  nut.textContent = "Đang tải…";
+  try {
+    caiDat.dsGiongGc = await layGiongGc();
+    if (!caiDat.dsGiongGc.length) throw new Error("Google Cloud chưa có giọng tiếng Việt nào.");
+    if (!caiDat.dsGiongGc.some((g) => g.ten === caiDat.giongGc)) caiDat.giongGc = caiDat.dsGiongGc[0].ten;
+    luuCaiDat();
+    veDsGiongGc();
+    nut.textContent = `✅ Có ${caiDat.dsGiongGc.length} giọng`;
+  } catch (loi) {
+    alert(loiDeHieu(loi));
+    nut.textContent = "🔄 Tải danh sách giọng";
+  } finally {
+    nut.disabled = false;
+  }
+});
+
+$("nut-thu-giong").addEventListener("click", async () => {
+  layTuForm();
+  const nut = $("nut-thu-giong");
+  nut.disabled = true;
+  try {
+    await phat(await docCau("Xin chào, đây là giọng lồng tiếng của PhaHa."));
+  } catch (loi) {
+    alert(loiDeHieu(loi));
+  } finally {
+    nut.disabled = false;
+  }
 });
 
 $("nut-luu").addEventListener("click", async () => {
@@ -151,18 +219,21 @@ function veLoiThoai() {
 
 async function ngheThu(i) {
   try {
-    amThanh ||= new AudioContext();
-    await amThanh.resume();
-    const mau = await docCau(cacCau[i].vi);
-    const b = amThanh.createBuffer(1, mau.length, TAN_SO_DOC);
-    b.copyToChannel(mau, 0);
-    const nguon = amThanh.createBufferSource();
-    nguon.buffer = b;
-    nguon.connect(amThanh.destination);
-    nguon.start();
+    await phat(await docCau(cacCau[i].vi));
   } catch (loi) {
     alert(loiDeHieu(loi));
   }
+}
+
+async function phat(mau) {
+  amThanh ||= new AudioContext();
+  await amThanh.resume();
+  const b = amThanh.createBuffer(1, mau.length, TAN_SO_DOC);
+  b.copyToChannel(mau, 0);
+  const nguon = amThanh.createBufferSource();
+  nguon.buffer = b;
+  nguon.connect(amThanh.destination);
+  nguon.start();
 }
 
 // =====================================================
@@ -173,6 +244,11 @@ async function chay(lamTuDau) {
   if (dangChay || !tepVideo) return;
   if (!caiDat.khoa) {
     alert("Cần dán mã Gemini trước (miễn phí). Mở Cài đặt nhé.");
+    moCaiDat();
+    return;
+  }
+  if (caiDat.dichVu === "gcloud" && !caiDat.giongGc) {
+    alert("Chưa chọn giọng Google Cloud. Mở Cài đặt → bấm “Tải danh sách giọng”.");
     moCaiDat();
     return;
   }
@@ -395,13 +471,24 @@ Nếu không có lời nói thì trả về mảng rỗng [].`;
 }
 
 // =====================================================
-// GEMINI: ĐỌC TIẾNG VIỆT
+// ĐỌC TIẾNG VIỆT (Google Cloud hoặc Gemini)
 // =====================================================
 async function docCau(chu) {
-  const khoa = caiDat.giong + "|" + chu.trim();
+  chu = chu.trim();
+  const gc = caiDat.dichVu === "gcloud";
+  const khoa = (gc ? "gc|" + caiDat.giongGc : "gm|" + caiDat.giong) + "|" + chu;
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
+  const { pcm, tanSo } = gc ? await docGoogleCloud(chu) : await docGemini(chu);
+  let mau = Float32Array.from(pcm, (v) => v / 32768);
+  if (tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, tanSo, TAN_SO_DOC);
+  mau = lamGon(mau);
+  khoGiong.set(khoa, mau);
+  return mau;
+}
+
+async function docGemini(chu) {
   const tl = await goiGemini("doc", {
-    contents: [{ parts: [{ text: `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu.trim()}` }] }],
+    contents: [{ parts: [{ text: `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu}` }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
@@ -409,31 +496,121 @@ async function docCau(chu) {
   });
   const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!phan) throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
-  const tanSo = Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || TAN_SO_DOC;
-  const byte = Uint8Array.from(atob(phan.inlineData.data), (k) => k.charCodeAt(0));
-  const i16 = new Int16Array(byte.buffer, 0, byte.length >> 1);
-  let mau = Float32Array.from(i16, (v) => v / 32768);
-  if (tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, tanSo, TAN_SO_DOC);
-  mau = lamGon(mau);
-  khoGiong.set(khoa, mau);
-  return mau;
+  const byte = tuBase64(phan.inlineData.data);
+  return {
+    pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
+    tanSo: Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || TAN_SO_DOC,
+  };
+}
+
+// ----- Google Cloud Text-to-Speech -----
+const GC_API = "https://texttospeech.googleapis.com/v1";
+const khoaGc = () => caiDat.khoaGc || caiDat.khoa;
+
+async function goiGc(duong, noiDung) {
+  for (let lan = 0; ; lan++) {
+    let r;
+    try {
+      r = await fetch(GC_API + duong, {
+        method: noiDung ? "POST" : "GET",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": khoaGc() },
+        body: noiDung ? JSON.stringify(noiDung) : undefined,
+      });
+    } catch {
+      if (lan < 3) { await cho(3); continue; }
+      throw new Error("Mất kết nối mạng khi gọi Google Cloud.");
+    }
+    if (r.ok) return r.json();
+    const j = await r.json().catch(() => ({}));
+    if ((r.status === 429 || r.status >= 500) && lan < 5) { await cho(5 * (lan + 1), "long"); continue; }
+    const e = new Error(j.error?.message || r.statusText);
+    e.status = r.status;
+    e.gc = true;
+    throw e;
+  }
+}
+
+// Danh sách giọng tiếng Việt, giọng tự nhiên (Chirp3-HD, Neural2, Wavenet) lên đầu
+async function layGiongGc() {
+  const j = await goiGc("/voices?languageCode=vi-VN");
+  const hang = (t) => (/Chirp3-HD/.test(t) ? 0 : /Neural2/.test(t) ? 1 : /Wavenet/.test(t) ? 2 : /Standard/.test(t) ? 4 : 3);
+  const loai = (t) => (/Chirp3-HD/.test(t) ? "Tự nhiên nhất" : /Neural2/.test(t) ? "Tự nhiên" : /Wavenet/.test(t) ? "Tốt, rẻ" : /Standard/.test(t) ? "Cơ bản" : "Khác");
+  return (j.voices || [])
+    .filter((g) => g.languageCodes?.includes("vi-VN"))
+    .sort((a, b) => hang(a.name) - hang(b.name) || a.name.localeCompare(b.name))
+    .map((g) => ({
+      ten: g.name,
+      nhan: `${loai(g.name)} · ${g.ssmlGender === "MALE" ? "Nam" : g.ssmlGender === "FEMALE" ? "Nữ" : ""} · ${g.name.replace("vi-VN-", "")}`,
+    }));
+}
+
+async function docGoogleCloud(chu) {
+  const j = await goiGc("/text:synthesize", {
+    input: { text: chu },
+    voice: { languageCode: "vi-VN", name: caiDat.giongGc },
+    audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: TAN_SO_DOC },
+  });
+  congKyTu(chu.length);
+  return docWav(tuBase64(j.audioContent));
+}
+
+// Lấy phần âm thanh trong file WAV
+function docWav(byte) {
+  const v = new DataView(byte.buffer, byte.byteOffset, byte.byteLength);
+  let tanSo = TAN_SO_DOC;
+  if (byte.length > 12 && String.fromCharCode(...byte.subarray(0, 4)) === "RIFF") {
+    for (let o = 12; o + 8 <= byte.length; ) {
+      const ten = String.fromCharCode(...byte.subarray(o, o + 4));
+      const dai = v.getUint32(o + 4, true);
+      if (ten === "fmt ") tanSo = v.getUint32(o + 12, true);
+      if (ten === "data") {
+        const doan = byte.slice(o + 8, Math.min(byte.length, o + 8 + dai));
+        return { pcm: new Int16Array(doan.buffer, 0, doan.length >> 1), tanSo };
+      }
+      o += 8 + dai + (dai & 1);
+    }
+  }
+  const ban = byte.slice(0, byte.length & ~1);
+  return { pcm: new Int16Array(ban.buffer), tanSo };
+}
+
+function tuBase64(chu) {
+  return Uint8Array.from(atob(chu), (k) => k.charCodeAt(0));
+}
+
+// Gemini: gộp các câu sát nhau (tối đa ~20 giây) vào 1 lần đọc để đỡ tốn lượt.
+// Google Cloud tính theo số chữ nên đọc từng câu cho khớp miệng.
+function chiaNhom(cau) {
+  if (caiDat.dichVu === "gcloud") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
+  const nhom = [];
+  for (const c of cau) {
+    const cuoi = nhom[nhom.length - 1];
+    if (cuoi && c.start - cuoi.end < 0.8 && c.end - cuoi.start <= 20) {
+      cuoi.end = Math.max(cuoi.end, c.end);
+      cuoi.vi += " " + c.vi.trim();
+    } else {
+      nhom.push({ start: c.start, end: c.end, vi: c.vi.trim() });
+    }
+  }
+  return nhom;
 }
 
 async function longTieng() {
   const tong = new Float32Array(Math.ceil(thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
   let xong = 0;
-  const cau = cacCau.filter((c) => c.vi.trim());
-  // Đọc 3 câu cùng lúc cho nhanh
+  const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()));
+  const donVi = caiDat.dichVu === "gcloud" ? "câu" : "lượt đọc";
+  // Đọc 3 phần cùng lúc cho nhanh
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
   await Promise.all([0, 1, 2].map(async () => {
     while (hang.length) {
       const i = hang.shift();
       cacGiong[i] = await docCau(cau[i].vi);
-      ghiChu("long", `${++xong}/${cau.length} câu`);
+      ghiChu("long", `${++xong}/${cau.length} ${donVi}`);
     }
   }));
-  // Đặt từng câu vào đúng thời điểm
+  // Đặt từng phần vào đúng thời điểm
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
     const sau = cau[i + 1] ? cau[i + 1].start : thoiLuong;
@@ -575,6 +752,13 @@ function layChu(tl) {
 function loiDeHieu(loi) {
   const m = String(loi?.message || loi);
   if (m === "HET_NGAY") return "Mã Gemini miễn phí đã hết lượt hôm nay.\nCách xử lý: chờ đến mai, hoặc bật thanh toán cho mã ở aistudio.google.com (rất rẻ), rồi bấm “Làm lại”. Những câu đã đọc xong được giữ lại, không tốn lượt lần nữa.";
+  if (loi?.gc) {
+    if (/billing/i.test(m)) return "Google Cloud cần gắn thẻ thanh toán trước (vẫn miễn phí trong mức cho phép).\nMở ⚙️ Cài đặt → “Cách bật” → bước 1.";
+    if (/has not been used|disabled|SERVICE_DISABLED/i.test(m)) return "Chưa bật dịch vụ đọc của Google Cloud cho mã này.\nMở ⚙️ Cài đặt → “Cách bật” → bước 2 (bấm Enable), chờ 1–2 phút rồi thử lại.";
+    if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Google Cloud không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
+    if (/blocked|not authorized|PERMISSION_DENIED|restrict/i.test(m)) return "Mã này bị giới hạn, không được dùng dịch vụ đọc.\nVào console.cloud.google.com → APIs & Services → Credentials → sửa mã, cho phép “Cloud Text-to-Speech API”.";
+    return "Google Cloud báo lỗi: " + m;
+  }
   if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Gemini không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
   if (loi?.status === 403) return "Mã Gemini không có quyền dùng (403). Kiểm tra mã ở aistudio.google.com.\n" + m;
   if (/out of memory|OOM|Aborted/i.test(m)) return "Video quá nặng so với điện thoại. Thử video ngắn hơn hoặc nhẹ hơn.";

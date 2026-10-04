@@ -74,11 +74,21 @@ Làm một lần:
 
 Mở: `https://phamduycuong1604-spec.github.io/app-cua-toi/dich-video/`
 
-1. Lấy mã Gemini miễn phí: https://aistudio.google.com/apikey → **Create API key** → sao chép.
-2. Mở app → ⚙️ → dán mã → chọn giọng → **Lưu**.
-3. Chọn video → **Bắt đầu**. App tự: tách tiếng → Gemini nghe tiếng Trung & dịch → Gemini đọc tiếng Việt → ghép vào video.
-4. Sửa câu dịch nếu muốn → **Làm lại**. Xong bấm **Lưu video** → **Lưu video** (vào Ảnh).
+App dùng 2 dịch vụ để vừa hay vừa rẻ:
+- **Nghe & dịch**: Gemini (1 lượt cho mỗi 5 phút video).
+- **Đọc giọng Việt**: Google Cloud Text-to-Speech – miễn phí 1 triệu ký tự/tháng (~800 video 2 phút).
+  Có thể đổi sang giọng Gemini trong ⚙️ (các câu sát nhau được gộp lại để đỡ tốn lượt).
+
+Làm 1 lần:
+1. Lấy mã Gemini: https://aistudio.google.com/apikey → **Create API key** → sao chép.
+2. Gắn thẻ thanh toán cho Google Cloud: https://console.cloud.google.com/billing (không bị trừ tiền nếu trong mức miễn phí).
+3. Bật **Cloud Text-to-Speech API** (chọn đúng dự án của mã Gemini → **Enable**):
+   https://console.cloud.google.com/apis/library/texttospeech.googleapis.com
+4. Mở app → ⚙️ → dán mã Gemini → **Tải danh sách giọng** → chọn giọng → **Nghe thử** → **Lưu**.
+   (Nếu báo mã bị giới hạn: tạo mã mới ở Google Cloud → Credentials, dán vào ô “Mã Google Cloud”.)
+
+Dùng: chọn video → **Bắt đầu** → sửa câu dịch nếu muốn → **Làm lại** → **Lưu video**.
 
 - Hình giữ nguyên, chỉ thay tiếng (giữ lại nhạc gốc nhỏ, chỉnh trong ⚙️).
-- Mã miễn phí có giới hạn lượt; hết lượt app tự chờ, hết lượt trong ngày thì báo.
+- ⚙️ hiện số ký tự đã dùng trong tháng (đếm trên máy đó).
 - Video nặng (trên ~300MB) có thể làm điện thoại bị đơ.

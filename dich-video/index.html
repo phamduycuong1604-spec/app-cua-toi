@@ -82,7 +82,31 @@
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
         → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
 
-      <label class="nhan">Giọng lồng tiếng</label>
+      <label class="nhan">Dịch vụ đọc giọng Việt</label>
+      <select id="o-dich-vu">
+        <option value="gcloud">Google Cloud – miễn phí ~800 video/tháng (khuyên dùng)</option>
+        <option value="gemini">Gemini – giọng có cảm xúc, ít lượt miễn phí</option>
+      </select>
+
+      <div id="phan-gcloud">
+        <label class="nhan">Mã Google Cloud</label>
+        <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
+        <details class="huong-dan">
+          <summary>Cách bật (làm 1 lần)</summary>
+          <ol>
+            <li>Vào <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">console.cloud.google.com/billing</a> → gắn thẻ thanh toán (không trừ tiền nếu dùng trong mức miễn phí).</li>
+            <li>Mở <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">Cloud Text-to-Speech API</a> → chọn đúng dự án của mã Gemini → bấm <b>Enable</b>.</li>
+            <li>Quay lại đây, bấm <b>Tải danh sách giọng</b>.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng đọc</label>
+        <select id="o-giong-gc"><option value="">(chưa tải danh sách giọng)</option></select>
+        <button type="button" id="nut-tai-giong" class="nut-phu">🔄 Tải danh sách giọng</button>
+        <p class="goi-y" id="chu-ky-tu"></p>
+      </div>
+
+      <div id="phan-gemini">
+      <label class="nhan">Giọng Gemini</label>
       <select id="o-giong">
         <option value="Kore">Nữ – rõ ràng (Kore)</option>
         <option value="Aoede">Nữ – nhẹ nhàng (Aoede)</option>
@@ -91,6 +115,9 @@
         <option value="Charon">Nam – trầm ấm (Charon)</option>
         <option value="Orus">Nam – chắc giọng (Orus)</option>
       </select>
+      <p class="goi-y">Nhiều câu liền nhau được gộp vào 1 lần đọc để đỡ tốn lượt.</p>
+      </div>
+      <button type="button" id="nut-thu-giong" class="nut-phu">🔊 Nghe thử giọng</button>
 
       <label class="nhan">Giữ lại tiếng gốc (nhạc nền): <b id="chu-am-goc">15%</b></label>
       <input id="o-am-goc" type="range" min="0" max="100" step="5" value="15">
@@ -99,7 +126,7 @@
         <summary>Nâng cao</summary>
         <label class="nhan">Mô hình nghe & dịch</label>
         <input id="o-mh-nghe" placeholder="gemini-flash-latest">
-        <label class="nhan">Mô hình đọc</label>
+        <label class="nhan">Mô hình đọc (Gemini)</label>
         <input id="o-mh-doc" placeholder="gemini-2.5-flash-preview-tts">
         <p class="goi-y">Để trống là app tự chọn.</p>
       </details>

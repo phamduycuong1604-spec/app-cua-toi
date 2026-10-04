@@ -118,3 +118,6 @@ main { max-width: 640px; margin: 0 auto; }
 .hop input[type=range] { width: 100%; }
 .hop details { margin-top: 14px; }
 .hop summary { color: var(--chu-nhat); }
+.huong-dan ol { padding-left: 20px; margin: 8px 0 0; font-size: 14px; }
+.huong-dan li { margin-bottom: 6px; }
+.huong-dan a { color: var(--bac-ha-dam); }
