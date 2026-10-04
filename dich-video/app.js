@@ -5,6 +5,7 @@
 // Mọi thứ chạy ngay trên điện thoại, chỉ gửi phần âm thanh/chữ lên Gemini.
 // =====================================================
 import { FFmpeg } from "./ffmpeg/index.js";
+import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
 
 const $ = (id) => document.getElementById(id);
 const API = "https://generativelanguage.googleapis.com/v1beta";
@@ -17,7 +18,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gc", dv: {} },
+  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gc", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -25,6 +26,11 @@ caiDat.dv.gc = Object.assign({ khoa: caiDat.khoaGc || "", giong: caiDat.giongGc 
 caiDat.dv.az = Object.assign({ khoa: "", vung: "southeastasia", giong: "", ds: [] }, caiDat.dv.az);
 caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, caiDat.dv.el);
 if (caiDat.dichVu === "gcloud") caiDat.dichVu = "gc";
+// Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
+{
+  const md = macDinhLop(), cu = caiDat.lop || {};
+  caiDat.lop = { phuDe: { ...md.phuDe, ...cu.phuDe }, che: { ...md.che, ...cu.che }, logo: { ...md.logo, ...cu.logo } };
+}
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
 
 function docLuu(ten) {
@@ -56,6 +62,8 @@ let ff = null;
 let nhatKy = [];
 let dangChay = false;
 let amThanh = null; // AudioContext để nghe thử
+let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm lại không phải tách lại
+let anhLogo = null; // ảnh logo đã nạp
 
 // =====================================================
 // GIAO DIỆN
@@ -73,6 +81,9 @@ $("o-video").addEventListener("change", (e) => {
   xem.onloadedmetadata = () => (thoiLuong = xem.duration || 0);
   $("nut-bat-dau").classList.remove("an");
   ["the-tien-do", "the-ket-qua", "the-loi-thoai"].forEach((id) => $(id).classList.add("an"));
+  nhacNen = null;
+  $("the-tuy-chon").classList.remove("an");
+  xem.onloadeddata = xem.onseeked = xem.onpause = () => veXemTruoc();
 });
 
 $("nut-bat-dau").addEventListener("click", () => chay(true));
@@ -94,13 +105,10 @@ function moCaiDat() {
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-mh-el").value = caiDat.dv.el.mh;
   hienDichVu();
-  $("o-am-goc").value = caiDat.amGoc;
-  $("chu-am-goc").textContent = caiDat.amGoc + "%";
   $("o-mh-nghe").value = caiDat.mhNghe;
   $("o-mh-doc").value = caiDat.mhDoc;
   $("hop-cai-dat").showModal();
 }
-$("o-am-goc").addEventListener("input", (e) => ($("chu-am-goc").textContent = e.target.value + "%"));
 $("hop-cai-dat").addEventListener("close", layTuForm);
 function layTuForm() {
   caiDat.dichVu = $("o-dich-vu").value;
@@ -112,7 +120,6 @@ function layTuForm() {
   caiDat.dv.el.mh = $("o-mh-el").value;
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.giong = $("o-giong").value;
-  caiDat.amGoc = Number($("o-am-goc").value);
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
   caiDat.mhDoc = $("o-mh-doc").value.trim();
   luuCaiDat();
@@ -166,6 +173,123 @@ $("nut-thu-giong").addEventListener("click", async () => {
   } finally {
     nut.disabled = false;
   }
+});
+
+// =====================================================
+// TUỲ CHỈNH VIDEO: âm thanh, phụ đề, lớp che, logo
+// Mỗi ô điều khiển có data-o="đường.dẫn" tới mục trong caiDat
+// =====================================================
+const layO = (duong) => duong.split(".").reduce((o, k) => o?.[k], caiDat);
+function datO(duong, giaTri) {
+  const k = duong.split(".");
+  const cuoi = k.pop();
+  k.reduce((o, x) => o[x], caiDat)[cuoi] = giaTri;
+}
+
+// Dựng thanh kéo từ <div class="truot" data-o=... data-min=... data-max=...>Tên</div>
+document.querySelectorAll(".truot").forEach((o) => {
+  const ten = o.textContent.trim(), donVi = o.dataset.donVi || "";
+  o.innerHTML = `<div class="dong"><span></span><b></b></div><input type="range">`;
+  o.querySelector("span").textContent = ten;
+  const thanh = o.querySelector("input");
+  Object.assign(thanh, { min: o.dataset.min, max: o.dataset.max, step: o.dataset.buoc || 1 });
+  thanh.dataset.o = o.dataset.o;
+  thanh.dataset.donVi = donVi;
+});
+
+const oDieuKhien = document.querySelectorAll("#the-tuy-chon [data-o]:not(.truot)");
+function hienDieuKhien() {
+  oDieuKhien.forEach((o) => {
+    const v = layO(o.dataset.o);
+    if (o.type === "checkbox") o.checked = !!v;
+    else o.value = v;
+    if (o.type === "range") o.closest(".truot").querySelector("b").textContent = v + (o.dataset.donVi || "");
+  });
+  // Ẩn/hiện phần phụ thuộc: data-hien="a.b" / "!a.b" / "a.b=giá trị"
+  document.querySelectorAll("#the-tuy-chon [data-hien]").forEach((o) => {
+    const dk = o.dataset.hien;
+    let hien;
+    if (dk.includes("=")) { const [d, g] = dk.split("="); hien = String(layO(d)) === g; }
+    else hien = dk.startsWith("!") ? !layO(dk.slice(1)) : !!layO(dk);
+    o.classList.toggle("an", !hien);
+  });
+  $("phan-logo").classList.toggle("an", !anhLogo);
+  $("chu-logo").textContent = anhLogo ? "Đổi ảnh logo" : "Chọn ảnh logo";
+}
+oDieuKhien.forEach((o) => {
+  o.addEventListener("input", () => {
+    datO(o.dataset.o, o.type === "checkbox" ? o.checked : o.type === "range" ? Number(o.value) : o.value);
+    hienDieuKhien();
+    veXemTruoc();
+  });
+  o.addEventListener("change", luuCaiDat);
+});
+
+// ----- Logo: thu nhỏ còn tối đa 600px rồi lưu trên máy -----
+$("o-logo").addEventListener("change", async (e) => {
+  const tep = e.target.files[0];
+  if (!tep) return;
+  try {
+    const anh = await createImageBitmap(tep);
+    const tile = Math.min(1, 600 / Math.max(anh.width, anh.height));
+    const kc = document.createElement("canvas");
+    kc.width = Math.round(anh.width * tile);
+    kc.height = Math.round(anh.height * tile);
+    kc.getContext("2d").drawImage(anh, 0, 0, kc.width, kc.height);
+    const du = kc.toDataURL("image/png");
+    try { localStorage.setItem("phaha-dv-logo", du); } catch {}
+    anhLogo = await napAnh(du);
+    caiDat.lop.logo.bat = true;
+    luuCaiDat();
+    hienDieuKhien();
+    veXemTruoc();
+  } catch {
+    alert("Không mở được ảnh này. Thử ảnh PNG hoặc JPG khác.");
+  }
+  e.target.value = "";
+});
+$("nut-xoa-logo").addEventListener("click", () => {
+  anhLogo = null;
+  try { localStorage.removeItem("phaha-dv-logo"); } catch {}
+  caiDat.lop.logo.bat = false;
+  luuCaiDat();
+  hienDieuKhien();
+  veXemTruoc();
+});
+function napAnh(nguon) {
+  return new Promise((xong, hong) => {
+    const a = new Image();
+    a.onload = () => xong(a);
+    a.onerror = hong;
+    a.src = nguon;
+  });
+}
+(async () => {
+  try {
+    const du = localStorage.getItem("phaha-dv-logo");
+    if (du) anhLogo = await napAnh(du);
+  } catch {}
+  hienDieuKhien();
+})();
+
+// ----- Ô xem thử: vẽ khung hình đang dừng của video + các lớp -----
+function veXemTruoc() {
+  const xem = $("xem-goc"), kv = $("xem-truoc");
+  if (!xem.videoWidth) return;
+  const tile = Math.min(1, 720 / Math.max(xem.videoWidth, xem.videoHeight));
+  const W = Math.round(xem.videoWidth * tile), H = Math.round(xem.videoHeight * tile);
+  if (kv.width !== W || kv.height !== H) { kv.width = W; kv.height = H; }
+  const ctx = kv.getContext("2d");
+  ctx.drawImage(xem, 0, 0, W, H);
+  veLop(ctx, W, H, xem.currentTime, caiDat.lop, cacCau, anhLogo, "Đây là phụ đề tiếng Việt mẫu");
+  $("goi-y-xem").textContent = xem.readyState >= 2
+    ? "Tua video ở trên tới đoạn có chữ Trung, rồi kéo các thanh để căn chỉnh."
+    : "Bấm ▶ video ở trên rồi dừng ở đoạn có chữ Trung để căn chỉnh.";
+}
+document.fonts?.ready.then(veXemTruoc);
+let henVe = 0;
+$("xem-goc").addEventListener("timeupdate", () => {
+  if (Date.now() - henVe > 250) { henVe = Date.now(); veXemTruoc(); }
 });
 
 $("nut-luu").addEventListener("click", async () => {
@@ -236,6 +360,7 @@ function veLoiThoai() {
     o.querySelector(".nghe-thu").addEventListener("click", () => ngheThu(i));
     ds.appendChild(o);
   });
+  veXemTruoc();
 }
 
 async function ngheThu(i) {
@@ -278,7 +403,7 @@ async function chay(lamTuDau) {
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");
   baoLoi("");
-  ["tai", "tach", "dich", "long", "xuat"].forEach((b) => buoc(b, "cho"));
+  ["tai", "tach", "dich", "nhac", "long", "ve", "xuat"].forEach((b) => buoc(b, "cho"));
   if (!lamTuDau) { buoc("tach", "bo"); buoc("dich", "bo", "Dùng lời thoại bạn đã sửa"); }
   const khoaMan = await giuManHinh();
   let buocDang = "tai";
@@ -303,14 +428,44 @@ async function chay(lamTuDau) {
       veLoiThoai();
     }
 
+    buocDang = "nhac";
+    let wavNen = null;
+    if (caiDat.tachNhac && thongTin.coTieng) {
+      buoc("nhac", "dang");
+      if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
+        nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await tachNhacNen() };
+      }
+      wavNen = nhacNen.wav;
+      buoc("nhac", "xong");
+    } else buoc("nhac", "bo", "Không bật");
+
     buocDang = "long";
     buoc("long", "dang");
     const tiengViet = await longTieng();
     buoc("long", "xong");
 
+    buocDang = "ve";
+    let hinh = null;
+    if (canVe(caiDat.lop, cacCau, anhLogo)) {
+      buoc("ve", "dang");
+      const batDau = Date.now();
+      try {
+        hinh = await xuatHinh(
+          tepVideo,
+          (ctx, W, H, t) => veLop(ctx, W, H, t, caiDat.lop, cacCau, anhLogo),
+          (p) => ghiChu("ve", `${Math.round(p * 100)}%`)
+        );
+        buoc("ve", "xong", `${Math.round((Date.now() - batDau) / 1000)} giây`);
+      } catch (loi) {
+        if (!loi.khongHoTro) throw loi;
+        // Máy không hỗ trợ: vẫn xuất video (không chữ/logo), vẫn tải được phụ đề .srt
+        buoc("ve", "loi", loi.message + " Video sẽ xuất không có chữ/logo.");
+      }
+    } else buoc("ve", "bo", "Không bật");
+
     buocDang = "xuat";
     buoc("xuat", "dang");
-    videoKetQua = await xuatVideo(tiengViet, thongTin);
+    videoKetQua = await xuatVideo(tiengViet, thongTin, wavNen, hinh);
     buoc("xuat", "xong", `${(videoKetQua.size / 1048576).toFixed(1)}MB`);
 
     $("xem-ket-qua").src = URL.createObjectURL(videoKetQua);
@@ -728,31 +883,99 @@ async function longTieng() {
 }
 
 // =====================================================
-// XUẤT VIDEO: giữ nguyên hình, thay tiếng
+// XUẤT VIDEO: ghép hình (gốc hoặc đã chèn chữ/logo) với tiếng mới
 // =====================================================
-async function xuatVideo(wav, tt) {
-  const tiengLong = "/long-tieng.wav";
+async function xuatVideo(wav, tt, wavNen, hinh) {
+  const tiengLong = "/long-tieng.wav", tepNen = "/nhac-nen.wav";
   const ra = "/ket-qua.mp4";
   await ff.writeFile(tiengLong, wav);
-  const amGoc = caiDat.amGoc / 100;
   const thamSo = ["-hide_banner", "-y", "-i", tt.duong, "-i", tiengLong];
-  if (tt.coTieng && amGoc > 0) {
-    thamSo.push(
-      "-filter_complex", `[0:a:0]volume=${amGoc}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0[am]`,
-      "-map", "0:v:0", "-map", "[am]"
-    );
+  let soVao = 2;
+  let chonAm;
+  if (wavNen) {
+    await ff.writeFile(tepNen, wavNen);
+    thamSo.push("-i", tepNen);
+    thamSo.push("-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    chonAm = "[am]";
+    soVao++;
+  } else if (tt.coTieng && caiDat.amGoc > 0) {
+    thamSo.push("-filter_complex", `[0:a:0]volume=${caiDat.amGoc / 100}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    chonAm = "[am]";
   } else {
-    thamSo.push("-map", "0:v:0", "-map", "1:a", "-t", String(thoiLuong));
+    chonAm = "1:a";
   }
-  thamSo.push("-c:v", "copy");
-  if (tt.hevc) thamSo.push("-tag:v", "hvc1"); // để iPhone phát được video HEVC
+  // Hình: lấy bản đã chèn phụ đề/logo nếu có, không thì giữ nguyên hình gốc
+  let chonHinh = "0:v:0", hevc = tt.hevc;
+  if (hinh) {
+    await ff.createDir("/hinh").catch(() => {});
+    await ff.mount("WORKERFS", { files: [new File([hinh.blob], "hinh.mp4")] }, "/hinh");
+    thamSo.push("-i", "/hinh/hinh.mp4");
+    chonHinh = `${soVao}:v:0`;
+    hevc = hinh.codec === "hevc";
+  }
+  thamSo.push("-map", chonHinh, "-map", chonAm, "-t", String(thoiLuong), "-c:v", "copy");
+  if (hevc) thamSo.push("-tag:v", "hvc1"); // để iPhone phát được video HEVC
   thamSo.push("-c:a", "aac", "-b:a", "160k", ra);
-  const { ma, log } = await lenh(thamSo, "xuat");
-  await ff.deleteFile(tiengLong).catch(() => {});
-  if (ma !== 0) throw new Error("Ghép video bị lỗi.\n" + log.split("\n").slice(-3).join("\n"));
+  try {
+    const { ma, log } = await lenh(thamSo, "xuat");
+    if (ma !== 0) throw new Error("Ghép video bị lỗi.\n" + log.split("\n").slice(-3).join("\n"));
+    const du = await ff.readFile(ra);
+    return new Blob([du], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile(tiengLong).catch(() => {});
+    await ff.deleteFile(tepNen).catch(() => {});
+    await ff.deleteFile(ra).catch(() => {});
+    if (hinh) await ff.unmount("/hinh").catch(() => {});
+  }
+}
+
+// =====================================================
+// TÁCH NHẠC NỀN (AI chạy ngầm trong tach-nhac.js)
+// =====================================================
+let thoTach = null;
+async function tachNhacNen() {
+  const ra = "/nen.pcm";
+  const { ma } = await lenh(
+    ["-hide_banner", "-i", duongDanVideo.duong, "-vn", "-ac", "2", "-ar", "44100", "-f", "s16le", ra],
+    "nhac"
+  );
+  if (ma !== 0) throw new Error("Không lấy được tiếng gốc để tách nhạc.");
   const du = await ff.readFile(ra);
-  await ff.deleteFile(ra).catch(() => {});
-  return new Blob([du], { type: "video/mp4" });
+  await ff.deleteFile(ra);
+  const i16 = new Int16Array(du.buffer, du.byteOffset, du.byteLength >> 1);
+  const n = i16.length >> 1;
+  const L = new Float32Array(n), R = new Float32Array(n);
+  for (let i = 0; i < n; i++) { L[i] = i16[2 * i] / 32768; R[i] = i16[2 * i + 1] / 32768; }
+  thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
+  const kq = await new Promise((xong, hong) => {
+    thoTach.onmessage = (e) => {
+      const d = e.data;
+      if (d.loai === "tien-do") ghiChu("nhac", d.chu);
+      else if (d.loai === "may") ghiChu("nhac", d.may === "webgpu" ? "Đang tách bằng chip đồ hoạ…" : "Đang tách bằng CPU (chậm hơn)…");
+      else if (d.loai === "xong") xong(d);
+      else if (d.loai === "loi") hong(new Error("Tách nhạc bị lỗi: " + d.chu));
+    };
+    thoTach.onerror = (e) => { thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + (e.message || "không tải được AI"))); };
+    thoTach.postMessage({ L, R, loai: caiDat.mhTach }, [L.buffer, R.buffer]);
+  });
+  return taoWav2(kq.L, kq.R, 44100);
+}
+
+function taoWav2(L, R, tanSo) {
+  const n = L.length;
+  const buf = new ArrayBuffer(44 + n * 4);
+  const v = new DataView(buf);
+  const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
+  chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE");
+  chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
+  v.setUint32(24, tanSo, true); v.setUint32(28, tanSo * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true);
+  chu(36, "data"); v.setUint32(40, n * 4, true);
+  const ra = new Int16Array(buf, 44, n * 2);
+  for (let i = 0; i < n; i++) {
+    ra[2 * i] = Math.max(-1, Math.min(1, L[i])) * 32767;
+    ra[2 * i + 1] = Math.max(-1, Math.min(1, R[i])) * 32767;
+  }
+  return new Uint8Array(buf);
 }
 
 // =====================================================
