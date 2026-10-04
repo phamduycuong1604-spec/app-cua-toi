@@ -6,6 +6,7 @@
 // =====================================================
 import { FFmpeg } from "./ffmpeg/index.js";
 import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
+import { taoDuPhong } from "./du-phong.js";
 
 const $ = (id) => document.getElementById(id);
 const API = "https://generativelanguage.googleapis.com/v1beta";
@@ -32,6 +33,8 @@ if (caiDat.dichVu === "gcloud") caiDat.dichVu = "gc";
   caiDat.lop = { phuDe: { ...md.phuDe, ...cu.phuDe }, che: { ...md.che, ...cu.che }, logo: { ...md.logo, ...cu.logo } };
 }
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
+// Dịch vụ dự phòng khi Gemini hết lượt
+caiDat.dp = Object.assign({ groq: "", cf: true, azNghe: true, azDich: "", azDichVung: "", or: "" }, caiDat.dp);
 
 function docLuu(ten) {
   try { return JSON.parse(localStorage.getItem(ten)) || {}; } catch { return {}; }
@@ -93,6 +96,7 @@ $("nut-chep-nhat-ky").addEventListener("click", async () => {
     $("nut-chep-nhat-ky").textContent = "Đã bôi đen – bấm Sao chép";
   }
 });
+const duPhong = taoDuPhong({ caiDat, nhat, cho });
 window.addEventListener("error", (e) => nhat("⚠️ Lỗi trang: " + e.message));
 window.addEventListener("unhandledrejection", (e) => nhat("⚠️ Lỗi ngầm: " + (e.reason?.message || e.reason)));
 function moTaMay() {
@@ -143,6 +147,16 @@ function moCaiDat() {
       `Tháng này đã dùng ${da.toLocaleString("vi-VN")} / ${toiDa.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
   }
   $("o-vung-az").value = caiDat.dv.az.vung;
+  $("o-dp-groq").value = caiDat.dp.groq;
+  $("o-dp-or").value = caiDat.dp.or;
+  $("o-dp-az-dich").value = caiDat.dp.azDich;
+  $("o-dp-az-dich-vung").value = caiDat.dp.azDichVung;
+  $("o-dp-cf").checked = caiDat.dp.cf;
+  $("o-dp-az-nghe").checked = caiDat.dp.azNghe;
+  const daDangNhap = (() => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } })();
+  $("chu-dp-cf").textContent = typeof DIA_CHI_MAY_CHU === "string" && DIA_CHI_MAY_CHU
+    ? (daDangNhap ? "✅ Đã đăng nhập app PHAHA – dùng được" : "⚠️ Chưa đăng nhập app PHAHA trên máy này – mở tab Lịch việc để đăng nhập")
+    : "⚠️ Chưa có máy chủ PHAHA";
   $("o-mh-el").value = caiDat.dv.el.mh;
   hienDichVu();
   $("o-mh-nghe").value = caiDat.mhNghe;
@@ -158,6 +172,12 @@ function layTuForm() {
   }
   caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
   caiDat.dv.el.mh = $("o-mh-el").value;
+  caiDat.dp.groq = $("o-dp-groq").value.trim();
+  caiDat.dp.or = $("o-dp-or").value.trim();
+  caiDat.dp.azDich = $("o-dp-az-dich").value.trim();
+  caiDat.dp.azDichVung = $("o-dp-az-dich-vung").value.trim().toLowerCase().replace(/\s+/g, "");
+  caiDat.dp.cf = $("o-dp-cf").checked;
+  caiDat.dp.azNghe = $("o-dp-az-nghe").checked;
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
@@ -437,8 +457,8 @@ async function phat(mau) {
 // =====================================================
 async function chay(lamTuDau) {
   if (dangChay || !tepVideo) return;
-  if (!caiDat.khoa) {
-    alert("Cần dán mã Gemini trước (miễn phí). Mở Cài đặt nhé.");
+  if (!caiDat.khoa && !duPhong.coDuPhong()) {
+    alert("Cần dán mã Gemini (hoặc cài dịch vụ dự phòng) trước. Mở Cài đặt nhé.");
     moCaiDat();
     return;
   }
@@ -448,6 +468,8 @@ async function chay(lamTuDau) {
     return;
   }
   dangChay = true;
+  geminiNghi = false;
+  duPhong.batDauLanMoi();
   nhatKyChay = [];
   mocNhat = Date.now();
   const l = caiDat.lop;
@@ -703,9 +725,34 @@ async function ngheVaDich(pcm) {
   return ketQua.sort((a, b) => a.start - b.start);
 }
 
+// Gemini nghe trước; Gemini hết lượt/lỗi thì chuyển lần lượt sang Groq → Cloudflare → Azure → OpenRouter
+let geminiNghi = false; // Gemini đã hỏng trong lần chạy này → các đoạn sau đi thẳng dự phòng
 async function ngheMotDoan(mau, batDau) {
   const dai = mau.length / TAN_SO_NGHE;
-  const duLieu = await sangBase64(taoWav(mau, TAN_SO_NGHE));
+  const wav = taoWav(mau, TAN_SO_NGHE);
+  const duLieu = await sangBase64(wav);
+  if (caiDat.khoa && !geminiNghi) {
+    try {
+      return await ngheGemini(duLieu, dai, batDau);
+    } catch (loi) {
+      if (!duPhong.coDuPhong()) throw loi;
+      geminiNghi = true;
+      nhat(`↪️ Gemini không dùng được (${loiDeHieu(loi).split("\n")[0]}) → chuyển sang dịch vụ dự phòng`);
+    }
+  }
+  nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} cho dịch vụ dự phòng`);
+  const cau = await duPhong.ngheVaDich(wav, duLieu);
+  const ra = cau
+    .filter((c) => c.vi)
+    .map((c) => {
+      const s = Math.max(0, Math.min(c.start, dai)), e = Math.min(Math.max(c.end, s + 0.5), dai);
+      return { start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: c.zh, vi: c.vi };
+    });
+  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (dự phòng)`);
+  return ra;
+}
+
+async function ngheGemini(duLieu, dai, batDau) {
   nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} (${(duLieu.length / 1048576).toFixed(1)}MB) cho Gemini nghe`);
   const tl = await goiGemini("nghe", {
     contents: [{

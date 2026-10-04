@@ -115,7 +115,7 @@ async function taoVe(env, ten) {
 }
 
 // Đọc vé trong yêu cầu → trả về người dùng, hoặc báo lỗi 401
-async function xacThuc(yeuCau, env) {
+export async function xacThuc(yeuCau, env) {
   const ve = (yeuCau.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!ve) throw new LoiNguoiDung("Chưa đăng nhập", 401);
   const nguoi = await env.DB.prepare(

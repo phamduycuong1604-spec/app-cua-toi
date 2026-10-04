@@ -149,3 +149,7 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
   background: var(--nen); border: 1px solid var(--vien); font-size: 12px; line-height: 1.5;
   white-space: pre-wrap; word-break: break-word;
 }
+
+.muc-dp { margin-top: 14px; }
+.muc-dp summary { font-weight: 600; }
+.muc-dp input + input { margin-top: 8px; }

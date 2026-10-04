@@ -252,6 +252,29 @@
       </div>
       <button type="button" id="nut-thu-giong" class="nut-phu">🔊 Nghe thử giọng</button>
 
+      <details class="muc-dp">
+        <summary>🔁 Dự phòng khi Gemini hết lượt (miễn phí)</summary>
+        <p class="goi-y">Gemini quá tải hoặc hết lượt thì app tự chuyển lần lượt: <b>Groq → Cloudflare → Azure → OpenRouter</b>. Dịch vụ nào chưa cài thì bỏ qua.</p>
+
+        <label class="nhan">1. Mã Groq (nghe + dịch, ~8 giờ âm thanh/ngày)</label>
+        <input id="o-dp-groq" type="password" autocomplete="off" placeholder="gsk_...">
+        <p class="goi-y">Vào <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → đăng nhập Google → <b>Create API Key</b> → sao chép. Không cần thẻ.</p>
+
+        <label class="nhan">2. Cloudflare (qua máy chủ PHAHA, không cần mã)</label>
+        <label class="cong-tac"><input type="checkbox" id="o-dp-cf"> Dùng AI của máy chủ PHAHA</label>
+        <p class="goi-y" id="chu-dp-cf"></p>
+
+        <label class="nhan">3. Azure (dùng mã Azure ở phần giọng đọc)</label>
+        <label class="cong-tac"><input type="checkbox" id="o-dp-az-nghe"> Dùng Azure nghe tiếng Trung (5 giờ/tháng)</label>
+        <input id="o-dp-az-dich" type="password" autocomplete="off" placeholder="Mã Azure Translator để dịch (không bắt buộc)">
+        <input id="o-dp-az-dich-vung" autocomplete="off" placeholder="Vùng của Translator, vd southeastasia">
+        <p class="goi-y">Muốn Azure dịch: tạo thêm dịch vụ <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation" target="_blank" rel="noopener">Translator</a> (gói Free F0, 2 triệu ký tự/tháng) → Keys and Endpoint → dán KEY 1 và Location.</p>
+
+        <label class="nhan">4. Mã OpenRouter (chỉ dịch, 50 lượt/ngày)</label>
+        <input id="o-dp-or" type="password" autocomplete="off" placeholder="sk-or-...">
+        <p class="goi-y">Vào <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai/settings/keys</a> → <b>Create Key</b> → sao chép.</p>
+      </details>
+
       <details>
         <summary>Nâng cao</summary>
         <label class="nhan">Mô hình nghe & dịch</label>
@@ -267,6 +290,7 @@
     </form>
   </dialog>
 
+  <script src="../may-chu.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
