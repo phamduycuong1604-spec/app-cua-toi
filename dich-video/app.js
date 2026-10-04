@@ -17,24 +17,33 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gcloud", khoaGc: "", giongGc: "", dsGiongGc: [] },
+  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gc", dv: {} },
   docLuu("phaha-dv-cai-dat")
 );
+// Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
+caiDat.dv.gc = Object.assign({ khoa: caiDat.khoaGc || "", giong: caiDat.giongGc || "", ds: caiDat.dsGiongGc || [] }, caiDat.dv.gc);
+caiDat.dv.az = Object.assign({ khoa: "", vung: "southeastasia", giong: "", ds: [] }, caiDat.dv.az);
+caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, caiDat.dv.el);
+if (caiDat.dichVu === "gcloud") caiDat.dichVu = "gc";
+delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
+
 function docLuu(ten) {
   try { return JSON.parse(localStorage.getItem(ten)) || {}; } catch { return {}; }
 }
 function luuCaiDat() {
   try { localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(caiDat)); } catch {}
 }
-// Đếm số ký tự đã gửi Google Cloud đọc trong tháng (để biết còn trong mức miễn phí)
-const MIEN_PHI_GC = 1000000;
+// Đếm số ký tự (lượt) đã dùng mỗi dịch vụ trong tháng, để biết còn trong mức miễn phí
 function thangNay() { return new Date().toISOString().slice(0, 7); }
-function kyTuThang() {
+function kyTuThang(dv) {
   const d = docLuu("phaha-dv-ky-tu");
-  return d.thang === thangNay() ? d.so : 0;
+  return d.thang === thangNay() ? d[dv] || 0 : 0;
 }
-function congKyTu(n) {
-  try { localStorage.setItem("phaha-dv-ky-tu", JSON.stringify({ thang: thangNay(), so: kyTuThang() + n })); } catch {}
+function congKyTu(dv, n) {
+  const d = docLuu("phaha-dv-ky-tu");
+  const moi = d.thang === thangNay() ? d : { thang: thangNay() };
+  moi[dv] = (moi[dv] || 0) + n;
+  try { localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(moi)); } catch {}
 }
 
 // ----- TRẠNG THÁI -----
@@ -70,15 +79,21 @@ $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
+const CAC_DV = ["gc", "az", "el"]; // các dịch vụ có danh sách giọng
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-giong").value = caiDat.giong;
   $("o-dich-vu").value = caiDat.dichVu;
-  $("o-khoa-gc").value = caiDat.khoaGc;
-  veDsGiongGc();
+  for (const dv of CAC_DV) {
+    $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
+    veDsGiong(dv);
+    const da = kyTuThang(dv), toiDa = DICH_VU[dv].mienPhi;
+    $("chu-ky-tu-" + dv).textContent =
+      `Tháng này đã dùng ${da.toLocaleString("vi-VN")} / ${toiDa.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
+  }
+  $("o-vung-az").value = caiDat.dv.az.vung;
+  $("o-mh-el").value = caiDat.dv.el.mh;
   hienDichVu();
-  $("chu-ky-tu").textContent =
-    `Tháng này đã dùng ${kyTuThang().toLocaleString("vi-VN")} / ${MIEN_PHI_GC.toLocaleString("vi-VN")} ký tự miễn phí (đếm trên máy này).`;
   $("o-am-goc").value = caiDat.amGoc;
   $("chu-am-goc").textContent = caiDat.amGoc + "%";
   $("o-mh-nghe").value = caiDat.mhNghe;
@@ -89,8 +104,12 @@ $("o-am-goc").addEventListener("input", (e) => ($("chu-am-goc").textContent = e.
 $("hop-cai-dat").addEventListener("close", layTuForm);
 function layTuForm() {
   caiDat.dichVu = $("o-dich-vu").value;
-  caiDat.khoaGc = $("o-khoa-gc").value.trim();
-  caiDat.giongGc = $("o-giong-gc").value || caiDat.giongGc;
+  for (const dv of CAC_DV) {
+    caiDat.dv[dv].khoa = $("o-khoa-" + dv).value.trim();
+    caiDat.dv[dv].giong = $("o-giong-" + dv).value || caiDat.dv[dv].giong;
+  }
+  caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
+  caiDat.dv.el.mh = $("o-mh-el").value;
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.amGoc = Number($("o-am-goc").value);
@@ -100,39 +119,41 @@ function layTuForm() {
 }
 
 function hienDichVu() {
-  const gc = $("o-dich-vu").value === "gcloud";
-  $("phan-gcloud").classList.toggle("an", !gc);
-  $("phan-gemini").classList.toggle("an", gc);
+  const chon = $("o-dich-vu").value;
+  for (const dv of [...CAC_DV, "gemini"]) $("phan-" + dv).classList.toggle("an", dv !== chon);
 }
 $("o-dich-vu").addEventListener("change", hienDichVu);
 
-function veDsGiongGc() {
-  const o = $("o-giong-gc");
-  if (!caiDat.dsGiongGc.length) return;
+function veDsGiong(dv) {
+  const o = $("o-giong-" + dv), c = caiDat.dv[dv];
+  if (!c.ds.length) return;
   o.innerHTML = "";
-  for (const g of caiDat.dsGiongGc) o.add(new Option(g.nhan, g.ten));
-  o.value = caiDat.giongGc || caiDat.dsGiongGc[0].ten;
+  for (const g of c.ds) o.add(new Option(g.nhan, g.ten));
+  o.value = c.giong || c.ds[0].ten;
 }
 
-$("nut-tai-giong").addEventListener("click", async () => {
-  layTuForm();
-  const nut = $("nut-tai-giong");
-  nut.disabled = true;
-  nut.textContent = "Đang tải…";
-  try {
-    caiDat.dsGiongGc = await layGiongGc();
-    if (!caiDat.dsGiongGc.length) throw new Error("Google Cloud chưa có giọng tiếng Việt nào.");
-    if (!caiDat.dsGiongGc.some((g) => g.ten === caiDat.giongGc)) caiDat.giongGc = caiDat.dsGiongGc[0].ten;
-    luuCaiDat();
-    veDsGiongGc();
-    nut.textContent = `✅ Có ${caiDat.dsGiongGc.length} giọng`;
-  } catch (loi) {
-    alert(loiDeHieu(loi));
-    nut.textContent = "🔄 Tải danh sách giọng";
-  } finally {
-    nut.disabled = false;
-  }
-});
+for (const dv of CAC_DV) {
+  $("nut-tai-giong-" + dv).addEventListener("click", async () => {
+    layTuForm();
+    const nut = $("nut-tai-giong-" + dv), c = caiDat.dv[dv];
+    nut.disabled = true;
+    nut.textContent = "Đang tải…";
+    try {
+      if (dv !== "gc" && !c.khoa) throw new Error("Dán mã " + DICH_VU[dv].ten + " trước đã.");
+      c.ds = await DICH_VU[dv].taiGiong();
+      if (!c.ds.length) throw new Error(DICH_VU[dv].ten + " chưa có giọng nào dùng được.");
+      if (!c.ds.some((g) => g.ten === c.giong)) c.giong = c.ds[0].ten;
+      luuCaiDat();
+      veDsGiong(dv);
+      nut.textContent = `✅ Có ${c.ds.length} giọng`;
+    } catch (loi) {
+      alert(loiDeHieu(loi));
+      nut.textContent = "🔄 Tải danh sách giọng";
+    } finally {
+      nut.disabled = false;
+    }
+  });
+}
 
 $("nut-thu-giong").addEventListener("click", async () => {
   layTuForm();
@@ -247,8 +268,8 @@ async function chay(lamTuDau) {
     moCaiDat();
     return;
   }
-  if (caiDat.dichVu === "gcloud" && !caiDat.giongGc) {
-    alert("Chưa chọn giọng Google Cloud. Mở Cài đặt → bấm “Tải danh sách giọng”.");
+  if (caiDat.dichVu !== "gemini" && !caiDat.dv[caiDat.dichVu].giong) {
+    alert(`Chưa chọn giọng ${DICH_VU[caiDat.dichVu].ten}. Mở Cài đặt → bấm “Tải danh sách giọng”.`);
     moCaiDat();
     return;
   }
@@ -471,16 +492,36 @@ Nếu không có lời nói thì trả về mảng rỗng [].`;
 }
 
 // =====================================================
-// ĐỌC TIẾNG VIỆT (Google Cloud hoặc Gemini)
+// ĐỌC TIẾNG VIỆT (Google Cloud, Azure, ElevenLabs hoặc Gemini)
 // =====================================================
+const DICH_VU = {
+  gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud },
+  az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure },
+  el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven },
+  gemini: { ten: "Gemini", doc: docGemini },
+};
+let hetLuotEl = false; // ElevenLabs hết lượt trong lần chạy này → đọc bằng Google Cloud
+
 async function docCau(chu) {
   chu = chu.trim();
-  const gc = caiDat.dichVu === "gcloud";
-  const khoa = (gc ? "gc|" + caiDat.giongGc : "gm|" + caiDat.giong) + "|" + chu;
+  let dv = caiDat.dichVu;
+  if (dv === "el" && hetLuotEl && caiDat.dv.gc.giong) dv = "gc";
+  const c = caiDat.dv[dv];
+  const khoa = [dv, dv === "gemini" ? caiDat.giong : c.giong, dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
-  const { pcm, tanSo } = gc ? await docGoogleCloud(chu) : await docGemini(chu);
-  let mau = Float32Array.from(pcm, (v) => v / 32768);
-  if (tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, tanSo, TAN_SO_DOC);
+  let kq;
+  try {
+    kq = await DICH_VU[dv].doc(chu);
+  } catch (loi) {
+    if (dv === "el" && loi.hetLuot && caiDat.dv.gc.giong) {
+      hetLuotEl = true;
+      ghiChu("long", "ElevenLabs hết lượt → chuyển sang Google Cloud");
+      return docCau(chu);
+    }
+    throw loi;
+  }
+  let mau = Float32Array.from(kq.pcm, (v) => v / 32768);
+  if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
   khoGiong.set(khoa, mau);
   return mau;
@@ -503,32 +544,39 @@ async function docGemini(chu) {
   };
 }
 
-// ----- Google Cloud Text-to-Speech -----
-const GC_API = "https://texttospeech.googleapis.com/v1";
-const khoaGc = () => caiDat.khoaGc || caiDat.khoa;
-
-async function goiGc(duong, noiDung) {
+// Gọi dịch vụ đọc: tự thử lại khi mạng chập chờn hoặc bị giới hạn lượt/phút
+async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
   for (let lan = 0; ; lan++) {
     let r;
     try {
-      r = await fetch(GC_API + duong, {
-        method: noiDung ? "POST" : "GET",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": khoaGc() },
-        body: noiDung ? JSON.stringify(noiDung) : undefined,
-      });
+      r = await fetch(diaChi, tuyChon);
     } catch {
       if (lan < 3) { await cho(3); continue; }
-      throw new Error("Mất kết nối mạng khi gọi Google Cloud.");
+      const e = new Error(`Không gọi được ${DICH_VU[dv].ten}. Kiểm tra mạng` + (dv === "az" ? " và tên Vùng." : "."));
+      e.dv = dv;
+      throw e;
     }
-    if (r.ok) return r.json();
-    const j = await r.json().catch(() => ({}));
-    if ((r.status === 429 || r.status >= 500) && lan < 5) { await cho(5 * (lan + 1), "long"); continue; }
-    const e = new Error(j.error?.message || r.statusText);
-    e.status = r.status;
-    e.gc = true;
+    if (r.ok) return kieu === "json" ? r.json() : new Uint8Array(await r.arrayBuffer());
+    const chu = await r.text().catch(() => "");
+    let j = {};
+    try { j = JSON.parse(chu); } catch {}
+    const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
+    const hetLuot = j.detail?.status === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el";
+    if (!hetLuot && (r.status === 429 || r.status >= 500) && lan < 5) { await cho(5 * (lan + 1), "long"); continue; }
+    const e = new Error(thongBao);
+    Object.assign(e, { status: r.status, dv, hetLuot });
     throw e;
   }
 }
+
+// ----- Google Cloud Text-to-Speech -----
+const GC_API = "https://texttospeech.googleapis.com/v1";
+const goiGc = (duong, noiDung) =>
+  goiDocGiong("gc", GC_API + duong, {
+    method: noiDung ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": caiDat.dv.gc.khoa || caiDat.khoa },
+    body: noiDung ? JSON.stringify(noiDung) : undefined,
+  });
 
 // Danh sách giọng tiếng Việt, giọng tự nhiên (Chirp3-HD, Neural2, Wavenet) lên đầu
 async function layGiongGc() {
@@ -547,11 +595,66 @@ async function layGiongGc() {
 async function docGoogleCloud(chu) {
   const j = await goiGc("/text:synthesize", {
     input: { text: chu },
-    voice: { languageCode: "vi-VN", name: caiDat.giongGc },
+    voice: { languageCode: "vi-VN", name: caiDat.dv.gc.giong },
     audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: TAN_SO_DOC },
   });
-  congKyTu(chu.length);
+  congKyTu("gc", chu.length);
   return docWav(tuBase64(j.audioContent));
+}
+
+// ----- Microsoft Azure Speech -----
+const azApi = (duong) => `https://${caiDat.dv.az.vung}.tts.speech.microsoft.com/cognitiveservices${duong}`;
+
+async function layGiongAz() {
+  const ds = await goiDocGiong("az", azApi("/voices/list"), {
+    headers: { "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa },
+  });
+  return (ds || [])
+    .filter((g) => g.Locale === "vi-VN")
+    .map((g) => ({ ten: g.ShortName, nhan: `${g.Gender === "Male" ? "Nam" : "Nữ"} · ${g.LocalName || g.DisplayName}` }));
+}
+
+async function docAzure(chu) {
+  const anToan = chu.replace(/[<>&'"]/g, (k) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[k]);
+  const byte = await goiDocGiong("az", azApi("/v1"), {
+    method: "POST",
+    headers: {
+      "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa,
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": "riff-24khz-16bit-mono-pcm",
+    },
+    body: `<speak version="1.0" xml:lang="vi-VN"><voice name="${caiDat.dv.az.giong}">${anToan}</voice></speak>`,
+  }, "byte");
+  congKyTu("az", chu.length);
+  return docWav(byte);
+}
+
+// ----- ElevenLabs -----
+const EL_API = "https://api.elevenlabs.io/v1";
+
+async function layGiongEl() {
+  const j = await goiDocGiong("el", EL_API + "/voices", { headers: { "xi-api-key": caiDat.dv.el.khoa } });
+  const laViet = (g) => /^vi|vietnam/i.test(g.labels?.language || "") || /vietnam/i.test(g.labels?.accent || "");
+  return (j.voices || [])
+    .sort((a, b) => laViet(b) - laViet(a) || a.name.localeCompare(b.name))
+    .map((g) => ({
+      ten: g.voice_id,
+      nhan: `${laViet(g) ? "🇻🇳 " : ""}${g.name}${g.labels?.gender ? " · " + (g.labels.gender === "male" ? "Nam" : "Nữ") : ""}`,
+    }));
+}
+
+async function docEleven(chu) {
+  const c = caiDat.dv.el;
+  const noiDung = { text: chu, model_id: c.mh };
+  if (c.mh !== "eleven_v3") noiDung.language_code = "vi";
+  const byte = await goiDocGiong("el", `${EL_API}/text-to-speech/${c.giong}?output_format=pcm_24000`, {
+    method: "POST",
+    headers: { "xi-api-key": c.khoa, "Content-Type": "application/json" },
+    body: JSON.stringify(noiDung),
+  }, "byte");
+  congKyTu("el", Math.ceil(chu.length * (c.mh === "eleven_v3" ? 1 : 0.5)));
+  const ban = byte.slice(0, byte.length & ~1);
+  return { pcm: new Int16Array(ban.buffer), tanSo: 24000 };
 }
 
 // Lấy phần âm thanh trong file WAV
@@ -579,9 +682,9 @@ function tuBase64(chu) {
 }
 
 // Gemini: gộp các câu sát nhau (tối đa ~20 giây) vào 1 lần đọc để đỡ tốn lượt.
-// Google Cloud tính theo số chữ nên đọc từng câu cho khớp miệng.
+// Các dịch vụ khác tính theo số chữ nên đọc từng câu cho khớp miệng.
 function chiaNhom(cau) {
-  if (caiDat.dichVu === "gcloud") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
+  if (caiDat.dichVu !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
   const nhom = [];
   for (const c of cau) {
     const cuoi = nhom[nhom.length - 1];
@@ -599,7 +702,8 @@ async function longTieng() {
   const tong = new Float32Array(Math.ceil(thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
   let xong = 0;
   const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()));
-  const donVi = caiDat.dichVu === "gcloud" ? "câu" : "lượt đọc";
+  const donVi = caiDat.dichVu === "gemini" ? "lượt đọc" : "câu";
+  hetLuotEl = false;
   // Đọc 3 phần cùng lúc cho nhanh
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
@@ -752,12 +856,23 @@ function layChu(tl) {
 function loiDeHieu(loi) {
   const m = String(loi?.message || loi);
   if (m === "HET_NGAY") return "Mã Gemini miễn phí đã hết lượt hôm nay.\nCách xử lý: chờ đến mai, hoặc bật thanh toán cho mã ở aistudio.google.com (rất rẻ), rồi bấm “Làm lại”. Những câu đã đọc xong được giữ lại, không tốn lượt lần nữa.";
-  if (loi?.gc) {
+  if (loi?.dv === "gc") {
     if (/billing/i.test(m)) return "Google Cloud cần gắn thẻ thanh toán trước (vẫn miễn phí trong mức cho phép).\nMở ⚙️ Cài đặt → “Cách bật” → bước 1.";
     if (/has not been used|disabled|SERVICE_DISABLED/i.test(m)) return "Chưa bật dịch vụ đọc của Google Cloud cho mã này.\nMở ⚙️ Cài đặt → “Cách bật” → bước 2 (bấm Enable), chờ 1–2 phút rồi thử lại.";
     if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Google Cloud không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
     if (/blocked|not authorized|PERMISSION_DENIED|restrict/i.test(m)) return "Mã này bị giới hạn, không được dùng dịch vụ đọc.\nVào console.cloud.google.com → APIs & Services → Credentials → sửa mã, cho phép “Cloud Text-to-Speech API”.";
     return "Google Cloud báo lỗi: " + m;
+  }
+  if (loi?.dv === "az") {
+    if (loi.status === 401) return "Mã Azure hoặc Vùng không đúng. Mở ⚙️ Cài đặt, kiểm tra lại KEY 1 và Location/Region (ví dụ southeastasia).";
+    if (loi.status === 403 || loi.status === 429) return "Azure đã hết lượt miễn phí tháng này (hoặc đang quá tải). Chọn dịch vụ khác trong ⚙️ Cài đặt.";
+    return "Azure báo lỗi: " + m;
+  }
+  if (loi?.dv === "el") {
+    if (loi.hetLuot) return "ElevenLabs đã hết lượt miễn phí tháng này.\nChọn dịch vụ khác trong ⚙️ Cài đặt, hoặc cài Google Cloud để app tự chuyển sang khi hết lượt.";
+    if (loi.status === 401) return "Mã ElevenLabs không đúng hoặc thiếu quyền. Tạo lại mã, bật quyền Text to Speech và Voices (Read).\n" + m;
+    if (/model/i.test(m)) return "Giọng/chất lượng này chưa đọc được tiếng Việt. Trong ⚙️ đổi Chất lượng sang “Nhanh (Flash)” rồi thử lại.\n" + m;
+    return "ElevenLabs báo lỗi: " + m;
   }
   if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Gemini không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
   if (loi?.status === 403) return "Mã Gemini không có quyền dùng (403). Kiểm tra mã ở aistudio.google.com.\n" + m;

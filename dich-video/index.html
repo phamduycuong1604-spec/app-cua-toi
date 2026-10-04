@@ -84,11 +84,13 @@
 
       <label class="nhan">Dịch vụ đọc giọng Việt</label>
       <select id="o-dich-vu">
-        <option value="gcloud">Google Cloud – miễn phí ~800 video/tháng (khuyên dùng)</option>
+        <option value="gc">Google Cloud – miễn phí ~800 video/tháng (khuyên dùng)</option>
+        <option value="az">Microsoft Azure – miễn phí ~400 video/tháng</option>
+        <option value="el">ElevenLabs – giống người thật nhất, miễn phí ~8 video/tháng</option>
         <option value="gemini">Gemini – giọng có cảm xúc, ít lượt miễn phí</option>
       </select>
 
-      <div id="phan-gcloud">
+      <div id="phan-gc" class="phan-dv">
         <label class="nhan">Mã Google Cloud</label>
         <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
         <details class="huong-dan">
@@ -101,11 +103,53 @@
         </details>
         <label class="nhan">Giọng đọc</label>
         <select id="o-giong-gc"><option value="">(chưa tải danh sách giọng)</option></select>
-        <button type="button" id="nut-tai-giong" class="nut-phu">🔄 Tải danh sách giọng</button>
-        <p class="goi-y" id="chu-ky-tu"></p>
+        <button type="button" id="nut-tai-giong-gc" class="nut-phu">🔄 Tải danh sách giọng</button>
+        <p class="goi-y" id="chu-ky-tu-gc"></p>
       </div>
 
-      <div id="phan-gemini">
+      <div id="phan-az" class="phan-dv">
+        <label class="nhan">Mã Azure (Key 1)</label>
+        <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
+        <label class="nhan">Vùng (Location/Region)</label>
+        <input id="o-vung-az" autocomplete="off" placeholder="southeastasia">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (làm 1 lần)</summary>
+          <ol>
+            <li>Tạo tài khoản miễn phí tại <a href="https://azure.microsoft.com/free" target="_blank" rel="noopener">azure.microsoft.com/free</a> (cần thẻ để xác minh).</li>
+            <li>Vào <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices" target="_blank" rel="noopener">tạo dịch vụ Speech</a> → Region chọn <b>Southeast Asia</b> → Pricing tier chọn <b>Free F0</b> → <b>Review + create</b> → <b>Create</b>.</li>
+            <li>Mở dịch vụ vừa tạo → <b>Keys and Endpoint</b> → sao chép <b>KEY 1</b> và <b>Location/Region</b> dán vào đây.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng đọc</label>
+        <select id="o-giong-az"><option value="">(chưa tải danh sách giọng)</option></select>
+        <button type="button" id="nut-tai-giong-az" class="nut-phu">🔄 Tải danh sách giọng</button>
+        <p class="goi-y" id="chu-ky-tu-az"></p>
+      </div>
+
+      <div id="phan-el" class="phan-dv">
+        <label class="nhan">Mã ElevenLabs (API key)</label>
+        <input id="o-khoa-el" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng sk_...">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (làm 1 lần)</summary>
+          <ol>
+            <li>Đăng ký miễn phí tại <a href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">elevenlabs.io</a>.</li>
+            <li>Vào <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">API Keys</a> → <b>Create API Key</b> → bật quyền <b>Text to Speech</b> và <b>Voices (Read)</b> → sao chép mã dán vào đây.</li>
+            <li>Muốn thêm giọng: vào <b>Voice Library</b>, lọc tiếng Việt, bấm <b>Add</b> rồi quay lại tải danh sách giọng.</li>
+          </ol>
+        </details>
+        <label class="nhan">Chất lượng</label>
+        <select id="o-mh-el">
+          <option value="eleven_v3">Thật nhất (v3) – 1 ký tự = 1 lượt</option>
+          <option value="eleven_flash_v2_5">Nhanh (Flash) – 1 ký tự = 0,5 lượt, gấp đôi số video</option>
+        </select>
+        <label class="nhan">Giọng đọc</label>
+        <select id="o-giong-el"><option value="">(chưa tải danh sách giọng)</option></select>
+        <button type="button" id="nut-tai-giong-el" class="nut-phu">🔄 Tải danh sách giọng</button>
+        <p class="goi-y">Gói miễn phí không được dùng cho video kiếm tiền. Hết lượt thì app tự chuyển sang Google Cloud (nếu đã cài).</p>
+        <p class="goi-y" id="chu-ky-tu-el"></p>
+      </div>
+
+      <div id="phan-gemini" class="phan-dv">
       <label class="nhan">Giọng Gemini</label>
       <select id="o-giong">
         <option value="Kore">Nữ – rõ ràng (Kore)</option>

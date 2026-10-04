@@ -76,8 +76,15 @@ Mở: `https://phamduycuong1604-spec.github.io/app-cua-toi/dich-video/`
 
 App dùng 2 dịch vụ để vừa hay vừa rẻ:
 - **Nghe & dịch**: Gemini (1 lượt cho mỗi 5 phút video).
-- **Đọc giọng Việt**: Google Cloud Text-to-Speech – miễn phí 1 triệu ký tự/tháng (~800 video 2 phút).
-  Có thể đổi sang giọng Gemini trong ⚙️ (các câu sát nhau được gộp lại để đỡ tốn lượt).
+- **Đọc giọng Việt** (chọn trong ⚙️, mỗi dịch vụ có hướng dẫn lấy mã ngay trong app):
+  | Dịch vụ | Miễn phí/tháng | ~Video 2 phút |
+  |---|---|---|
+  | Google Cloud (mặc định) | 1 triệu ký tự | ~800 |
+  | Microsoft Azure | 0,5 triệu ký tự | ~400 |
+  | ElevenLabs (giống người nhất, không dùng cho video kiếm tiền khi miễn phí) | 10.000 lượt | ~8 (gấp đôi nếu chọn Flash) |
+  | Gemini (gộp câu sát nhau để đỡ tốn lượt) | tùy mã | ít |
+
+  ElevenLabs hết lượt giữa chừng thì app tự chuyển sang Google Cloud (nếu đã cài).
 
 Làm 1 lần:
 1. Lấy mã Gemini: https://aistudio.google.com/apikey → **Create API key** → sao chép.
