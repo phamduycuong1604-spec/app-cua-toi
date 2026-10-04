@@ -139,11 +139,21 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
   }
   function docKetQuaDich(chu, so) {
     chu = String(chu || "").replace(/<think>[\s\S]*?<\/think>/g, "");
-    const a = chu.indexOf("{"), b = chu.lastIndexOf("}");
+    // Chấp nhận cả {"1": "...", "2": "..."}, ["...", "..."] và {"vi": ["...", ...]}
+    const viTriObj = chu.indexOf("{"), viTriMang = chu.indexOf("[");
+    const laMang = viTriMang >= 0 && (viTriObj < 0 || viTriMang < viTriObj);
+    const a = laMang ? viTriMang : viTriObj, b = chu.lastIndexOf(laMang ? "]" : "}");
     if (a < 0 || b < a) throw new Error("trả lời không đúng dạng");
-    const j = JSON.parse(chu.slice(a, b + 1));
+    let j = JSON.parse(chu.slice(a, b + 1));
+    if (!Array.isArray(j)) {
+      const mang = Object.values(j).find((v) => Array.isArray(v));
+      if (mang && !("1" in j)) j = mang;
+    }
     const ra = [];
-    for (let i = 1; i <= so; i++) ra.push(String(j[i] ?? j[String(i)] ?? "").trim());
+    for (let i = 1; i <= so; i++) {
+      const x = Array.isArray(j) ? j[i - 1] : j[i] ?? j[String(i)];
+      ra.push(String((typeof x === "object" && x ? x.vi ?? x.text ?? Object.values(x)[0] : x) ?? "").trim());
+    }
     const thieu = ra.filter((x) => !x).length;
     if (thieu > Math.max(1, so * 0.2)) throw new Error(`dịch thiếu ${thieu}/${so} câu`);
     return ra;
