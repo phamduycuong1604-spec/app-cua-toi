@@ -1,0 +1,2 @@
+Bộ điều khiển ffmpeg.wasm (@ffmpeg/ffmpeg 0.12.15, giấy phép MIT – https://github.com/ffmpegwasm/ffmpeg.wasm).
+Chép nguyên bản vào đây để trình duyệt cho phép chạy ngầm (cùng địa chỉ với app).

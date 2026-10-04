@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PhaHa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#cdf1e3">
+  <link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="PhaHa">
+</head>
+<body>
+
+  <header class="dau-trang">
+    <div>
+      <p class="phu-de">Lồng tiếng Trung → Việt</p>
+      <h1>PhaHa</h1>
+    </div>
+    <button id="nut-cai-dat" class="nut-tron" aria-label="Cài đặt">⚙️</button>
+  </header>
+
+  <main>
+    <!-- BƯỚC 1: chọn video -->
+    <section class="the">
+      <label class="nut-chon-video" id="nut-chon-video">
+        <input type="file" id="o-video" accept="video/*" hidden>
+        <span class="bieu-tuong">🎬</span>
+        <span id="chu-chon-video">Chọn video tiếng Trung</span>
+      </label>
+      <video id="xem-goc" class="khung-video an" controls playsinline></video>
+      <button id="nut-bat-dau" class="nut-chinh an">▶ Bắt đầu dịch & lồng tiếng</button>
+    </section>
+
+    <!-- Tiến độ các bước -->
+    <section class="the an" id="the-tien-do">
+      <ol class="cac-buoc" id="cac-buoc">
+        <li data-buoc="tai"><span class="dau">○</span> Tải bộ xử lý video <small>(~30MB, chỉ lần đầu)</small><em></em></li>
+        <li data-buoc="tach"><span class="dau">○</span> Tách tiếng khỏi video<em></em></li>
+        <li data-buoc="dich"><span class="dau">○</span> Nghe tiếng Trung & dịch sang tiếng Việt<em></em></li>
+        <li data-buoc="long"><span class="dau">○</span> Lồng tiếng Việt<em></em></li>
+        <li data-buoc="xuat"><span class="dau">○</span> Xuất video<em></em></li>
+      </ol>
+      <p class="loi an" id="loi"></p>
+      <p class="goi-y">Giữ màn hình mở, đừng chuyển sang app khác khi đang chạy.</p>
+    </section>
+
+    <!-- Kết quả -->
+    <section class="the an" id="the-ket-qua">
+      <h2>🎉 Video đã lồng tiếng</h2>
+      <video id="xem-ket-qua" class="khung-video" controls playsinline></video>
+      <button id="nut-luu" class="nut-chinh">💾 Lưu video</button>
+      <button id="nut-phu-de" class="nut-phu">📝 Tải phụ đề tiếng Việt (.srt)</button>
+    </section>
+
+    <!-- Bảng lời thoại: sửa được -->
+    <section class="the an" id="the-loi-thoai">
+      <div class="hang-tieu-de">
+        <h2>Lời thoại</h2>
+        <span class="dem" id="dem-cau"></span>
+      </div>
+      <p class="goi-y">Bấm vào giờ để xem đoạn đó. Sửa câu tiếng Việt nếu chưa hay rồi bấm “Làm lại”.</p>
+      <div id="ds-cau"></div>
+      <button id="nut-lam-lai" class="nut-chinh">🔁 Làm lại lồng tiếng & xuất video</button>
+    </section>
+  </main>
+
+  <!-- CÀI ĐẶT -->
+  <dialog id="hop-cai-dat" class="hop">
+    <form method="dialog">
+      <h2>⚙️ Cài đặt</h2>
+
+      <label class="nhan">Mã Gemini (API key)</label>
+      <input id="o-khoa" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng AIza...">
+      <p class="goi-y">Lấy miễn phí tại
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
+
+      <label class="nhan">Dịch vụ đọc giọng Việt</label>
+      <select id="o-dich-vu">
+        <option value="gcloud">Google Cloud – miễn phí ~800 video/tháng (khuyên dùng)</option>
+        <option value="gemini">Gemini – giọng có cảm xúc, ít lượt miễn phí</option>
+      </select>
+
+      <div id="phan-gcloud">
+        <label class="nhan">Mã Google Cloud</label>
+        <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
+        <details class="huong-dan">
+          <summary>Cách bật (làm 1 lần)</summary>
+          <ol>
+            <li>Vào <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">console.cloud.google.com/billing</a> → gắn thẻ thanh toán (không trừ tiền nếu dùng trong mức miễn phí).</li>
+            <li>Mở <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">Cloud Text-to-Speech API</a> → chọn đúng dự án của mã Gemini → bấm <b>Enable</b>.</li>
+            <li>Quay lại đây, bấm <b>Tải danh sách giọng</b>.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng đọc</label>
+        <select id="o-giong-gc"><option value="">(chưa tải danh sách giọng)</option></select>
+        <button type="button" id="nut-tai-giong" class="nut-phu">🔄 Tải danh sách giọng</button>
+        <p class="goi-y" id="chu-ky-tu"></p>
+      </div>
+
+      <div id="phan-gemini">
+      <label class="nhan">Giọng Gemini</label>
+      <select id="o-giong">
+        <option value="Kore">Nữ – rõ ràng (Kore)</option>
+        <option value="Aoede">Nữ – nhẹ nhàng (Aoede)</option>
+        <option value="Leda">Nữ – trẻ trung (Leda)</option>
+        <option value="Puck">Nam – vui vẻ (Puck)</option>
+        <option value="Charon">Nam – trầm ấm (Charon)</option>
+        <option value="Orus">Nam – chắc giọng (Orus)</option>
+      </select>
+      <p class="goi-y">Nhiều câu liền nhau được gộp vào 1 lần đọc để đỡ tốn lượt.</p>
+      </div>
+      <button type="button" id="nut-thu-giong" class="nut-phu">🔊 Nghe thử giọng</button>
+
+      <label class="nhan">Giữ lại tiếng gốc (nhạc nền): <b id="chu-am-goc">15%</b></label>
+      <input id="o-am-goc" type="range" min="0" max="100" step="5" value="15">
+
+      <details>
+        <summary>Nâng cao</summary>
+        <label class="nhan">Mô hình nghe & dịch</label>
+        <input id="o-mh-nghe" placeholder="gemini-flash-latest">
+        <label class="nhan">Mô hình đọc (Gemini)</label>
+        <input id="o-mh-doc" placeholder="gemini-2.5-flash-preview-tts">
+        <p class="goi-y">Để trống là app tự chọn.</p>
+      </details>
+
+      <div class="hang-nut">
+        <button class="nut-chinh" value="luu">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

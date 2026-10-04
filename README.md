@@ -19,6 +19,7 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `may-chu.js` | Địa chỉ máy chủ nhắc giờ (tự động điền) |
 | `may-chu/` | Máy chủ nhắc giờ chạy trên Cloudflare: gửi thông báo kể cả khi app tắt |
 | `.github/workflows/may-chu.yml` | Tự động đưa máy chủ lên Cloudflare |
+| `dich-video/` | App **PhaHa lồng tiếng**: video tiếng Trung → dịch → lồng tiếng Việt (xem mục bên dưới) |
 
 ## Khi sửa code
 
@@ -68,3 +69,26 @@ Làm một lần:
 - Đồng bộ **gộp từng mục** (không ghi đè cả danh sách): thêm ở máy nào cũng giữ, xóa ở máy nào thì máy khác xóa theo.
 - **Bản lưu tự động**: máy chủ cất nội dung cũ trước khi thay đổi (ngay khi có mục bị xóa, còn lại 10 phút/bản, giữ 200 bản).
   Khôi phục trong ⚙️ Cài đặt → Sao lưu & khôi phục (chỉ thêm lại mục đang thiếu). Có thêm nút xuất/nhập file sao lưu.
+
+## PhaHa lồng tiếng (thư mục `dich-video/`)
+
+Mở: `https://phamduycuong1604-spec.github.io/app-cua-toi/dich-video/`
+
+App dùng 2 dịch vụ để vừa hay vừa rẻ:
+- **Nghe & dịch**: Gemini (1 lượt cho mỗi 5 phút video).
+- **Đọc giọng Việt**: Google Cloud Text-to-Speech – miễn phí 1 triệu ký tự/tháng (~800 video 2 phút).
+  Có thể đổi sang giọng Gemini trong ⚙️ (các câu sát nhau được gộp lại để đỡ tốn lượt).
+
+Làm 1 lần:
+1. Lấy mã Gemini: https://aistudio.google.com/apikey → **Create API key** → sao chép.
+2. Gắn thẻ thanh toán cho Google Cloud: https://console.cloud.google.com/billing (không bị trừ tiền nếu trong mức miễn phí).
+3. Bật **Cloud Text-to-Speech API** (chọn đúng dự án của mã Gemini → **Enable**):
+   https://console.cloud.google.com/apis/library/texttospeech.googleapis.com
+4. Mở app → ⚙️ → dán mã Gemini → **Tải danh sách giọng** → chọn giọng → **Nghe thử** → **Lưu**.
+   (Nếu báo mã bị giới hạn: tạo mã mới ở Google Cloud → Credentials, dán vào ô “Mã Google Cloud”.)
+
+Dùng: chọn video → **Bắt đầu** → sửa câu dịch nếu muốn → **Làm lại** → **Lưu video**.
+
+- Hình giữ nguyên, chỉ thay tiếng (giữ lại nhạc gốc nhỏ, chỉnh trong ⚙️).
+- ⚙️ hiện số ký tự đã dùng trong tháng (đếm trên máy đó).
+- Video nặng (trên ~300MB) có thể làm điện thoại bị đơ.
