@@ -449,6 +449,7 @@ button { font-family: inherit; cursor: pointer; }
   opacity: 0.7;
 }
 .tab span { font-size: 12px; font-weight: 600; }
+a.tab { text-decoration: none; }
 .tab.dang-chon { color: var(--bac-ha-dam); filter: none; opacity: 1; }
 
 /* ===== TAB THU CHI ===== */

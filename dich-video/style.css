@@ -47,6 +47,7 @@ main { max-width: 640px; margin: 0 auto; }
 }
 .dau-trang h1 { margin: 0; font-size: 30px; color: var(--bac-ha-dam); }
 .phu-de { margin: 0; color: var(--chu-nhat); font-size: 14px; }
+.ve-phaha { display: inline-block; color: var(--bac-ha-dam); text-decoration: none; font-weight: 600; font-size: 14px; padding: 4px 0; }
 .nut-tron {
   width: 44px; height: 44px; border-radius: 50%; border: none;
   background: var(--bac-ha-nhat); font-size: 20px;
