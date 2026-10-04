@@ -469,6 +469,7 @@ async function chay(lamTuDau) {
   }
   dangChay = true;
   geminiNghi = false;
+  napMoHinhNghi();
   duPhong.batDauLanMoi();
   nhatKyChay = [];
   mocNhat = Date.now();
@@ -813,27 +814,13 @@ const DICH_VU = {
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven },
   gemini: { ten: "Gemini", doc: docGemini },
 };
-let hetLuotEl = false; // ElevenLabs hết lượt trong lần chạy này → đọc bằng Google Cloud
 
-async function docCau(chu) {
+async function docCau(chu, dv = caiDat.dichVu) {
   chu = chu.trim();
-  let dv = caiDat.dichVu;
-  if (dv === "el" && hetLuotEl && caiDat.dv.gc.giong) dv = "gc";
   const c = caiDat.dv[dv];
   const khoa = [dv, dv === "gemini" ? caiDat.giong : c.giong, dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
-  let kq;
-  try {
-    kq = await DICH_VU[dv].doc(chu);
-  } catch (loi) {
-    if (dv === "el" && loi.hetLuot && caiDat.dv.gc.giong) {
-      hetLuotEl = true;
-      ghiChu("long", "ElevenLabs hết lượt → chuyển sang Google Cloud");
-      nhat("ElevenLabs hết lượt → chuyển sang Google Cloud");
-      return docCau(chu);
-    }
-    throw loi;
-  }
+  const kq = await DICH_VU[dv].doc(chu);
   let mau = Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
@@ -1010,8 +997,8 @@ function tuBase64(chu) {
 
 // Gemini: gộp các câu sát nhau (tối đa ~20 giây) vào 1 lần đọc để đỡ tốn lượt.
 // Các dịch vụ khác tính theo số chữ nên đọc từng câu cho khớp miệng.
-function chiaNhom(cau) {
-  if (caiDat.dichVu !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
+function chiaNhom(cau, dv) {
+  if (dv !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
   const nhom = [];
   for (const c of cau) {
     const cuoi = nhom[nhom.length - 1];
@@ -1025,24 +1012,56 @@ function chiaNhom(cau) {
   return nhom;
 }
 
+// Dịch vụ đọc đã cài được (đã có mã + giọng), cái đang chọn đứng đầu
+function dvDocDung() {
+  const co = {
+    gc: () => !!caiDat.dv.gc.giong,
+    az: () => !!(caiDat.dv.az.khoa && caiDat.dv.az.giong),
+    el: () => !!(caiDat.dv.el.khoa && caiDat.dv.el.giong),
+    gemini: () => !!caiDat.khoa,
+  };
+  return [...new Set([caiDat.dichVu, "gc", "az", "gemini", "el"])].filter((dv) => dv === caiDat.dichVu || co[dv]());
+}
+
+// Đọc cả video bằng 1 giọng; giọng đó hết lượt/hỏng thì đọc lại TOÀN BỘ bằng dịch vụ kế tiếp
+// (không trộn 2 giọng trong 1 video)
 async function longTieng() {
+  let loiCuoi;
+  const ds = dvDocDung();
+  for (let i = 0; i < ds.length; i++) {
+    try {
+      if (i > 0) ghiChu("long", `Chuyển sang đọc bằng ${DICH_VU[ds[i]].ten}…`);
+      return await longTiengBang(ds[i]);
+    } catch (loi) {
+      loiCuoi = loi;
+      if (i < ds.length - 1) nhat(`↪️ Đọc bằng ${DICH_VU[ds[i]].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${DICH_VU[ds[i + 1]].ten}`);
+    }
+  }
+  throw loiCuoi;
+}
+
+async function longTiengBang(dv) {
   const tong = new Float32Array(Math.ceil(thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
-  let xong = 0;
-  const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()));
-  const donVi = caiDat.dichVu === "gemini" ? "lượt đọc" : "câu";
-  hetLuotEl = false;
+  let xong = 0, hong = false;
+  const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()), dv);
+  const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
-  const soLuong = caiDat.dichVu === "el" ? 2 : 3;
+  const soLuong = dv === "el" ? 2 : 3;
   await Promise.all(Array.from({ length: soLuong }, async () => {
-    while (hang.length) {
+    while (hang.length && !hong) {
       const i = hang.shift();
-      cacGiong[i] = await docCau(cau[i].vi);
-      ghiChu("long", `${++xong}/${cau.length} ${donVi}`);
+      try {
+        cacGiong[i] = await docCau(cau[i].vi, dv);
+      } catch (loi) {
+        hong = true; // dừng các luồng khác, khỏi gửi thêm yêu cầu thừa
+        throw loi;
+      }
+      ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
-  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự (${caiDat.dichVu})`);
+  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}`);
   // Đặt từng phần vào đúng thời điểm
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
@@ -1193,6 +1212,18 @@ const MO_HINH = {
 };
 const moHinhDung = {}; // mô hình đã chạy được
 const moHinhNghi = new Set(); // mô hình đang quá tải hoặc hết lượt hôm nay → bỏ qua
+// Lưu trên máy: mô hình nào hết lượt tới lúc nào / đã ngừng → lần sau khỏi thử lại
+function napMoHinhNghi() {
+  moHinhNghi.clear();
+  const d = docLuu("phaha-dv-gemini-nghi");
+  for (const [m, han] of Object.entries(d)) if (han > Date.now()) moHinhNghi.add(m);
+}
+function luuMoHinhNghi(m, giay) {
+  const d = docLuu("phaha-dv-gemini-nghi");
+  for (const k of Object.keys(d)) if (d[k] < Date.now()) delete d[k];
+  d[m] = Date.now() + giay * 1000;
+  try { localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(d)); } catch {}
+}
 
 async function goiGemini(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
@@ -1208,13 +1239,14 @@ async function goiGemini(loai, noiDung) {
     } catch (loi) {
       if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
       loiCuoi = loi;
-      if (loi.status === 404) moHinhNghi.add(ds[i]);
+      if (loi.status === 404) { moHinhNghi.add(ds[i]); luuMoHinhNghi(ds[i], 30 * 86400); }
       if (loi.goiY && !ds.includes(loi.goiY)) {
         ds.splice(i + 1, 0, loi.goiY);
         nhat(`↪️ ${ds[i]} đã ngừng, Google gợi ý dùng ${loi.goiY} → thử ngay`);
       }
       if (loi.doiMoHinh) {
         moHinhNghi.add(ds[i]);
+        if (loi.message === "HET_NGAY") luuMoHinhNghi(ds[i], Math.min(loi.choGiay || 3600, 86400));
         if (moHinhDung[loai] === ds[i]) delete moHinhDung[loai];
         nhat(`↪️ Bỏ qua ${ds[i]} (${loi.message === "HET_NGAY" ? "hết lượt miễn phí hôm nay" : "đang quá tải"}), thử loại Gemini khác`);
       }
@@ -1226,6 +1258,8 @@ async function goiGemini(loai, noiDung) {
     }
   }
   if (loiCuoi?.message === "HET_NGAY") throw loiCuoi;
+  // Mọi mô hình đều đang được nhớ là hết lượt/ngừng → coi như hết lượt hôm nay
+  if (!loiCuoi && ds.every((m) => moHinhNghi.has(m))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }
@@ -1300,7 +1334,7 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       if (quota) nhat(`Giới hạn bị chạm: ${quota}${giay ? `, Google bảo chờ ${giay} giây` : ""}`);
       // Hết lượt trong ngày (hoặc phải chờ quá lâu) → đổi sang loại Gemini khác
       if (/per ?day|PerDay/i.test(thongBao + chiTiet) || !giay || giay > 60 || lan >= 3) {
-        throw Object.assign(new Error("HET_NGAY"), { chiTiet: thongBao, doiMoHinh: true });
+        throw Object.assign(new Error("HET_NGAY"), { chiTiet: thongBao, doiMoHinh: true, choGiay: giay });
       }
       await cho(giay + 1, loai === "nghe" ? "dich" : "long");
       continue;
