@@ -154,5 +154,5 @@ export async function xuatHinh(tep, ve, baoTienDo) {
   }
   conv.onProgress = baoTienDo;
   await conv.execute();
-  return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec };
+  return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec, W, H };
 }

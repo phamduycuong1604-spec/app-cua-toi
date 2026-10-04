@@ -65,6 +65,46 @@ let amThanh = null; // AudioContext để nghe thử
 let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm lại không phải tách lại
 let anhLogo = null; // ảnh logo đã nạp
 
+// ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
+let nhatKyChay = [];
+let mocNhat = Date.now();
+function nhat(chu) {
+  const s = (Date.now() - mocNhat) / 1000;
+  const dong = `[${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}] ${chu}`;
+  nhatKyChay.push(dong);
+  if (nhatKyChay.length > 500) nhatKyChay.shift();
+  console.log("[PhaHa]", chu);
+  const o = $("o-nhat-ky");
+  o.textContent = nhatKyChay.join("\n");
+  o.scrollTop = o.scrollHeight;
+  try { localStorage.setItem("phaha-dv-nhat-ky", o.textContent); } catch {}
+}
+try { $("o-nhat-ky").textContent = localStorage.getItem("phaha-dv-nhat-ky") || "(chưa có)"; } catch {}
+$("nut-chep-nhat-ky").addEventListener("click", async () => {
+  const chu = $("o-nhat-ky").textContent;
+  try {
+    await navigator.clipboard.writeText(chu);
+    $("nut-chep-nhat-ky").textContent = "✅ Đã sao chép – dán gửi người hỗ trợ";
+  } catch {
+    const r = document.createRange();
+    r.selectNodeContents($("o-nhat-ky"));
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    $("nut-chep-nhat-ky").textContent = "Đã bôi đen – bấm Sao chép";
+  }
+});
+window.addEventListener("error", (e) => nhat("⚠️ Lỗi trang: " + e.message));
+window.addEventListener("unhandledrejection", (e) => nhat("⚠️ Lỗi ngầm: " + (e.reason?.message || e.reason)));
+function moTaMay() {
+  const ios = /OS (\d+)_(\d+)/.exec(navigator.userAgent);
+  return [
+    ios ? `iOS ${ios[1]}.${ios[2]}` : navigator.userAgent.slice(0, 60),
+    `chip đồ hoạ (WebGPU): ${navigator.gpu ? "có" : "không"}`,
+    `bộ mã hoá video: ${typeof VideoEncoder !== "undefined" ? "có" : "không"}`,
+    `${navigator.hardwareConcurrency || "?"} nhân`,
+  ].join(" · ");
+}
+
 // =====================================================
 // GIAO DIỆN
 // =====================================================
@@ -317,7 +357,15 @@ function taiXuong(blob, ten) {
 }
 
 // ----- Tiến độ từng bước -----
+const TEN_BUOC = { tai: "Tải bộ xử lý", tach: "Tách tiếng", dich: "Nghe & dịch", nhac: "Tách nhạc nền", long: "Lồng tiếng", ve: "Chèn chữ/logo", xuat: "Xuất video" };
+const batDauBuoc = {};
 function buoc(ten, trangThai, ghiChu = "") {
+  if (trangThai === "dang") { batDauBuoc[ten] = Date.now(); nhat(`▶ ${TEN_BUOC[ten]}`); }
+  else if (trangThai !== "cho") {
+    const t = batDauBuoc[ten] ? ` (${((Date.now() - batDauBuoc[ten]) / 1000).toFixed(1)} giây)` : "";
+    nhat(`${{ xong: "✅", loi: "❌", bo: "–" }[trangThai]} ${TEN_BUOC[ten]}${t}${ghiChu ? " · " + ghiChu : ""}`);
+    delete batDauBuoc[ten];
+  }
   const li = document.querySelector(`[data-buoc="${ten}"]`);
   li.classList.toggle("dang", trangThai === "dang");
   li.querySelector(".dau").textContent = { cho: "○", dang: "⏳", xong: "✅", loi: "❌", bo: "–" }[trangThai];
@@ -327,6 +375,7 @@ function ghiChu(ten, chu) {
   document.querySelector(`[data-buoc="${ten}"] em`).textContent = chu;
 }
 function baoLoi(chu) {
+  if (chu) nhat("❌ BÁO LỖI: " + chu.replace(/\n/g, " / "));
   $("loi").textContent = chu;
   $("loi").classList.toggle("an", !chu);
 }
@@ -399,6 +448,13 @@ async function chay(lamTuDau) {
     return;
   }
   dangChay = true;
+  nhatKyChay = [];
+  mocNhat = Date.now();
+  const l = caiDat.lop;
+  nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
+  nhat(`Máy: ${moTaMay()}`);
+  nhat(`Video: ${tepVideo.name} · ${(tepVideo.size / 1048576).toFixed(1)}MB`);
+  nhat(`Cài đặt: đọc bằng ${caiDat.dichVu}${caiDat.dichVu === "gemini" ? "" : " / " + caiDat.dv[caiDat.dichVu].giong} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
   ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = true));
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");
@@ -449,12 +505,18 @@ async function chay(lamTuDau) {
     if (canVe(caiDat.lop, cacCau, anhLogo)) {
       buoc("ve", "dang");
       const batDau = Date.now();
+      let mocVe = -1;
       try {
         hinh = await xuatHinh(
           tepVideo,
           (ctx, W, H, t) => veLop(ctx, W, H, t, caiDat.lop, cacCau, anhLogo),
-          (p) => ghiChu("ve", `${Math.round(p * 100)}%`)
+          (p) => {
+            ghiChu("ve", `${Math.round(p * 100)}%`);
+            const nac = Math.floor(p * 4);
+            if (nac !== mocVe) { mocVe = nac; nhat(`Chèn chữ/logo: ${Math.round(p * 100)}%`); }
+          }
         );
+        nhat(`Dựng hình xong: ${hinh.W}×${hinh.H}, mã hoá ${hinh.codec}, ${(hinh.blob.size / 1048576).toFixed(1)}MB`);
         buoc("ve", "xong", `${Math.round((Date.now() - batDau) / 1000)} giây`);
       } catch (loi) {
         if (!loi.khongHoTro) throw loi;
@@ -468,11 +530,13 @@ async function chay(lamTuDau) {
     videoKetQua = await xuatVideo(tiengViet, thongTin, wavNen, hinh);
     buoc("xuat", "xong", `${(videoKetQua.size / 1048576).toFixed(1)}MB`);
 
+    nhat(`🎉 HOÀN TẤT · tổng ${((Date.now() - mocNhat) / 1000).toFixed(0)} giây · ${(videoKetQua.size / 1048576).toFixed(1)}MB`);
     $("xem-ket-qua").src = URL.createObjectURL(videoKetQua);
     $("the-ket-qua").classList.remove("an");
     $("the-ket-qua").scrollIntoView({ behavior: "smooth" });
   } catch (loi) {
     console.error(loi);
+    nhat("❌ Chi tiết lỗi: " + (loi?.message || loi) + (loi?.status ? ` (mã ${loi.status})` : ""));
     buoc(buocDang, "loi");
     baoLoi(loiDeHieu(loi));
   } finally {
@@ -532,8 +596,10 @@ async function lenh(thamSo, tenBuoc) {
     }
   };
   ff.on("log", theoDoi);
+  const bd = Date.now();
   try {
     const ma = await ff.exec(thamSo);
+    if (tenBuoc) nhat(`ffmpeg (${TEN_BUOC[tenBuoc]}): mã ${ma}, ${((Date.now() - bd) / 1000).toFixed(1)} giây${ma ? " · " + nhatKy.slice(-2).join(" / ") : ""}`);
     return { ma, log: nhatKy.join("\n") };
   } finally {
     ff.off("log", theoDoi);
@@ -565,6 +631,9 @@ async function ganVideo() {
   const m = /Duration: (\d+):(\d+):([\d.]+)/.exec(log);
   if (m) thoiLuong = +m[1] * 3600 + +m[2] * 60 + +m[3];
   if (!thoiLuong) throw new Error("Không đọc được video này. Thử video khác (MP4/MOV).");
+  const hinh = /Stream #.*Video: (\w+)[^\n]*?(\d{2,5})x(\d{2,5})/.exec(log);
+  const tieng = /Stream #.*Audio: (\w+)[^\n]*?(\d+) Hz, (\w+)/.exec(log);
+  nhat(`Thông tin video: dài ${dongHo(thoiLuong)} · hình ${hinh ? `${hinh[1]} ${hinh[2]}×${hinh[3]}` : "?"} · tiếng ${tieng ? `${tieng[1]} ${tieng[2]}Hz ${tieng[3]}` : "không có"}`);
   return {
     duong: duongDanVideo.duong,
     coTieng: /Stream #.*Audio:/.test(log),
@@ -627,6 +696,7 @@ async function ngheVaDich(pcm) {
 async function ngheMotDoan(mau, batDau) {
   const dai = mau.length / TAN_SO_NGHE;
   const duLieu = await sangBase64(taoWav(mau, TAN_SO_NGHE));
+  nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} (${(duLieu.length / 1048576).toFixed(1)}MB) cho Gemini nghe`);
   const tl = await goiGemini("nghe", {
     contents: [{
       parts: [
@@ -663,6 +733,7 @@ async function ngheMotDoan(mau, batDau) {
     e = Math.min(e, dai);
     ra.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: String(c.zh || ""), vi: String(c.vi).trim() });
   }
+  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu`);
   return ra;
 }
 
@@ -701,6 +772,7 @@ async function docCau(chu) {
     if (dv === "el" && loi.hetLuot && caiDat.dv.gc.giong) {
       hetLuotEl = true;
       ghiChu("long", "ElevenLabs hết lượt → chuyển sang Google Cloud");
+      nhat("ElevenLabs hết lượt → chuyển sang Google Cloud");
       return docCau(chu);
     }
     throw loi;
@@ -733,16 +805,22 @@ async function docGemini(chu) {
 async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
   for (let lan = 0; ; lan++) {
     let r;
+    const bd = Date.now();
     try {
       r = await fetch(diaChi, tuyChon);
-    } catch {
+    } catch (loiMang) {
+      nhat(`⚠️ ${DICH_VU[dv].ten}: lỗi mạng (${loiMang?.message || loiMang})`);
       if (lan < 3) { await cho(3); continue; }
       const e = new Error(`Không gọi được ${DICH_VU[dv].ten}. Kiểm tra mạng` + (dv === "az" ? " và tên Vùng." : "."));
       e.dv = dv;
       throw e;
     }
-    if (r.ok) return kieu === "json" ? r.json() : new Uint8Array(await r.arrayBuffer());
+    if (r.ok) {
+      if (Date.now() - bd > 8000) nhat(`🐢 ${DICH_VU[dv].ten} trả lời chậm: ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
+      return kieu === "json" ? r.json() : new Uint8Array(await r.arrayBuffer());
+    }
     const chu = await r.text().catch(() => "");
+    nhat(`⚠️ ${DICH_VU[dv].ten}: mã ${r.status} · ${chu.slice(0, 150)}`);
     let j = {};
     try { j = JSON.parse(chu); } catch {}
     const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
@@ -899,6 +977,7 @@ async function longTieng() {
       ghiChu("long", `${++xong}/${cau.length} ${donVi}`);
     }
   }));
+  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự (${caiDat.dichVu})`);
   // Đặt từng phần vào đúng thời điểm
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
@@ -977,11 +1056,20 @@ async function tachNhacNen() {
   const L = new Float32Array(n), R = new Float32Array(n);
   for (let i = 0; i < n; i++) { L[i] = i16[2 * i] / 32768; R[i] = i16[2 * i + 1] / 32768; }
   thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
+  nhat(`Tách nhạc: ${dongHo(n / 44100)} âm thanh, kiểu ${caiDat.mhTach}`);
+  let mocPhanTram = -1;
   const kq = await new Promise((xong, hong) => {
     thoTach.onmessage = (e) => {
       const d = e.data;
-      if (d.loai === "tien-do") ghiChu("nhac", d.chu);
-      else if (d.loai === "may") ghiChu("nhac", d.may === "webgpu" ? "Đang tách bằng chip đồ hoạ…" : "Đang tách bằng CPU (chậm hơn)…");
+      if (d.loai === "tien-do") {
+        ghiChu("nhac", d.chu);
+        const pt = Number(/(\d+)%/.exec(d.chu)?.[1]);
+        const nac = Math.floor(pt / 25);
+        if (isFinite(pt) && (nac !== mocPhanTram || /^Đang/.test(d.chu))) { mocPhanTram = nac; nhat("Tách nhạc: " + d.chu); }
+      } else if (d.loai === "may") {
+        ghiChu("nhac", d.may === "webgpu" ? "Đang tách bằng chip đồ hoạ…" : "Đang tách bằng CPU (chậm hơn)…");
+        nhat(`Tách nhạc chạy bằng: ${d.may === "webgpu" ? "chip đồ hoạ (WebGPU)" : "CPU (WASM, chậm)"}`);
+      }
       else if (d.loai === "xong") xong(d);
       else if (d.loai === "loi") hong(new Error("Tách nhạc bị lỗi: " + d.chu));
     };
@@ -1065,6 +1153,8 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     const huy = new AbortController();
     const hen = setTimeout(() => huy.abort(), (loai === "nghe" ? 180 : 60) * 1000);
     let r;
+    const bd = Date.now();
+    const thoiGian = () => ((Date.now() - bd) / 1000).toFixed(1) + " giây";
     try {
       r = await fetch(`${API}/models/${moHinh}:generateContent`, {
         method: "POST",
@@ -1072,13 +1162,22 @@ async function goiMoHinh(moHinh, noiDung, loai) {
         body: JSON.stringify(guiDi),
         signal: huy.signal,
       });
-      if (r.ok) return await r.json();
-    } catch {
+      if (r.ok) {
+        const j = await r.json();
+        if (loai === "nghe" || Date.now() - bd > 8000) {
+          const u = j.usageMetadata;
+          nhat(`Gemini ${moHinh} (${loai === "nghe" ? "nghe & dịch" : "đọc"}): xong sau ${thoiGian()}${u ? ` · ${u.promptTokenCount || 0}→${u.candidatesTokenCount || 0} token${u.thoughtsTokenCount ? `, suy nghĩ ${u.thoughtsTokenCount}` : ""}` : ""}`);
+        }
+        return j;
+      }
+    } catch (loiMang) {
       clearTimeout(hen);
       if (huy.signal.aborted) {
+        nhat(`⏱️ Gemini ${moHinh} quá lâu (${thoiGian()}), huỷ và gửi lại (lần ${quaLau + 1})`);
         if (++quaLau <= 2) continue;
         throw new Error("Gemini trả lời quá lâu. Kiểm tra mạng rồi bấm Bắt đầu để thử lại.");
       }
+      nhat(`⚠️ Gemini ${moHinh}: lỗi mạng sau ${thoiGian()} (${loiMang?.message || loiMang})`);
       if (lan < 3) { await cho(3); continue; }
       throw new Error("Mất kết nối mạng khi gọi Gemini.");
     } finally {
@@ -1086,6 +1185,7 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     }
     const j = await r.json().catch(() => ({}));
     const thongBao = j.error?.message || r.statusText;
+    nhat(`⚠️ Gemini ${moHinh}: mã ${r.status} sau ${thoiGian()} · ${String(thongBao).slice(0, 150)}`);
     if (r.status === 400 && guiDi !== noiDung && /thinking/i.test(thongBao)) {
       khongTatSuyNghi = true;
       continue;
