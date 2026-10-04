@@ -257,7 +257,8 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
         nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}`);
       }
     }
-    throw loiCuoi || new Error(`Chưa cài dịch vụ dự phòng nào cho việc ${viec}. Mở ⚙️ Cài đặt → Dự phòng khi Gemini hết lượt.`);
+    if (!loiCuoi) throw new Error(`Chưa cài dịch vụ dự phòng nào để ${viec}. Mở ⚙️ Cài đặt → 🔁 Dự phòng khi Gemini hết lượt, thêm mã Groq (miễn phí).`);
+    throw new Error(`Gemini và mọi dịch vụ dự phòng đều không ${viec} được (hết lượt hoặc lỗi).\nCách xử lý: chờ đến mai, hoặc thêm dịch vụ khác trong ⚙️ Cài đặt → 🔁 Dự phòng.\nLỗi cuối: ${loiCuoi.message}`);
   }
 
   return {

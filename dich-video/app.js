@@ -1067,7 +1067,8 @@ async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
   let soVao = 2;
   let chonAm;
   if (wavNen) {
-    await ff.writeFile(tepNen, wavNen);
+    // gửi bản sao: bộ xử lý video giữ luôn dữ liệu được gửi, bản gốc còn để dùng lại khi bấm "Làm lại"
+    await ff.writeFile(tepNen, wavNen.slice());
     thamSo.push("-i", tepNen);
     thamSo.push("-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
     chonAm = "[am]";
