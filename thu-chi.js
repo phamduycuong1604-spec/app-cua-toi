@@ -77,7 +77,8 @@ function dinhDangTien(so) {
 
 let tabDangMo = "trang-lich";
 
-document.querySelectorAll(".tab").forEach((tab) => {
+// (chỉ các tab có data-trang; tab "Dịch video" là đường dẫn sang trang khác)
+document.querySelectorAll(".tab[data-trang]").forEach((tab) => {
   tab.onclick = () => {
     tabDangMo = tab.dataset.trang;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("dang-chon", t === tab));
