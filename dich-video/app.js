@@ -860,6 +860,7 @@ async function docGemini(chu) {
 
 // Gọi dịch vụ đọc: tự thử lại khi mạng chập chờn hoặc bị giới hạn lượt/phút
 async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
+  let lanDongThoi = 0;
   for (let lan = 0; ; lan++) {
     let r;
     const bd = Date.now();
@@ -881,7 +882,13 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
     let j = {};
     try { j = JSON.parse(chu); } catch {}
     const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
-    const hetLuot = j.detail?.status === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el";
+    const hetLuot = j.detail?.status === "quota_exceeded" || j.detail?.code === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el";
+    // Gửi quá nhiều câu cùng lúc → chờ chút rồi gửi lại (không tính là lỗi)
+    if (r.status === 429 && /concurrent/i.test(chu) && lanDongThoi++ < 40) {
+      await new Promise((x) => setTimeout(x, 1000 + Math.random() * 2000));
+      lan--;
+      continue;
+    }
     if (!hetLuot && (r.status === 429 || r.status >= 500) && lan < 5) { await cho(5 * (lan + 1), "long"); continue; }
     const e = new Error(thongBao);
     Object.assign(e, { status: r.status, dv, hetLuot });
@@ -1024,10 +1031,11 @@ async function longTieng() {
   const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()));
   const donVi = caiDat.dichVu === "gemini" ? "lượt đọc" : "câu";
   hetLuotEl = false;
-  // Đọc 3 phần cùng lúc cho nhanh
+  // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
-  await Promise.all([0, 1, 2].map(async () => {
+  const soLuong = caiDat.dichVu === "el" ? 2 : 3;
+  await Promise.all(Array.from({ length: soLuong }, async () => {
     while (hang.length) {
       const i = hang.shift();
       cacGiong[i] = await docCau(cau[i].vi);
@@ -1199,6 +1207,11 @@ async function goiGemini(loai, noiDung) {
     } catch (loi) {
       if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
       loiCuoi = loi;
+      if (loi.status === 404) moHinhNghi.add(ds[i]);
+      if (loi.goiY && !ds.includes(loi.goiY)) {
+        ds.splice(i + 1, 0, loi.goiY);
+        nhat(`↪️ ${ds[i]} đã ngừng, Google gợi ý dùng ${loi.goiY} → thử ngay`);
+      }
       if (loi.doiMoHinh) {
         moHinhNghi.add(ds[i]);
         if (moHinhDung[loai] === ds[i]) delete moHinhDung[loai];
@@ -1229,12 +1242,12 @@ async function timMoHinh(loai) {
   }
 }
 
-let khongTatSuyNghi = false; // mô hình không cho tắt chế độ "suy nghĩ"
+const khongTatSuyNghi = new Set(); // các mô hình không nhận tuỳ chọn tắt "suy nghĩ"
 async function goiMoHinh(moHinh, noiDung, loai) {
   let quaLau = 0;
   for (let lan = 0; ; lan++) {
     // Nghe & dịch: tắt chế độ "suy nghĩ" của Gemini để trả lời nhanh hơn nhiều
-    const guiDi = loai === "nghe" && !khongTatSuyNghi
+    const guiDi = loai === "nghe" && !khongTatSuyNghi.has(moHinh)
       ? { ...noiDung, generationConfig: { ...noiDung.generationConfig, thinkingConfig: { thinkingBudget: 0 } } }
       : noiDung;
     // Chờ quá lâu thì huỷ, gửi lại (tránh treo mãi khi mạng chập chờn)
@@ -1274,8 +1287,9 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     const j = await r.json().catch(() => ({}));
     const thongBao = j.error?.message || r.statusText;
     nhat(`⚠️ Gemini ${moHinh}: mã ${r.status} sau ${thoiGian()} · ${String(thongBao).slice(0, 150)}`);
-    if (r.status === 400 && guiDi !== noiDung && /thinking/i.test(thongBao)) {
-      khongTatSuyNghi = true;
+    if (r.status === 400 && guiDi !== noiDung && /thinking|invalid argument/i.test(thongBao)) {
+      khongTatSuyNghi.add(moHinh);
+      nhat(`${moHinh} không nhận tuỳ chọn tắt suy nghĩ → gửi lại không kèm`);
       continue;
     }
     if (r.status === 429) {
@@ -1298,6 +1312,8 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     if (r.status >= 500 && lan < 3) { await cho(5); continue; }
     const e = new Error(thongBao);
     e.status = r.status === 400 && /not found|not supported|is not/i.test(thongBao) ? 404 : r.status;
+    // Google gợi ý mô hình thay thế, vd "use models/gemini-3.8-flash"
+    e.goiY = /use models\/([\w.\-]+)/i.exec(thongBao)?.[1];
     throw e;
   }
 }
