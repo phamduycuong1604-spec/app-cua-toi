@@ -94,6 +94,16 @@ Làm 1 lần:
 4. Mở app → ⚙️ → dán mã Gemini → **Tải danh sách giọng** → chọn giọng → **Nghe thử** → **Lưu**.
    (Nếu báo mã bị giới hạn: tạo mã mới ở Google Cloud → Credentials, dán vào ô “Mã Google Cloud”.)
 
+Thẻ **🎛️ Tuỳ chỉnh video** (hiện sau khi chọn video, có ô xem thử):
+- **Tách nhạc nền** (AI chạy ngay trên máy, file `dich-video/tach-nhac.js`, mô hình trong `dich-video/mo-hinh/`):
+  bỏ giọng Trung gốc, giữ nhạc nền. Lần đầu tải mô hình (Nhanh 28MB / Kỹ 56MB) + bộ chạy AI (~21MB).
+- **Phụ đề tiếng Việt** chèn thẳng vào hình: cỡ chữ, vị trí, màu, kiểu viền/nền.
+- **Lớp che chữ Trung**: làm mờ hoặc tô màu, chỉnh vị trí và kích thước.
+- **Logo**: chỉnh cỡ, độ rõ, vị trí (ảnh logo lưu trên máy).
+- Có phụ đề/lớp che/logo thì app dựng lại hình bằng bộ mã hoá của điện thoại (`dich-video/lop-phu.js`,
+  thư viện mediabunny) → lâu hơn; máy không hỗ trợ thì vẫn xuất video nhưng không có chữ/logo.
+- Tất cả chạy trên máy, **không tốn thêm tiền**.
+
 Dùng: chọn video → **Bắt đầu** → sửa câu dịch nếu muốn → **Làm lại** → **Lưu video**.
 
 - Hình giữ nguyên, chỉ thay tiếng (giữ lại nhạc gốc nhỏ, chỉnh trong ⚙️).

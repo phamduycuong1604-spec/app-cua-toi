@@ -1,0 +1,4 @@
+Mô hình AI tách nhạc nền (MDX-Net) từ dự án Ultimate Vocal Remover – giấy phép MIT.
+Nguồn: https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models
+- UVR_MDXNET_9482.onnx        (kiểu "Nhanh": đoán giọng, nhạc nền = gốc − giọng)
+- UVR-MDX-NET-Inst_HQ_4.onnx  (kiểu "Kỹ": đoán thẳng nhạc nền)

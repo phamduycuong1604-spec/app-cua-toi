@@ -122,3 +122,22 @@ main { max-width: 640px; margin: 0 auto; }
 .huong-dan ol { padding-left: 20px; margin: 8px 0 0; font-size: 14px; }
 .huong-dan li { margin-bottom: 6px; }
 .huong-dan a { color: var(--bac-ha-dam); }
+
+/* ===== TUỲ CHỈNH VIDEO ===== */
+.muc { border-top: 1px solid var(--vien); padding: 10px 0; }
+.muc summary { font-weight: 600; cursor: pointer; padding: 4px 0; }
+.cong-tac { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+.cong-tac input { width: 20px; height: 20px; accent-color: var(--nut-chinh); }
+.truot { margin-top: 10px; font-size: 14px; }
+.truot .dong { display: flex; justify-content: space-between; }
+.truot input { width: 100%; accent-color: var(--nut-chinh); }
+.hang-chon { display: flex; gap: 12px; align-items: center; margin-top: 10px; flex-wrap: wrap; font-size: 14px; }
+.hang-chon label { display: flex; align-items: center; gap: 6px; }
+.the select, .hang-chon select {
+  padding: 8px; border-radius: 10px; border: 1px solid var(--vien);
+  font: inherit; font-size: 15px; background: var(--nen); color: var(--chu); max-width: 100%;
+}
+.the select[data-o="mhTach"] { width: 100%; }
+input[type=color] { width: 40px; height: 32px; border: none; background: none; padding: 0; }
+.nut-nho { padding: 10px; font-size: 15px; margin-top: 8px; text-align: center; cursor: pointer; }
+#xem-truoc { display: block; }

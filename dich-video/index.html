@@ -39,13 +39,90 @@
       <button id="nut-bat-dau" class="nut-chinh an">▶ Bắt đầu dịch & lồng tiếng</button>
     </section>
 
+    <!-- TUỲ CHỈNH: âm thanh, phụ đề, lớp che, logo (có ô xem thử) -->
+    <section class="the an" id="the-tuy-chon">
+      <h2>🎛️ Tuỳ chỉnh video</h2>
+      <canvas id="xem-truoc" class="khung-video"></canvas>
+      <p class="goi-y" id="goi-y-xem">Bấm ▶ video ở trên rồi dừng ở đoạn có chữ Trung để căn chỉnh.</p>
+
+      <details class="muc" open>
+        <summary>🎵 Âm thanh</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="tachNhac"> Tách nhạc nền, bỏ giọng Trung gốc (AI)</label>
+        <div data-hien="tachNhac">
+          <label class="nhan">Kiểu tách</label>
+          <select data-o="mhTach">
+            <option value="nhanh">Nhanh (tải 28MB lần đầu)</option>
+            <option value="ky">Kỹ – sạch hơn, chậm gấp đôi (tải 56MB lần đầu)</option>
+          </select>
+          <div class="truot" data-o="amNen" data-min="0" data-max="150" data-buoc="5" data-don-vi="%">Âm lượng nhạc nền</div>
+        </div>
+        <div data-hien="!tachNhac">
+          <div class="truot" data-o="amGoc" data-min="0" data-max="100" data-buoc="5" data-don-vi="%">Giữ lại tiếng gốc (cả giọng Trung)</div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>📝 Phụ đề tiếng Việt</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="lop.phuDe.bat"> Hiện phụ đề trên video</label>
+        <div data-hien="lop.phuDe.bat">
+          <div class="truot" data-o="lop.phuDe.co" data-min="2" data-max="12" data-buoc="0.5">Cỡ chữ</div>
+          <div class="truot" data-o="lop.phuDe.y" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          <div class="hang-chon">
+            <label>Màu chữ <input type="color" data-o="lop.phuDe.mau"></label>
+            <select data-o="lop.phuDe.kieu">
+              <option value="vien">Viền đen</option>
+              <option value="nen">Nền đen mờ</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>⬛ Lớp che chữ Trung</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="lop.che.bat"> Che dòng chữ Trung có sẵn</label>
+        <div data-hien="lop.che.bat">
+          <div class="hang-chon">
+            <select data-o="lop.che.kieu">
+              <option value="mo">Làm mờ</option>
+              <option value="mau">Tô màu</option>
+            </select>
+            <label data-hien="lop.che.kieu=mau">Màu <input type="color" data-o="lop.che.mau"></label>
+          </div>
+          <div class="truot" data-o="lop.che.y" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          <div class="truot" data-o="lop.che.x" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trái ↔ phải)</div>
+          <div class="truot" data-o="lop.che.h" data-min="2" data-max="60" data-buoc="0.5" data-don-vi="%">Chiều cao</div>
+          <div class="truot" data-o="lop.che.w" data-min="5" data-max="100" data-buoc="1" data-don-vi="%">Chiều rộng</div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>🖼️ Logo</summary>
+        <label class="nut-phu nut-nho">
+          <input type="file" id="o-logo" accept="image/*" hidden> <span id="chu-logo">Chọn ảnh logo</span>
+        </label>
+        <div id="phan-logo" class="an">
+          <label class="cong-tac"><input type="checkbox" data-o="lop.logo.bat"> Hiện logo</label>
+          <div data-hien="lop.logo.bat">
+            <div class="truot" data-o="lop.logo.co" data-min="3" data-max="60" data-buoc="1" data-don-vi="%">Cỡ</div>
+            <div class="truot" data-o="lop.logo.mo" data-min="5" data-max="100" data-buoc="5" data-don-vi="%">Độ rõ (thấp = mờ)</div>
+            <div class="truot" data-o="lop.logo.x" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trái ↔ phải)</div>
+            <div class="truot" data-o="lop.logo.y" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          </div>
+          <button type="button" id="nut-xoa-logo" class="nut-phu nut-nho">🗑️ Bỏ logo</button>
+        </div>
+      </details>
+      <p class="goi-y">Bật phụ đề, lớp che hoặc logo thì app phải dựng lại hình nên xuất lâu hơn (khoảng bằng độ dài video).</p>
+    </section>
+
     <!-- Tiến độ các bước -->
     <section class="the an" id="the-tien-do">
       <ol class="cac-buoc" id="cac-buoc">
         <li data-buoc="tai"><span class="dau">○</span> Tải bộ xử lý video <small>(~30MB, chỉ lần đầu)</small><em></em></li>
         <li data-buoc="tach"><span class="dau">○</span> Tách tiếng khỏi video<em></em></li>
         <li data-buoc="dich"><span class="dau">○</span> Nghe tiếng Trung & dịch sang tiếng Việt<em></em></li>
+        <li data-buoc="nhac"><span class="dau">○</span> Tách nhạc nền khỏi giọng gốc<em></em></li>
         <li data-buoc="long"><span class="dau">○</span> Lồng tiếng Việt<em></em></li>
+        <li data-buoc="ve"><span class="dau">○</span> Chèn phụ đề, lớp che, logo<em></em></li>
         <li data-buoc="xuat"><span class="dau">○</span> Xuất video<em></em></li>
       </ol>
       <p class="loi an" id="loi"></p>
@@ -163,9 +240,6 @@
       <p class="goi-y">Nhiều câu liền nhau được gộp vào 1 lần đọc để đỡ tốn lượt.</p>
       </div>
       <button type="button" id="nut-thu-giong" class="nut-phu">🔊 Nghe thử giọng</button>
-
-      <label class="nhan">Giữ lại tiếng gốc (nhạc nền): <b id="chu-am-goc">15%</b></label>
-      <input id="o-am-goc" type="range" min="0" max="100" step="5" value="15">
 
       <details>
         <summary>Nâng cao</summary>

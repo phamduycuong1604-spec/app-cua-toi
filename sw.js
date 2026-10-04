@@ -7,7 +7,7 @@
 // để điện thoại biết mà tải bản mới.
 // =====================================================
 
-const PHIEN_BAN = "viec-hom-nay-v18";
+const PHIEN_BAN = "viec-hom-nay-v19";
 
 const CAC_FILE = [
   "./",
@@ -50,6 +50,8 @@ self.addEventListener("fetch", (e) => {
   // Chỉ lo file của app (và phông chữ); việc khác như tải Google Sheets, máy chủ nhắc giờ thì để yên
   const diaChi = new URL(e.request.url);
   if (diaChi.origin !== self.location.origin && !diaChi.hostname.startsWith("fonts.")) return;
+  // Mô hình AI tách nhạc rất nặng, trang dịch video tự cất riêng → không cất thêm bản nữa
+  if (diaChi.pathname.endsWith(".onnx")) return;
   e.respondWith(
     // cache: "no-cache" = luôn hỏi máy chủ xem có bản mới không (GitHub giữ file cũ tới 10 phút)
     // (lúc mở trang, trình duyệt không cho thêm tùy chọn vào yêu cầu gốc nên phải tạo yêu cầu mới theo địa chỉ)
