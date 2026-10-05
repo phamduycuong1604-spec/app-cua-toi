@@ -262,6 +262,7 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
   }
 
   return {
+    goi, // gọi dịch vụ ngoài (tự đi vòng qua máy chủ PHAHA khi bị chặn) – dùng cho nút Kiểm tra mã
     // Có dịch vụ dự phòng nào dùng được không
     coDuPhong: () => Object.values(NGHE).some((n) => n.co()) && Object.values(DICH).some((n) => n.co()),
     batDauLanMoi: () => hong.clear(),
