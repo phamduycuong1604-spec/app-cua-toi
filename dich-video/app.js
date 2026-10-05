@@ -2181,6 +2181,7 @@ function loiDeHieu(loi) {
     return "Fish Audio báo lỗi: " + m;
   }
   if (loi?.dv === "fpt") {
+    if (/cannot consume|not.*(allow|permission)|forbidden/i.test(m)) return "Mã FPT.AI đúng nhưng FPT chưa cho dùng dịch vụ đọc giọng.\nVào console.fpt.ai → chọn đúng dự án → APIs → bật Text to Speech. Bật rồi vẫn lỗi thì FPT đã ngừng cho tài khoản cá nhân – bỏ tích \"Dùng FPT.AI\" để app dùng giọng khác.\n(" + m + ")";
     if (loi.status === 401 || loi.status === 403) return "Mã FPT.AI không đúng. Mở ⚙️ Cài đặt → mục FPT.AI, dán lại mã.\n" + m;
     if (loi.hetLuot) return "FPT.AI đã hết lượt dùng thử. App tự chuyển sang giọng kế tiếp; muốn dùng tiếp thì mua gói ở console.fpt.ai.";
     return "FPT.AI báo lỗi: " + m;
