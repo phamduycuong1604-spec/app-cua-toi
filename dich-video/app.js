@@ -1556,9 +1556,9 @@ function luuMoHinhNghi(m, giay) {
   try { localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(d)); } catch {}
 }
 
-// Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (trả phí)
+// Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (dự án khác → lượt miễn phí riêng)
 const khoaGemini = (loai) => (loai === "doc" && caiDat.khoaDoc) || caiDat.khoa;
-// Ghi nhớ "hết lượt" riêng cho mã đọc (mã miễn phí hết lượt không có nghĩa mã trả phí hết)
+// Ghi nhớ "hết lượt" riêng cho mã đọc (mã chính hết lượt không có nghĩa mã riêng cũng hết)
 const tenNghi = (m, loai) => (loai === "doc" && caiDat.khoaDoc ? "rieng:" : "") + m;
 
 async function goiGemini(loai, noiDung) {
