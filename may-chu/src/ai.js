@@ -20,6 +20,7 @@ const DUOC_CHUYEN = [
   /^api\.fish\.audio$/,
   /^api\.deepseek\.com$/,
   /^api\.fpt\.ai$/,
+  /^viettelai\.vn$/,
   /^file\d*\.fpt\.ai$/,
 ];
 

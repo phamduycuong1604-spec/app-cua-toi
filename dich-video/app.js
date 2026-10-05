@@ -30,8 +30,9 @@ caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, c
 caiDat.dv.fish = Object.assign({ khoa: "", giong: "", ds: [] }, caiDat.dv.fish);
 caiDat.dv.edge = Object.assign({ giong: "vi-VN-HoaiMyNeural" }, caiDat.dv.edge);
 caiDat.dv.fpt = Object.assign({ khoa: "", giong: "banmai" }, caiDat.dv.fpt);
+caiDat.dv.vt = Object.assign({ khoa: "", giong: "hn-quynhanh" }, caiDat.dv.vt);
 // Bật/tắt từng dịch vụ đọc (Google Cloud chỉ bật sẵn nếu trước đây đã cài)
-caiDat.bat = Object.assign({ el: true, gemini: true, fpt: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
+caiDat.bat = Object.assign({ el: true, vt: true, gemini: true, fpt: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
 delete caiDat.dichVu;
 // Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
 {
@@ -199,7 +200,7 @@ $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
 // Thứ tự dùng giọng: trên hết lượt/lỗi thì đọc lại cả video bằng cái kế tiếp
-const THU_TU = ["el", "gemini", "fpt", "fish", "az", "gc", "edge", "may"];
+const THU_TU = ["el", "vt", "gemini", "fpt", "fish", "az", "gc", "edge", "may"];
 const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
 const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
 const daDangNhap = () => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } };
@@ -226,6 +227,8 @@ function moCaiDat() {
   for (const dv of THU_TU) if ($("bat-" + dv)) $("bat-" + dv).checked = caiDat.bat[dv];
   $("o-giong-edge").value = caiDat.dv.edge.giong;
   $("o-khoa-fpt").value = caiDat.dv.fpt.khoa;
+  $("o-khoa-vt").value = caiDat.dv.vt.khoa;
+  $("o-giong-vt").value = caiDat.dv.vt.giong;
   $("o-giong-fpt").value = caiDat.dv.fpt.giong;
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-dp-groq").value = caiDat.dp.groq;
@@ -255,6 +258,8 @@ function layTuForm() {
   for (const dv of THU_TU) if ($("bat-" + dv)) caiDat.bat[dv] = $("bat-" + dv).checked;
   caiDat.dv.edge.giong = $("o-giong-edge").value || caiDat.dv.edge.giong;
   caiDat.dv.fpt.khoa = $("o-khoa-fpt").value.trim();
+  caiDat.dv.vt.khoa = $("o-khoa-vt").value.trim();
+  caiDat.dv.vt.giong = $("o-giong-vt").value || caiDat.dv.vt.giong;
   caiDat.dv.fpt.giong = $("o-giong-fpt").value || caiDat.dv.fpt.giong;
   caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
   caiDat.dv.el.mh = $("o-mh-el").value;
@@ -294,6 +299,7 @@ function trangThai(dv) {
     gc: !caiDat.dv.gc.khoa && !caiDat.khoa && "chưa có mã",
     edge: (!coMayChu() || !daDangNhap()) && "cần đăng nhập app PHAHA",
     fpt: !caiDat.dv.fpt.khoa && "chưa có mã",
+    vt: !caiDat.dv.vt.khoa && "chưa có mã",
   }[dv];
   if (thieu) return "⚠️ " + thieu;
   if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
@@ -382,7 +388,7 @@ function goiCaiDat() {
 // Đếm số mã API đang có trong 1 bản cài đặt (để không bao giờ lặng lẽ thay bản nhiều mã bằng bản ít mã)
 function demMa(cd = {}) {
   const dv = cd.dv || {}, dp = cd.dp || {};
-  return [cd.khoa, cd.khoaDoc, dp.ds, dp.groq, dp.or, dp.azDich, dv.el?.khoa, dv.fish?.khoa, dv.az?.khoa, dv.gc?.khoa, dv.fpt?.khoa].filter(Boolean).length;
+  return [cd.khoa, cd.khoaDoc, dp.ds, dp.groq, dp.or, dp.azDich, dv.el?.khoa, dv.fish?.khoa, dv.az?.khoa, dv.gc?.khoa, dv.fpt?.khoa, dv.vt?.khoa].filter(Boolean).length;
 }
 // Cất bản cài đặt hiện tại trước khi bị thay (giữ 5 bản gần nhất) → khôi phục được
 function catSaoLuu(lyDo) {
@@ -1306,7 +1312,7 @@ function chuanHoaDoc(chu) {
 }
 
 // =====================================================
-// ĐỌC TIẾNG VIỆT: ElevenLabs → Gemini → Fish Audio → Azure → (Google Cloud) → Edge → giọng máy
+// ĐỌC TIẾNG VIỆT: ElevenLabs → Viettel AI → Gemini → Fish Audio → Azure → (Google Cloud) → Edge → giọng máy
 // =====================================================
 const DICH_VU = {
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven, cungLuc: 2 },
@@ -1316,6 +1322,7 @@ const DICH_VU = {
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
   edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
   fpt: { ten: "FPT.AI", doc: docFpt, cungLuc: 4 },
+  vt: { ten: "Viettel AI", doc: docViettel, cungLuc: 3 },
   may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
 };
 // Tên giọng đang chọn của 1 dịch vụ (để ghi nhật ký)
@@ -1323,6 +1330,7 @@ function tenGiong(dv) {
   if (dv === "gemini") return caiDat.giong;
   if (dv === "may") return "";
   if (dv === "fpt") return GIONG_FPT[caiDat.dv.fpt.giong] || caiDat.dv.fpt.giong;
+  if (dv === "vt") return $("o-giong-vt")?.querySelector(`option[value="${caiDat.dv.vt.giong}"]`)?.textContent || caiDat.dv.vt.giong;
   const c = caiDat.dv[dv];
   return (c.ds?.find((g) => g.ten === c.giong)?.nhan || c.giong || "").replace(/^🇻🇳 |^🌐 /, "");
 }
@@ -1634,6 +1642,35 @@ async function docFish(chu) {
   return docWav(byte);
 }
 
+// ----- Viettel AI: giọng đọc tiếng Việt của Viettel (trả về MP3 ngay) -----
+// Trình duyệt bị chặn gọi thẳng thì tự đi vòng qua máy chủ PHAHA.
+const VT_API = "https://viettelai.vn/tts/speech_synthesis";
+async function docViettel(chu) {
+  const c = caiDat.dv.vt;
+  for (let lan = 0; ; lan++) {
+    const r = await duPhong.goi(VT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", token: c.khoa },
+      body: JSON.stringify({ text: chu, voice: c.giong, speed: 1, tts_return_option: 3, token: c.khoa, without_filter: false }),
+    }, "Viettel AI");
+    const kieu = r.headers.get("content-type") || "";
+    if (r.ok && !/json|text\/html/i.test(kieu)) {
+      const b = new Uint8Array(await r.arrayBuffer());
+      if (b.length > 500) return { mau: await giaiMp3(b), tanSo: TAN_SO_DOC };
+    }
+    const t = await r.text().catch(() => "");
+    let j = {};
+    try { j = JSON.parse(t); } catch {}
+    const tb = String(j.message || j.msg || j.error || j.detail || t || r.statusText).slice(0, 200);
+    nhat(`⚠️ Viettel AI: mã ${r.status} · ${tb}`);
+    if ((r.status === 429 || r.status >= 500) && lan < 3) { await cho(3 * (lan + 1), "long"); continue; }
+    throw Object.assign(new Error(tb || "Viettel AI không trả về giọng đọc"), {
+      status: r.status, dv: "vt",
+      hetLuot: r.status === 402 || /quota|limit|exceed|balance|credit|hết|vượt|không đủ/i.test(tb),
+    });
+  }
+}
+
 // ----- FPT.AI: giọng đọc tiếng Việt của FPT -----
 // Gửi chữ → FPT trả về 1 địa chỉ file MP3, vài giây sau file mới có → chờ rồi tải về.
 // Trình duyệt bị chặn gọi thẳng thì tự đi vòng qua máy chủ PHAHA.
@@ -1743,6 +1780,7 @@ function dvDocDung(imLang) {
     gc: () => !!(caiDat.dv.gc.giong || caiDat.dv.gc.khoa),
     edge: () => vao,
     fpt: () => !!caiDat.dv.fpt.khoa,
+    vt: () => !!caiDat.dv.vt.khoa,
     may: () => true,
   };
   const ds = THU_TU.filter((dv) => (dv === "may" || caiDat.bat[dv]) && co[dv]());
@@ -2179,6 +2217,11 @@ function loiDeHieu(loi) {
     if (loi.status === 401 || loi.status === 403) return "Mã Fish Audio không đúng hoặc chưa đăng nhập app PHAHA. Mở ⚙️ Cài đặt kiểm tra lại.\n" + m;
     if (loi.hetLuot || loi.status === 429) return "Fish Audio đã hết lượt miễn phí (hoặc đang quá tải). App tự chuyển sang giọng kế tiếp.";
     return "Fish Audio báo lỗi: " + m;
+  }
+  if (loi?.dv === "vt") {
+    if (loi.status === 401 || loi.status === 403 || /token|key|auth/i.test(m)) return "Mã Viettel AI không đúng hoặc hết hạn. Mở ⚙️ Cài đặt → mục Viettel AI, dán lại mã.\n" + m;
+    if (loi.hetLuot) return "Viettel AI đã hết ký tự. App tự chuyển sang giọng kế tiếp; mua thêm gói ở viettelai.vn để dùng tiếp.";
+    return "Viettel AI báo lỗi: " + m;
   }
   if (loi?.dv === "fpt") {
     if (/cannot consume|not.*(allow|permission)|forbidden/i.test(m)) return "Mã FPT.AI đúng nhưng FPT chưa cho dùng dịch vụ đọc giọng.\nVào console.fpt.ai → chọn đúng dự án → APIs → bật Text to Speech. Bật rồi vẫn lỗi thì FPT đã ngừng cho tài khoản cá nhân – bỏ tích \"Dùng FPT.AI\" để app dùng giọng khác.\n(" + m + ")";
