@@ -7,6 +7,7 @@
 import { FFmpeg } from "./ffmpeg/index.js";
 import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { taoDuPhong } from "./du-phong.js";
+import { khoaLai, moKhoa, layTuMayChu, guiLenMayChu } from "./dong-bo.js";
 
 const $ = (id) => document.getElementById(id);
 const API = "https://generativelanguage.googleapis.com/v1beta";
@@ -39,12 +40,26 @@ delete caiDat.dichVu;
 }
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
 // Dịch vụ dự phòng khi Gemini hết lượt
+caiDat.capNhat ||= 0;
 caiDat.dp = Object.assign({ ds: "", groq: "", cf: true, azNghe: true, azDich: "", azDichVung: "", or: "" }, caiDat.dp);
 
 function docLuu(ten) {
   try { return JSON.parse(localStorage.getItem(ten)) || {}; } catch { return {}; }
 }
+// Lưu cài đặt; nếu nội dung (hoặc logo) thật sự thay đổi thì ghi mốc thời gian để đồng bộ biết máy nào mới hơn
+let dauVanTayCaiDat = null;
+function vanTayCaiDat() {
+  let logo = "";
+  try { logo = localStorage.getItem("phaha-dv-logo") || ""; } catch {}
+  return JSON.stringify({ ...caiDat, capNhat: 0 }) + "|" + logo.length + ":" + logo.slice(-64);
+}
 function luuCaiDat() {
+  const vt = vanTayCaiDat();
+  if (dauVanTayCaiDat !== null && vt !== dauVanTayCaiDat) {
+    caiDat.capNhat = Date.now();
+    henGuiDongBo();
+  }
+  dauVanTayCaiDat = vt;
   try { localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(caiDat)); } catch {}
 }
 // Đếm số ký tự (lượt) đã dùng mỗi dịch vụ trong tháng, để biết còn trong mức miễn phí
@@ -193,6 +208,9 @@ const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-khoa-doc").value = caiDat.khoaDoc;
+  $("o-mk-dong-bo").value = trangDongBo().mk || "";
+  $("o-tu-dong-bo").checked = trangDongBo().tuDong !== false;
+  hienTrangDongBo();
   $("bat-deepseek").checked = caiDat.dichBang === "deepseek";
   $("o-khoa-ds").value = caiDat.dp.ds;
   $("o-giong").value = caiDat.giong;
@@ -254,6 +272,7 @@ function layTuForm() {
   }
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.khoaDoc = $("o-khoa-doc").value.trim();
+  ghiTrangDongBo({ mk: $("o-mk-dong-bo").value, tuDong: $("o-tu-dong-bo").checked });
   caiDat.dichBang = $("bat-deepseek").checked ? "deepseek" : "gemini";
   caiDat.dp.ds = $("o-khoa-ds").value.trim();
   caiDat.giong = $("o-giong").value;
@@ -332,6 +351,112 @@ document.querySelectorAll(".nut-nghe").forEach((nut) => {
       return docCau(CAU_MAU, dv);
     }, DICH_VU[dv].ten + ": ", "⏳ Đang đọc…", "▶️ Đọc xong – bấm ▶ bên dưới để nghe");
   });
+});
+
+// =====================================================
+// ĐỒNG BỘ CÀI ĐẶT GIỮA CÁC MÁY (xem dong-bo.js)
+// Ghi nhớ: lucMayChu = mốc bản trên máy chủ lần cuối máy này thấy/gửi; lucMay = mốc cài đặt máy này lúc đó
+// → biết được bên nào đã đổi kể từ lần đồng bộ trước.
+// Không đồng bộ: nhật ký, đếm lượt, ghi nhớ hết lượt (mỗi máy tự có).
+// =====================================================
+function trangDongBo() { return docLuu("phaha-dv-dong-bo"); }
+function ghiTrangDongBo(them) {
+  const d = { ...trangDongBo(), ...them };
+  try { localStorage.setItem("phaha-dv-dong-bo", JSON.stringify(d)); } catch {}
+  return d;
+}
+function hienTrangDongBo(chu) {
+  const d = trangDongBo(), o = $("tt-dong-bo");
+  if (!o) return;
+  if (chu) { o.textContent = chu; return; }
+  if (!coMayChu() || !daDangNhap()) o.textContent = "⚠️ Cần đăng nhập app PHAHA (cùng 1 tài khoản trên các máy).";
+  else if (!d.mk) o.textContent = "Đặt mật khẩu đồng bộ rồi bấm Đồng bộ ngay.";
+  else o.textContent = d.lanCuoi ? `Lần đồng bộ gần nhất: ${new Date(d.lanCuoi).toLocaleString("vi-VN")}` : "Chưa đồng bộ lần nào trên máy này.";
+}
+function goiCaiDat() {
+  let logo = null;
+  try { logo = localStorage.getItem("phaha-dv-logo"); } catch {}
+  if (logo && logo.length > 900000) logo = undefined; // logo quá nặng → không gửi
+  return { caiDat, logo, may: moTaMay().split(" · ")[0] };
+}
+function apDungCaiDat(du, capNhat) {
+  try {
+    localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(du.caiDat));
+    if (du.logo) localStorage.setItem("phaha-dv-logo", du.logo);
+    else if (du.logo === null) localStorage.removeItem("phaha-dv-logo");
+  } catch {}
+  ghiTrangDongBo({ lucMayChu: capNhat, lucMay: du.caiDat.capNhat || 0, lanCuoi: Date.now() });
+  nhat(`🔄 Đã lấy cài đặt từ ${du.may || "máy khác"} → tải lại trang`);
+  setTimeout(() => location.reload(), 600);
+}
+async function guiDongBo(d) {
+  const capNhat = await guiLenMayChu(DIA_CHI_MAY_CHU, veDangNhap(), await khoaLai(goiCaiDat(), d.mk));
+  ghiTrangDongBo({ lucMayChu: capNhat, lucMay: caiDat.capNhat, lanCuoi: Date.now() });
+  nhat("🔄 Đã gửi cài đặt máy này lên tài khoản");
+}
+// cheDo: "bam" (người dùng bấm nút), "mo" (vừa mở app), "luu" (vừa lưu cài đặt)
+let dangDongBo = false;
+async function dongBo(cheDo) {
+  const d = trangDongBo();
+  if (dangDongBo || !d.mk || !coMayChu() || !daDangNhap()) return;
+  if (cheDo !== "bam" && d.tuDong === false) return;
+  dangDongBo = true;
+  try {
+    const tren = await layTuMayChu(DIA_CHI_MAY_CHU, veDangNhap());
+    const mayDoi = (caiDat.capNhat || 0) > (d.lucMay || 0);
+    if (!tren) {
+      await guiDongBo(d);
+      return hienTrangDongBo("✅ Đã gửi cài đặt máy này lên. Máy kia bấm Đồng bộ ngay (cùng mật khẩu) để lấy về.");
+    }
+    const trenDoi = tren.capNhat > (d.lucMayChu || 0);
+    if (!trenDoi && !mayDoi) return hienTrangDongBo("✅ Đã giống nhau, không có gì mới.");
+    if (trenDoi && (!mayDoi || !d.lucMayChu)) {
+      // Máy chủ có bản mới (hoặc máy này chưa đồng bộ bao giờ) → lấy về
+      const du = await moKhoa(tren.goi, d.mk);
+      if (cheDo === "bam" && !d.lucMayChu && mayDoi &&
+          !confirm(`Trên tài khoản có cài đặt từ ${du.may || "máy khác"}.\nOK = lấy về máy này (thay cài đặt hiện tại)\nHuỷ = gửi cài đặt máy này lên thay`)) {
+        await guiDongBo(d);
+        return hienTrangDongBo("✅ Đã gửi cài đặt máy này lên.");
+      }
+      if (cheDo === "mo" && tepVideo) return; // đang làm video thì không tải lại trang
+      if (cheDo === "luu" && !d.lucMayChu) return; // lần đầu: để người dùng tự bấm nút
+      hienTrangDongBo("✅ Đã lấy cài đặt mới về, đang tải lại…");
+      return apDungCaiDat(du, tren.capNhat);
+    }
+    if (!trenDoi && mayDoi) {
+      await guiDongBo(d);
+      return hienTrangDongBo("✅ Đã gửi thay đổi của máy này lên.");
+    }
+    // Cả 2 bên cùng đổi kể từ lần trước → hỏi người dùng
+    if (cheDo !== "bam") return hienTrangDongBo("⚠️ Cả máy này và máy kia đều đổi cài đặt – bấm Đồng bộ ngay để chọn bản giữ lại.");
+    const du = await moKhoa(tren.goi, d.mk);
+    if (confirm(`Cả máy này và ${du.may || "máy kia"} đều đã đổi cài đặt.\nOK = lấy bản của máy kia về\nHuỷ = giữ bản máy này và gửi lên`)) return apDungCaiDat(du, tren.capNhat);
+    await guiDongBo(d);
+    hienTrangDongBo("✅ Đã gửi cài đặt máy này lên.");
+  } catch (loi) {
+    nhat("🔄 Đồng bộ lỗi: " + loi.message);
+    hienTrangDongBo("❌ " + loi.message);
+    if (cheDo === "bam") alert(loi.message);
+  } finally {
+    dangDongBo = false;
+  }
+}
+let henDongBo = null;
+function henGuiDongBo() {
+  clearTimeout(henDongBo);
+  henDongBo = setTimeout(() => dongBo("luu"), 3000);
+}
+$("nut-dong-bo").addEventListener("click", async () => {
+  layTuForm();
+  if (!trangDongBo().mk) return alert("Đặt mật khẩu đồng bộ trước (tự đặt, nhập giống nhau ở mọi máy).");
+  if (trangDongBo().mk.length < 6) return alert("Mật khẩu đồng bộ cần ít nhất 6 ký tự.");
+  const nut = $("nut-dong-bo");
+  nut.disabled = true;
+  nut.textContent = "⏳ Đang đồng bộ…";
+  clearTimeout(henDongBo);
+  await dongBo("bam");
+  nut.disabled = false;
+  nut.textContent = "🔄 Đồng bộ ngay";
 });
 
 // Hạn mức + % còn lại của từng dịch vụ (lấy số thật nếu dịch vụ cho xem, không thì đếm trên máy này)
@@ -509,6 +634,8 @@ function napAnh(nguon) {
   } catch {}
   hienDieuKhien();
 })();
+dauVanTayCaiDat = vanTayCaiDat();
+setTimeout(() => dongBo("mo"), 1500); // mở app: có bản mới từ máy khác thì lấy về
 
 // ----- Ô xem thử: vẽ khung hình đang dừng của video + các lớp -----
 function veXemTruoc() {
