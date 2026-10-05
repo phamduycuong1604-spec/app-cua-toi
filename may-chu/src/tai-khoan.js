@@ -10,7 +10,10 @@
 
 const VONG_BAM = 10000;                      // số vòng băm mật khẩu
 const HAN_VE = 90 * 24 * 60 * 60 * 1000;     // vé đăng nhập dùng được 90 ngày
-const CAC_PHAN_DU_LIEU = ["viec", "thu-chi", "cai-dat"];
+const CAC_PHAN_DU_LIEU = ["viec", "thu-chi", "cai-dat", "dich-video"];
+// Các phần lưu nguyên khối (bản mới thay bản cũ, không gộp từng mục).
+// "dich-video": cài đặt trang dịch video, đã được khoá bằng mật khẩu đồng bộ ngay trên máy (máy chủ không đọc được)
+const PHAN_NGUYEN_KHOI = ["cai-dat", "dich-video"];
 const DU_LIEU_TOI_DA = 1500000;              // mỗi phần tối đa ~1,5 MB
 const SAI_TOI_DA = 5;                        // sai mật khẩu 5 lần...
 const KHOA_SAI_TRONG = 15 * 60 * 1000;       // ...thì khóa 15 phút
@@ -311,7 +314,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
           .bind(nguoi.ten, phan).first();
         const giaTriCu = dong ? JSON.parse(dong.gia_tri) : null;
         // Cài đặt: lấy bản mới; công việc / thu chi: gộp từng mục
-        const giaTriMoi = phan === "cai-dat" ? giaTriGuiLen : gop.gopPhan(giaTriCu, giaTriGuiLen);
+        const giaTriMoi = PHAN_NGUYEN_KHOI.includes(phan) ? giaTriGuiLen : gop.gopPhan(giaTriCu, giaTriGuiLen);
         const capNhat = Math.max(Date.now(), dong ? dong.cap_nhat + 1 : 0);
 
         let ketQua;
@@ -326,7 +329,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
         if (!ketQua.meta.changes) continue; // máy khác vừa ghi xen vào → làm lại
 
         // Cất bản CŨ vào lịch sử: ngay lập tức nếu có mục bị xóa, còn lại tối đa 10 phút một bản
-        if (dong && dong.gia_tri !== JSON.stringify(giaTriMoi)) {
+        if (dong && phan !== "dich-video" && dong.gia_tri !== JSON.stringify(giaTriMoi)) {
           let coMucBiXoa = false;
           if (phan !== "cai-dat") {
             const conLai = new Set(giaTriMoi.muc.map((x) => x.id));

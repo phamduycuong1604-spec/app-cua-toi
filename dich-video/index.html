@@ -165,6 +165,16 @@
     <form method="dialog">
       <h2>⚙️ Cài đặt</h2>
 
+      <details class="muc-dp" id="muc-dong-bo">
+        <summary>🔄 Đồng bộ cài đặt giữa các máy</summary>
+        <p class="goi-y" id="tt-dong-bo"></p>
+        <label class="nhan">Mật khẩu đồng bộ</label>
+        <input id="o-mk-dong-bo" type="password" autocomplete="new-password" placeholder="Tự đặt (≥ 6 ký tự), nhập giống nhau ở mọi máy">
+        <label class="cong-tac"><input type="checkbox" id="o-tu-dong-bo"> Tự đồng bộ (mở app thì lấy bản mới, lưu thì gửi lên)</label>
+        <button type="button" id="nut-dong-bo" class="nut-phu">🔄 Đồng bộ ngay</button>
+        <p class="goi-y">Gồm: các mã API, giọng đã chọn, thứ tự & bật/tắt giọng, DeepSeek, dịch vụ dự phòng, phụ đề, lớp che, logo. Cài đặt được <b>khoá bằng mật khẩu đồng bộ ngay trên máy</b> rồi mới gửi lên tài khoản PHAHA – máy chủ không đọc được. Quên mật khẩu này thì đặt mật khẩu mới và bấm Đồng bộ ở máy có cài đặt đầy đủ.</p>
+      </details>
+
       <label class="nhan">Mã Gemini (API key)</label>
       <input id="o-khoa" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng AIza...">
       <p class="goi-y">Lấy miễn phí tại
