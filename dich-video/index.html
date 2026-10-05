@@ -171,6 +171,25 @@
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
         → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
 
+      <label class="nhan">Dịch tiếng Trung bằng</label>
+      <select id="o-dich-bang">
+        <option value="gemini">Gemini – nghe & dịch cùng lúc (như cũ)</option>
+        <option value="deepseek">DeepSeek – Groq/Cloudflare nghe, DeepSeek dịch</option>
+      </select>
+      <div id="phan-deepseek">
+        <label class="nhan">Mã DeepSeek (API key)</label>
+        <input id="o-khoa-ds" type="password" autocomplete="off" placeholder="sk-...">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (trả trước, rất rẻ)</summary>
+          <ol>
+            <li>Vào <a href="https://platform.deepseek.com" target="_blank" rel="noopener">platform.deepseek.com</a> → đăng nhập (Google hoặc email).</li>
+            <li><b>Top up</b> → nạp ít nhất ~2 đô (thẻ Visa). Dịch 1 video 2 phút chỉ tốn vài chục đồng.</li>
+            <li><b>API keys</b> → <b>Create new API key</b> → sao chép (mã chỉ hiện 1 lần) → dán vào đây.</li>
+          </ol>
+        </details>
+        <p class="goi-y">DeepSeek hết tiền hoặc lỗi thì app tự dịch bằng Groq/Cloudflare/OpenRouter, rồi tới Gemini.</p>
+      </div>
+
       <h3 class="tieu-de-giong">🔊 Giọng lồng tiếng</h3>
       <p class="goi-y">App dùng lần lượt theo thứ tự dưới đây: dịch vụ trên hết lượt/lỗi thì tự đọc lại cả video bằng dịch vụ kế tiếp. Mỗi dịch vụ chọn sẵn 1 giọng mặc định, bấm 🔊 để nghe thử.</p>
 
