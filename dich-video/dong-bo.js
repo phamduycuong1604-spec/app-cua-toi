@@ -54,3 +54,13 @@ export async function guiLenMayChu(mayChu, ve, goiDaKhoa) {
   const j = await goi(mayChu, ve, "/du-lieu/" + PHAN, { method: "PUT", body: JSON.stringify({ giaTri: goiDaKhoa }) });
   return j.capNhat;
 }
+
+// Các bản cũ trên tài khoản (máy chủ giữ 10 bản gần nhất, vẫn ở dạng đã khoá)
+export async function layLichSuMayChu(mayChu, ve) {
+  const { banLuu = [] } = await goi(mayChu, ve, "/du-lieu/lich-su?phan=" + PHAN);
+  const ra = [];
+  for (const b of banLuu.filter((x) => x.phan === PHAN).slice(0, 10)) {
+    try { ra.push({ luc: b.luc, goi: (await goi(mayChu, ve, "/du-lieu/lich-su/" + b.ma)).giaTri }); } catch {}
+  }
+  return ra;
+}

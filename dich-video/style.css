@@ -163,3 +163,5 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
 .hang-nut-giong .nut-nho { flex: 1; margin-top: 8px; }
 .loa-nghe { display: block; width: 100%; margin-top: 8px; height: 40px; }
 #kq-kiem-tra { white-space: pre-line; line-height: 1.6; }
+.dong-khoi-phuc { display: flex; gap: 8px; align-items: center; justify-content: space-between; border-top: 1px solid var(--vien); padding: 6px 0; }
+.dong-khoi-phuc .nut-nho { width: auto; margin: 0; padding: 6px 10px; flex: none; }

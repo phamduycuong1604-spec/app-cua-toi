@@ -276,13 +276,16 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
     // Danh sách bản lưu tự động (không kèm nội dung)
     if (p === "GET /du-lieu/lich-su") {
       const nguoi = await xacThuc(yeuCau, env);
+      // Mặc định không kèm bản cũ của trang dịch video (đã khoá, app chính không đọc được); ?phan=dich-video để lấy riêng
+      const chiDichVideo = new URL(yeuCau.url).searchParams.get("phan") === "dich-video";
       const { results } = await env.DB.prepare(
-        "SELECT rowid AS ma, phan, luc, gia_tri FROM lich_su WHERE ten = ?1 ORDER BY luc DESC LIMIT 60"
+        "SELECT rowid AS ma, phan, luc, gia_tri FROM lich_su WHERE ten = ?1 AND " +
+          (chiDichVideo ? "phan = 'dich-video'" : "phan != 'dich-video'") + " ORDER BY luc DESC LIMIT 60"
       ).bind(nguoi.ten).all();
       return traLoi({
         banLuu: results.map((r) => {
           const giaTri = JSON.parse(r.gia_tri);
-          const soMuc = r.phan === "cai-dat" ? null : gop.chuanHoaPhan(giaTri).muc.length;
+          const soMuc = PHAN_NGUYEN_KHOI.includes(r.phan) ? null : gop.chuanHoaPhan(giaTri).muc.length;
           return { ma: r.ma, phan: r.phan, luc: r.luc, soMuc };
         }),
       });
@@ -329,7 +332,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
         if (!ketQua.meta.changes) continue; // máy khác vừa ghi xen vào → làm lại
 
         // Cất bản CŨ vào lịch sử: ngay lập tức nếu có mục bị xóa, còn lại tối đa 10 phút một bản
-        if (dong && phan !== "dich-video" && dong.gia_tri !== JSON.stringify(giaTriMoi)) {
+        if (dong && dong.gia_tri !== JSON.stringify(giaTriMoi)) {
           let coMucBiXoa = false;
           if (phan !== "cai-dat") {
             const conLai = new Set(giaTriMoi.muc.map((x) => x.id));
@@ -337,7 +340,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
           }
           const ganNhat = await env.DB.prepare("SELECT MAX(luc) AS luc FROM lich_su WHERE ten = ?1 AND phan = ?2")
             .bind(nguoi.ten, phan).first("luc");
-          if (coMucBiXoa || !ganNhat || Date.now() - ganNhat > LUU_LICH_SU_MOI) {
+          if (phan === "dich-video" || coMucBiXoa || !ganNhat || Date.now() - ganNhat > LUU_LICH_SU_MOI) {
             await env.DB.batch([
               env.DB.prepare("INSERT INTO lich_su VALUES (?1, ?2, ?3, ?4)").bind(nguoi.ten, phan, dong.gia_tri, Date.now()),
               env.DB.prepare(
