@@ -616,6 +616,7 @@ async function chay(lamTuDau) {
   dangChay = true;
   geminiNghi = false;
   deepSeekNghi = false;
+  daBaoNghi = new Set();
   napMoHinhNghi();
   duPhong.batDauLanMoi();
   nhatKyChay = [];
@@ -1629,8 +1630,14 @@ function luuMoHinhNghi(m, giay) {
 
 // Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (dự án khác → lượt miễn phí riêng)
 const khoaGemini = (loai) => (loai === "doc" && caiDat.khoaDoc) || caiDat.khoa;
-// Ghi nhớ "hết lượt" riêng cho mã đọc (mã chính hết lượt không có nghĩa mã riêng cũng hết)
-const tenNghi = (m, loai) => (loai === "doc" && caiDat.khoaDoc ? "rieng:" : "") + m;
+// Ghi nhớ "hết lượt" theo TỪNG MÃ (dấu vân tay ngắn của mã, không lưu mã): đổi mã là có sổ ghi nhớ mới
+function vanTayMa(khoa) {
+  let h = 5381;
+  for (let i = 0; i < khoa.length; i++) h = ((h << 5) + h + khoa.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+const tenNghi = (m, loai) => vanTayMa(khoaGemini(loai) || "") + ":" + m;
+let daBaoNghi = new Set(); // đã ghi nhật ký "bỏ qua vì ghi nhớ" (mỗi lần chạy 1 lần)
 
 async function goiGemini(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
@@ -1638,7 +1645,14 @@ async function goiGemini(loai, noiDung) {
   let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
   let daHoi = false, loiCuoi = null;
   for (let i = 0; i < ds.length; i++) {
-    if (moHinhNghi.has(tenNghi(ds[i], loai))) continue;
+    if (moHinhNghi.has(tenNghi(ds[i], loai))) {
+      if (!daBaoNghi.has(tenNghi(ds[i], loai))) {
+        daBaoNghi.add(tenNghi(ds[i], loai));
+        const han = docLuu("phaha-dv-gemini-nghi")[tenNghi(ds[i], loai)];
+        nhat(`Bỏ qua ${ds[i]}: mã này đã hết lượt ở lần trước${han ? ` (thử lại sau ${new Date(han).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })})` : ""}`);
+      }
+      continue;
+    }
     try {
       const kq = await goiMoHinh(ds[i], noiDung, loai);
       moHinhDung[loai] = ds[i];
