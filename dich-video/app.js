@@ -100,7 +100,49 @@ $("nut-chep-nhat-ky").addEventListener("click", async () => {
     $("nut-chep-nhat-ky").textContent = "Đã bôi đen – bấm Sao chép";
   }
 });
-const duPhong = taoDuPhong({ caiDat, nhat, cho });
+const duPhong = taoDuPhong({
+  caiDat, nhat, cho,
+  dem: (ten, n) => demDung(`${ten}:${vanTayMa(ten === "groq" ? caiDat.dp.groq : caiDat.dp.or)}`, n),
+});
+
+// ----- ĐẾM LƯỢT ĐÃ DÙNG HÔM NAY (trên máy này) để hiện hạn mức còn lại -----
+// Gemini làm mới lúc 0 giờ giờ Mỹ (Thái Bình Dương); dịch vụ khác tính theo ngày quốc tế (UTC)
+const ngayMy = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+const ngayQT = () => new Date().toISOString().slice(0, 10);
+function demDung(ten, n = 1, ngay = ngayQT()) {
+  const d = docLuu("phaha-dv-dung");
+  const c = d[ten]?.ngay === ngay ? d[ten] : { ngay, n: 0 };
+  c.n += n;
+  d[ten] = c;
+  for (const k of Object.keys(d)) if (d[k]?.ngay && d[k].ngay < ngay && !k.startsWith("max:")) delete d[k];
+  try { localStorage.setItem("phaha-dv-dung", JSON.stringify(d)); } catch {}
+}
+function daDung(ten, ngay = ngayQT()) {
+  const c = docLuu("phaha-dv-dung")[ten];
+  return c?.ngay === ngay ? c.n : 0;
+}
+// Giờ (giờ Việt Nam) lúc Gemini làm mới lượt: 0 giờ ở Mỹ
+function gioLamMoiGemini() {
+  const [h, m] = new Date().toLocaleTimeString("en-GB", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit" }).split(":").map(Number);
+  return new Date(Date.now() + (1440 - h * 60 - m) * 60000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+const gioLamMoiQT = () => new Date(Date.UTC(2000, 0, 1)).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+function hanMuc(da, toiDa, donVi, uocTinh, lamMoi) {
+  const con = Math.max(0, Math.round(100 * (1 - da / toiDa)));
+  return `đã dùng ${da.toLocaleString("vi-VN")}/${toiDa.toLocaleString("vi-VN")} ${donVi}${uocTinh ? " (ước tính)" : ""} → còn ${con}%${lamMoi ? `, làm mới lúc ${lamMoi}` : ""}`;
+}
+// Hạn mức miễn phí Gemini mỗi ngày (ước tính, Google không cho xem qua mã); hết lượt thật thì app tự nhớ con số đúng
+const GM_UOC = { nghe: 250, doc: 15 };
+function hanMucGemini(khoa, loai) {
+  const vt = vanTayMa(khoa), d = docLuu("phaha-dv-dung");
+  const da = daDung(`gm:${vt}:${loai}`, ngayMy());
+  const hoc = d[`max:gm:${vt}:${loai}`];
+  const toiDa = hoc?.n || GM_UOC[loai];
+  const het = d[`het:gm:${vt}:${loai}`]?.ngay === ngayMy();
+  const ten = loai === "nghe" ? "nghe & dịch" : "đọc";
+  if (het) return `${ten}: đã hết lượt hôm nay → còn 0%, làm mới lúc ${gioLamMoiGemini()}`;
+  return `${ten}: ${hanMuc(da, Math.max(toiDa, da), "lượt", !hoc, gioLamMoiGemini())}`;
+}
 window.addEventListener("error", (e) => nhat("⚠️ Lỗi trang: " + e.message));
 window.addEventListener("unhandledrejection", (e) => nhat("⚠️ Lỗi ngầm: " + (e.reason?.message || e.reason)));
 function moTaMay() {
@@ -150,7 +192,7 @@ const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-khoa-doc").value = caiDat.khoaDoc;
-  $("o-dich-bang").value = caiDat.dichBang;
+  $("bat-deepseek").checked = caiDat.dichBang === "deepseek";
   $("o-khoa-ds").value = caiDat.dp.ds;
   $("o-giong").value = caiDat.giong;
   for (const dv of CAC_DV) {
@@ -207,7 +249,7 @@ function layTuForm() {
   }
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.khoaDoc = $("o-khoa-doc").value.trim();
-  caiDat.dichBang = $("o-dich-bang").value;
+  caiDat.dichBang = $("bat-deepseek").checked ? "deepseek" : "gemini";
   caiDat.dp.ds = $("o-khoa-ds").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
@@ -286,6 +328,34 @@ document.querySelectorAll(".nut-nghe").forEach((nut) => {
   });
 });
 
+// Hạn mức + % còn lại của từng dịch vụ (lấy số thật nếu dịch vụ cho xem, không thì đếm trên máy này)
+async function chiTietHanMuc(ten, r) {
+  try {
+    if (ten === "Gemini (nghe & dịch)") {
+      return hanMucGemini(caiDat.khoa, "nghe") + (caiDat.khoaDoc ? "" : " · " + hanMucGemini(caiDat.khoa, "doc"));
+    }
+    if (ten === "Gemini riêng cho giọng đọc") return hanMucGemini(caiDat.khoaDoc, "doc");
+    if (ten === "Groq") {
+      const giay = daDung(`groq:${vanTayMa(caiDat.dp.groq)}`);
+      return `nghe: ${hanMuc(Math.round(giay / 60), 480, "phút âm thanh", true, gioLamMoiQT())}`;
+    }
+    if (ten === "OpenRouter") {
+      const j = (await r.json().catch(() => ({}))).data || {};
+      const toiDa = j.is_free_tier === false ? 1000 : 50;
+      return hanMuc(daDung(`or:${vanTayMa(caiDat.dp.or)}`), toiDa, "lượt dịch", false, gioLamMoiQT()) + " (đếm trên máy này)";
+    }
+    if (ten === "ElevenLabs") {
+      const r2 = await fetch(EL_API + "/user/subscription", { headers: { "xi-api-key": caiDat.dv.el.khoa } });
+      if (!r2.ok) return `không xem được hạn mức (mã thiếu quyền "User – Read")`;
+      const j = await r2.json();
+      const ngay = j.next_character_count_reset_unix ? new Date(j.next_character_count_reset_unix * 1000).toLocaleDateString("vi-VN") : "";
+      return `tháng này ${hanMuc(j.character_count || 0, j.character_limit || 1, "ký tự", false, "")}${ngay ? `, làm mới ngày ${ngay}` : ""}`;
+    }
+    if (ten === "Azure") return `đọc: ${hanMuc(kyTuThang("az"), 500000, "ký tự tháng này", true, "")}`;
+  } catch {}
+  return "dùng được";
+}
+
 // Nút 🔎 Kiểm tra các mã: thử từng mã đã dán (chỉ hỏi danh sách, không tốn lượt đọc/dịch)
 $("nut-kiem-tra-ma").addEventListener("click", async () => {
   layTuForm();
@@ -309,9 +379,10 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
       if (r.ok && ten === "DeepSeek") {
         const j = await r.json().catch(() => ({}));
         const tien = (j.balance_infos || []).map((b) => `${b.total_balance} ${b.currency}`).join(", ");
-        return j.is_available === false ? `⚠️ DeepSeek: mã đúng nhưng hết tiền (còn ${tien || 0}) – nạp thêm` : `✅ DeepSeek: mã đúng, còn ${tien || "?"}`;
+        const tat = caiDat.dichBang === "deepseek" ? "" : " (công tắc đang TẮT)";
+        return j.is_available === false ? `⚠️ DeepSeek: mã đúng nhưng hết tiền (còn ${tien || 0}) – nạp thêm${tat}` : `✅ DeepSeek: mã đúng, còn ${tien || "?"} (trả trước, không giới hạn lượt)${tat}`;
       }
-      if (r.ok) return `✅ ${ten}: mã đúng, dùng được`;
+      if (r.ok) return `✅ ${ten}: mã đúng · ${await chiTietHanMuc(ten, r)}`;
       if (r.status === 402) return `⚠️ ${ten}: mã đúng nhưng hết tiền – nạp thêm`;
       if (r.status === 429) return `⚠️ ${ten}: mã đúng nhưng đang hết lượt, chờ một lúc`;
       if ([400, 401, 403].includes(r.status)) return `❌ ${ten}: mã sai hoặc thiếu quyền (mã ${r.status}) – dán lại mã`;
@@ -321,7 +392,9 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
     }
   }));
   kq.push(`${coMayChu() && daDangNhap() ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Cloudflare): ${coMayChu() && daDangNhap() ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
-  kq.push("Fish Audio: bấm 🔊 Nghe thử trong mục Fish để kiểm tra.");
+  kq.push("Fish Audio: bấm 🔊 Nghe thử trong mục Fish để kiểm tra (Fish không công bố hạn mức miễn phí).");
+  kq.push("Edge: không giới hạn · Cloudflare: 10.000 đơn vị/ngày (máy chủ không báo số còn lại).");
+  kq.push("(ước tính) = app tự đếm trên máy này, dùng ở máy khác sẽ không tính vào.");
   o.textContent = kq.join("\n");
   o.classList.remove("an");
   nhat("Kiểm tra mã:\n" + kq.join("\n"));
@@ -1678,11 +1751,20 @@ async function goiGemini(loai, noiDung) {
       ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t)));
     }
   }
-  if (loiCuoi?.message === "HET_NGAY") throw loiCuoi;
+  if (loiCuoi?.message === "HET_NGAY") { ghiHetGemini(loai); throw loiCuoi; }
   // Mọi mô hình đều đang được nhớ là hết lượt/ngừng → coi như hết lượt hôm nay
   if (!loiCuoi && ds.every((m) => moHinhNghi.has(tenNghi(m, loai)))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
+}
+
+// Hết lượt cả ngày: ghi lại số lượt đã dùng được hôm nay = hạn mức thật của mã này
+function ghiHetGemini(loai) {
+  const vt = vanTayMa(khoaGemini(loai)), ngay = ngayMy();
+  const d = docLuu("phaha-dv-dung"), da = daDung(`gm:${vt}:${loai}`, ngay);
+  if (da > 0) d[`max:gm:${vt}:${loai}`] = { n: da };
+  d[`het:gm:${vt}:${loai}`] = { ngay };
+  try { localStorage.setItem("phaha-dv-dung", JSON.stringify(d)); } catch {}
 }
 
 async function timMoHinh(loai) {
@@ -1722,6 +1804,7 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       });
       if (r.ok) {
         const j = await r.json();
+        demDung(`gm:${vanTayMa(khoaGemini(loai))}:${loai}`, 1, ngayMy());
         if (loai === "nghe" || Date.now() - bd > 8000) {
           const u = j.usageMetadata;
           nhat(`Gemini ${moHinh} (${loai === "nghe" ? "nghe & dịch" : "đọc"}): xong sau ${thoiGian()}${u ? ` · ${u.promptTokenCount || 0}→${u.candidatesTokenCount || 0} token${u.thoughtsTokenCount ? `, suy nghĩ ${u.thoughtsTokenCount}` : ""}` : ""}`);

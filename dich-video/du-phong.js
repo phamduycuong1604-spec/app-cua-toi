@@ -11,7 +11,7 @@ const DEEPSEEK = "https://api.deepseek.com";
 // Câu "ảo" Whisper hay tự bịa ra ở đoạn chỉ có nhạc
 const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|字幕提供|字幕志愿者|明镜与点点|Amara|中文字幕|感谢观看|感謝觀看/;
 
-export function taoDuPhong({ caiDat, nhat, cho }) {
+export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
   const ve = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
   const coMayChu = () => !!(mayChu && ve() && caiDat.dp.cf);
@@ -82,6 +82,7 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
               return { method: "POST", headers: { Authorization: "Bearer " + caiDat.dp.groq }, body: f };
             }, "Groq Whisper");
             const j = await r.json();
+            dem("groq", Math.round((wav.length - 44) / 32000)); // giây âm thanh đã gửi (16kHz, 1 kênh)
             return (j.segments || [])
               .filter((s) => !(s.no_speech_prob > 0.6 && s.avg_logprob < -0.8))
               .map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
@@ -169,6 +170,7 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
           body: JSON.stringify({ model: mh, messages: loiNhac(cau), temperature: 0.3, ...(them.body?.(mh) || {}) }),
         }), `${ten} (${mh})`);
         const j = await r.json();
+        if (url.startsWith(OPENROUTER)) dem("or", 1);
         return docKetQuaDich(j.choices?.[0]?.message?.content, cau.length);
       } catch (loi) {
         loiCuoi = loi;
@@ -197,7 +199,7 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
   const DICH = {
     deepseek: {
       ten: "DeepSeek",
-      co: () => !!caiDat.dp.ds,
+      co: () => !!caiDat.dp.ds && caiDat.dichBang === "deepseek", // tắt công tắc = không dùng DeepSeek
       chay: (cau) => chatOpenAI(`${DEEPSEEK}/chat/completions`, caiDat.dp.ds, ["deepseek-chat"], cau, "DeepSeek dịch", {
         body: () => ({ response_format: { type: "json_object" } }),
       }),
