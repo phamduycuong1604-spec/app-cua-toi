@@ -46,7 +46,7 @@ export async function docEdge(chu, giong = "vi-VN-HoaiMyNeural", toc = "+0%") {
   if (!ws) throw new Error(`Edge từ chối kết nối (mã ${tl.status})`);
   ws.accept();
   return await new Promise((xong, hong) => {
-    const manh = [], daNhan = [];
+    const manh = [], daNhan = [], choDoc = [];
     const hen = setTimeout(() => { try { ws.close(); } catch {} hong(new Error("Edge trả lời quá lâu")); }, 30000);
     ws.addEventListener("message", (e) => {
       if (typeof e.data === "string") {
@@ -54,22 +54,34 @@ export async function docEdge(chu, giong = "vi-VN-HoaiMyNeural", toc = "+0%") {
         if (e.data.includes("Path:turn.end")) {
           clearTimeout(hen);
           try { ws.close(); } catch {}
+          ketThuc();
+        }
+        return;
+      }
+      // Cloudflare có thể đưa dữ liệu nhị phân dạng Blob → đọc theo đúng thứ tự
+      choDoc.push(
+        (typeof e.data.arrayBuffer === "function" ? e.data.arrayBuffer() : Promise.resolve(e.data)).then((b) => {
+          const du = new Uint8Array(b);
+          daNhan.push("bin" + du.length);
+          if (du.length < 2) return null;
+          const daiDau = (du[0] << 8) | du[1];
+          const dau = new TextDecoder().decode(du.subarray(2, 2 + daiDau));
+          return dau.includes("Path:audio") ? du.slice(2 + daiDau) : null;
+        })
+      );
+    });
+    const ketThuc = async () => {
+      for (const m of await Promise.all(choDoc)) if (m && m.length) manh.push(m);
+      {
           const tong = manh.reduce((n, m) => n + m.length, 0);
           if (!tong) return hong(new Error("Edge không trả về âm thanh (nhận: " + daNhan.join(",") + ")"));
           const ra = new Uint8Array(tong);
           let o = 0;
           for (const m of manh) { ra.set(m, o); o += m.length; }
           xong(ra);
-        }
-        return;
       }
-      const du = new Uint8Array(e.data instanceof ArrayBuffer ? e.data : e.data.buffer || e.data);
-      daNhan.push("bin" + du.length);
-      const daiDau = (du[0] << 8) | du[1];
-      const dau = new TextDecoder().decode(du.subarray(2, 2 + daiDau));
-      if (dau.includes("Path:audio")) manh.push(du.slice(2 + daiDau));
-    });
-    ws.addEventListener("close", (e) => { clearTimeout(hen); if (!manh.length) hong(new Error(`Edge đóng kết nối (mã ${e.code} ${e.reason || ""}; nhận: ${daNhan.join(",")})`)); });
+    };
+    ws.addEventListener("close", (e) => { clearTimeout(hen); if (!manh.length && !choDoc.length) hong(new Error(`Edge đóng kết nối (mã ${e.code} ${e.reason || ""}; nhận: ${daNhan.join(",")})`)); });
     ws.addEventListener("error", () => { clearTimeout(hen); hong(new Error("Lỗi kết nối Edge")); });
     ws.send(`X-Timestamp:${gioGmt()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
       '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n');
