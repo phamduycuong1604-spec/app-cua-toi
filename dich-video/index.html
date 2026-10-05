@@ -229,8 +229,46 @@
         <p class="goi-y" id="chu-ky-tu-el"></p>
       </details>
 
+      <details class="dv-doc" data-dv="vt">
+        <summary>2. Viettel AI (giọng Việt) <span class="tt" id="tt-vt"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-vt"> Dùng Viettel AI</label>
+        <label class="nhan">Mã Viettel AI (API key / token)</label>
+        <input id="o-khoa-vt" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://viettelai.vn" target="_blank" rel="noopener">viettelai.vn</a> bằng số điện thoại (xác nhận mã OTP). Tài khoản mới được tặng 50.000 ký tự.</li>
+            <li>Đăng nhập → <b>Kho dịch vụ</b> (hoặc tên tài khoản → <b>API Key / Token</b>) → sao chép mã → dán vào đây.</li>
+            <li>Hết ký tự thì mua gói trong viettelai.vn (gói 1 triệu ký tự khoảng 320.000đ ≈ 550đ/video 2 phút).</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-vt">
+          <option value="hn-quynhanh">Nữ miền Bắc – Quỳnh Anh</option>
+          <option value="hn-thaochi">Nữ miền Bắc – Thảo Chi</option>
+          <option value="hn-phuongtrang">Nữ miền Bắc – Phương Trang</option>
+          <option value="hn-thanhha">Nữ miền Bắc – Thanh Hà</option>
+          <option value="hn-thanhphuong">Nữ miền Bắc – Thanh Phương</option>
+          <option value="hn-thanhtung">Nam miền Bắc – Thanh Tùng</option>
+          <option value="hn-namkhanh">Nam miền Bắc – Nam Khánh</option>
+          <option value="hn-tienquan">Nam miền Bắc – Tiến Quân</option>
+          <option value="hue-maingoc">Nữ miền Trung – Mai Ngọc</option>
+          <option value="hue-baoquoc">Nam miền Trung – Bảo Quốc</option>
+          <option value="hcm-diemmy">Nữ miền Nam – Diễm My</option>
+          <option value="hcm-thuydung">Nữ miền Nam – Thùy Dung</option>
+          <option value="hcm-phuongly">Nữ miền Nam – Phương Ly</option>
+          <option value="hcm-thuyduyen">Nữ miền Nam – Thùy Duyên</option>
+          <option value="hn-leyen">Nữ miền Nam – Lê Yến</option>
+          <option value="hcm-minhquan">Nam miền Nam – Minh Quân</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="vt">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng do Viettel làm riêng cho tiếng Việt: đúng dấu, 3 miền, giá rẻ.</p>
+      </details>
+
       <details class="dv-doc" data-dv="gemini">
-        <summary>2. Gemini <span class="tt" id="tt-gemini"></span></summary>
+        <summary>3. Gemini <span class="tt" id="tt-gemini"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-gemini"> Dùng Gemini</label>
         <label class="nhan">Mã Gemini riêng cho giọng đọc (không bắt buộc)</label>
         <input id="o-khoa-doc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
@@ -275,7 +313,7 @@
       </details>
 
       <details class="dv-doc" data-dv="fpt">
-        <summary>3. FPT.AI (giọng Việt) <span class="tt" id="tt-fpt"></span></summary>
+        <summary>4. FPT.AI (giọng Việt) <span class="tt" id="tt-fpt"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-fpt"> Dùng FPT.AI</label>
         <label class="nhan">Mã FPT.AI (API key)</label>
         <input id="o-khoa-fpt" type="password" autocomplete="off" placeholder="Dán mã API">
@@ -306,7 +344,7 @@
       </details>
 
       <details class="dv-doc" data-dv="fish">
-        <summary>4. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
+        <summary>5. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-fish"> Dùng Fish Audio</label>
         <label class="nhan">Mã Fish Audio (API key)</label>
         <input id="o-khoa-fish" type="password" autocomplete="off" placeholder="Dán mã API">
@@ -327,7 +365,7 @@
       </details>
 
       <details class="dv-doc" data-dv="az">
-        <summary>5. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
+        <summary>6. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-az"> Dùng Azure</label>
         <label class="nhan">Mã Azure (Key 1)</label>
         <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
@@ -352,7 +390,7 @@
       </details>
 
       <details class="dv-doc" data-dv="edge">
-        <summary>6. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
+        <summary>7. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-edge"> Dùng giọng Edge</label>
         <label class="nhan">Giọng mặc định</label>
         <select id="o-giong-edge">
