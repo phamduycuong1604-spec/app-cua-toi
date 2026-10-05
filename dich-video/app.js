@@ -276,6 +276,42 @@ document.querySelectorAll(".nut-nghe").forEach((nut) => {
   });
 });
 
+// Nút 🔎 Kiểm tra các mã: thử từng mã đã dán (chỉ hỏi danh sách, không tốn lượt đọc/dịch)
+$("nut-kiem-tra-ma").addEventListener("click", async () => {
+  layTuForm();
+  const nut = $("nut-kiem-tra-ma"), o = $("kq-kiem-tra");
+  const bear = (k) => ({ headers: { Authorization: "Bearer " + k } });
+  const ds = [
+    ["Gemini (nghe & dịch)", caiDat.khoa, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoa } })],
+    ["Gemini riêng cho giọng đọc", caiDat.khoaDoc, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoaDoc } })],
+    ["Groq", caiDat.dp.groq, () => duPhong.goi("https://api.groq.com/openai/v1/models", bear(caiDat.dp.groq), "Groq")],
+    ["OpenRouter", caiDat.dp.or, () => duPhong.goi("https://openrouter.ai/api/v1/key", bear(caiDat.dp.or), "OpenRouter")],
+    ["ElevenLabs", caiDat.dv.el.khoa, () => fetch(EL_API + "/voices", { headers: { "xi-api-key": caiDat.dv.el.khoa } })],
+    ["Azure", caiDat.dv.az.khoa, () => fetch(azApi("/voices/list"), { headers: { "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa } })],
+  ];
+  nut.disabled = true;
+  nut.textContent = "⏳ Đang kiểm tra…";
+  const kq = await Promise.all(ds.map(async ([ten, khoa, thu]) => {
+    if (!khoa) return `▫️ ${ten}: chưa dán mã`;
+    try {
+      const r = await thu();
+      if (r.ok) return `✅ ${ten}: mã đúng, dùng được`;
+      if (r.status === 429) return `⚠️ ${ten}: mã đúng nhưng đang hết lượt, chờ một lúc`;
+      if ([400, 401, 403].includes(r.status)) return `❌ ${ten}: mã sai hoặc thiếu quyền (mã ${r.status}) – dán lại mã`;
+      return `⚠️ ${ten}: chưa kiểm tra được (mã ${r.status}), thử lại sau`;
+    } catch (loi) {
+      return `⚠️ ${ten}: không kết nối được (${loi.message})`;
+    }
+  }));
+  kq.push(`${coMayChu() && daDangNhap() ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Cloudflare): ${coMayChu() && daDangNhap() ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
+  kq.push("Fish Audio: bấm 🔊 Nghe thử trong mục Fish để kiểm tra.");
+  o.textContent = kq.join("\n");
+  o.classList.remove("an");
+  nhat("Kiểm tra mã:\n" + kq.join("\n"));
+  nut.disabled = false;
+  nut.textContent = "🔎 Kiểm tra các mã";
+});
+
 // =====================================================
 // TUỲ CHỈNH VIDEO: âm thanh, phụ đề, lớp che, logo
 // Mỗi ô điều khiển có data-o="đường.dẫn" tới mục trong caiDat
