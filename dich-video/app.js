@@ -1650,7 +1650,7 @@ async function docViettel(chu) {
   for (let lan = 0; ; lan++) {
     const r = await duPhong.goi(VT_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json", token: c.khoa },
+      headers: { "Content-Type": "application/json", accept: "*/*" },
       body: JSON.stringify({ text: chu, voice: c.giong, speed: 1, tts_return_option: 3, token: c.khoa, without_filter: false }),
     }, "Viettel AI");
     const kieu = r.headers.get("content-type") || "";
