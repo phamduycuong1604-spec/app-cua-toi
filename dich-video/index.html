@@ -171,92 +171,163 @@
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
         → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
 
-      <label class="nhan">Dịch vụ đọc giọng Việt</label>
-      <select id="o-dich-vu">
-        <option value="gc">Google Cloud – miễn phí ~800 video/tháng (khuyên dùng)</option>
-        <option value="az">Microsoft Azure – miễn phí ~400 video/tháng</option>
-        <option value="el">ElevenLabs – giống người thật nhất, miễn phí ~8 video/tháng</option>
-        <option value="gemini">Gemini – giọng có cảm xúc, ít lượt miễn phí</option>
-        <option value="may">Giọng máy trên điện thoại – miễn phí, không giới hạn, không cần mã</option>
-      </select>
-      <p class="goi-y">Giọng đang chọn hết lượt thì app tự đọc bằng giọng khác đã cài; cuối cùng là giọng máy (luôn có).</p>
+      <h3 class="tieu-de-giong">🔊 Giọng lồng tiếng</h3>
+      <p class="goi-y">App dùng lần lượt theo thứ tự dưới đây: dịch vụ trên hết lượt/lỗi thì tự đọc lại cả video bằng dịch vụ kế tiếp. Mỗi dịch vụ chọn sẵn 1 giọng mặc định, bấm 🔊 để nghe thử.</p>
 
-      <div id="phan-may" class="phan-dv">
-        <p class="goi-y">Giọng nữ đọc tiếng Việt chạy ngay trên điện thoại (Piper, dữ liệu VAIS-1000, CC BY 4.0). Lần đầu tải khoảng 90MB, sau đó dùng không cần mạng. Giọng nghe kém tự nhiên hơn Google/ElevenLabs.</p>
-      </div>
-
-      <div id="phan-gc" class="phan-dv">
-        <label class="nhan">Mã Google Cloud</label>
-        <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
-        <details class="huong-dan">
-          <summary>Cách bật (làm 1 lần)</summary>
-          <ol>
-            <li>Vào <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">console.cloud.google.com/billing</a> → gắn thẻ thanh toán (không trừ tiền nếu dùng trong mức miễn phí).</li>
-            <li>Mở <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" rel="noopener">Cloud Text-to-Speech API</a> → chọn đúng dự án của mã Gemini → bấm <b>Enable</b>.</li>
-            <li>Quay lại đây, bấm <b>Tải danh sách giọng</b>.</li>
-          </ol>
-        </details>
-        <label class="nhan">Giọng đọc</label>
-        <select id="o-giong-gc"><option value="">(chưa tải danh sách giọng)</option></select>
-        <button type="button" id="nut-tai-giong-gc" class="nut-phu">🔄 Tải danh sách giọng</button>
-        <p class="goi-y" id="chu-ky-tu-gc"></p>
-      </div>
-
-      <div id="phan-az" class="phan-dv">
-        <label class="nhan">Mã Azure (Key 1)</label>
-        <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
-        <label class="nhan">Vùng (Location/Region)</label>
-        <input id="o-vung-az" autocomplete="off" placeholder="southeastasia">
-        <details class="huong-dan">
-          <summary>Cách lấy mã (làm 1 lần)</summary>
-          <ol>
-            <li>Tạo tài khoản miễn phí tại <a href="https://azure.microsoft.com/free" target="_blank" rel="noopener">azure.microsoft.com/free</a> (cần thẻ để xác minh).</li>
-            <li>Vào <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices" target="_blank" rel="noopener">tạo dịch vụ Speech</a> → Region chọn <b>Southeast Asia</b> → Pricing tier chọn <b>Free F0</b> → <b>Review + create</b> → <b>Create</b>.</li>
-            <li>Mở dịch vụ vừa tạo → <b>Keys and Endpoint</b> → sao chép <b>KEY 1</b> và <b>Location/Region</b> dán vào đây.</li>
-          </ol>
-        </details>
-        <label class="nhan">Giọng đọc</label>
-        <select id="o-giong-az"><option value="">(chưa tải danh sách giọng)</option></select>
-        <button type="button" id="nut-tai-giong-az" class="nut-phu">🔄 Tải danh sách giọng</button>
-        <p class="goi-y" id="chu-ky-tu-az"></p>
-      </div>
-
-      <div id="phan-el" class="phan-dv">
+      <details class="dv-doc" data-dv="el">
+        <summary>1. ElevenLabs <span class="tt" id="tt-el"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-el"> Dùng ElevenLabs</label>
         <label class="nhan">Mã ElevenLabs (API key)</label>
         <input id="o-khoa-el" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng sk_...">
         <details class="huong-dan">
-          <summary>Cách lấy mã (làm 1 lần)</summary>
+          <summary>Cách lấy mã</summary>
           <ol>
-            <li>Đăng ký miễn phí tại <a href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">elevenlabs.io</a>.</li>
-            <li>Vào <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">API Keys</a> → <b>Create API Key</b> → bật quyền <b>Text to Speech</b> và <b>Voices (Read)</b> → sao chép mã dán vào đây.</li>
-            <li>Muốn thêm giọng: vào <b>Voice Library</b>, lọc tiếng Việt, bấm <b>Add</b> rồi quay lại tải danh sách giọng.</li>
+            <li>Đăng ký tại <a href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">elevenlabs.io</a> (gói trả phí: <a href="https://elevenlabs.io/app/subscription" target="_blank" rel="noopener">Subscription</a>).</li>
+            <li>Vào <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">API Keys</a> → <b>Create API Key</b> → bật quyền <b>Text to Speech</b>, <b>Voices</b> → sao chép dán vào đây.</li>
           </ol>
         </details>
         <label class="nhan">Chất lượng</label>
         <select id="o-mh-el">
           <option value="eleven_v3">Thật nhất (v3) – 1 ký tự = 1 lượt</option>
-          <option value="eleven_flash_v2_5">Nhanh (Flash) – 1 ký tự = 0,5 lượt, gấp đôi số video</option>
+          <option value="eleven_flash_v2_5">Nhanh (Flash) – 1 ký tự = 0,5 lượt</option>
         </select>
-        <label class="nhan">Giọng đọc</label>
-        <select id="o-giong-el"><option value="">(chưa tải danh sách giọng)</option></select>
-        <button type="button" id="nut-tai-giong-el" class="nut-phu">🔄 Tải danh sách giọng</button>
-        <p class="goi-y">Gói miễn phí không được dùng cho video kiếm tiền. Hết lượt thì app tự chuyển sang Google Cloud (nếu đã cài).</p>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-el"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-el" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="el">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Danh sách gồm giọng trong tài khoản và <b>giọng Việt được dùng nhiều nhất</b> trong thư viện ElevenLabs (🇻🇳). Chọn giọng thư viện thì app tự thêm vào tài khoản.</p>
         <p class="goi-y" id="chu-ky-tu-el"></p>
-      </div>
+      </details>
 
-      <div id="phan-gemini" class="phan-dv">
-      <label class="nhan">Giọng Gemini</label>
-      <select id="o-giong">
-        <option value="Kore">Nữ – rõ ràng (Kore)</option>
-        <option value="Aoede">Nữ – nhẹ nhàng (Aoede)</option>
-        <option value="Leda">Nữ – trẻ trung (Leda)</option>
-        <option value="Puck">Nam – vui vẻ (Puck)</option>
-        <option value="Charon">Nam – trầm ấm (Charon)</option>
-        <option value="Orus">Nam – chắc giọng (Orus)</option>
-      </select>
-      <p class="goi-y">Nhiều câu liền nhau được gộp vào 1 lần đọc để đỡ tốn lượt.</p>
-      </div>
-      <button type="button" id="nut-thu-giong" class="nut-phu">🔊 Nghe thử giọng</button>
+      <details class="dv-doc" data-dv="gemini">
+        <summary>2. Gemini <span class="tt" id="tt-gemini"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-gemini"> Dùng Gemini (dùng mã Gemini ở trên)</label>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong">
+          <option value="Kore">Nữ – rõ ràng, chắc chắn (Kore)</option>
+          <option value="Aoede">Nữ – nhẹ nhàng, thoáng (Aoede)</option>
+          <option value="Leda">Nữ – trẻ trung (Leda)</option>
+          <option value="Zephyr">Nữ – tươi sáng (Zephyr)</option>
+          <option value="Despina">Nữ – mượt mà (Despina)</option>
+          <option value="Sulafat">Nữ – ấm áp (Sulafat)</option>
+          <option value="Vindemiatrix">Nữ – dịu dàng (Vindemiatrix)</option>
+          <option value="Achernar">Nữ – mềm mại (Achernar)</option>
+          <option value="Callirrhoe">Nữ – thoải mái (Callirrhoe)</option>
+          <option value="Autonoe">Nữ – sáng giọng (Autonoe)</option>
+          <option value="Erinome">Nữ – rõ ràng (Erinome)</option>
+          <option value="Laomedeia">Nữ – vui tươi (Laomedeia)</option>
+          <option value="Gacrux">Nữ – chín chắn (Gacrux)</option>
+          <option value="Pulcherrima">Nữ – dứt khoát (Pulcherrima)</option>
+          <option value="Charon">Nam – trầm, truyền cảm (Charon)</option>
+          <option value="Puck">Nam – vui vẻ (Puck)</option>
+          <option value="Orus">Nam – chắc giọng (Orus)</option>
+          <option value="Iapetus">Nam – rõ ràng (Iapetus)</option>
+          <option value="Algieba">Nam – mượt mà (Algieba)</option>
+          <option value="Achird">Nam – thân thiện (Achird)</option>
+          <option value="Sadaltager">Nam – hiểu biết (Sadaltager)</option>
+          <option value="Rasalgethi">Nam – thuyết minh (Rasalgethi)</option>
+          <option value="Umbriel">Nam – thoải mái (Umbriel)</option>
+          <option value="Schedar">Nam – đều giọng (Schedar)</option>
+          <option value="Alnilam">Nam – dứt khoát (Alnilam)</option>
+          <option value="Fenrir">Nam – hào hứng (Fenrir)</option>
+          <option value="Enceladus">Nam – hơi thở nhẹ (Enceladus)</option>
+          <option value="Algenib">Nam – khàn (Algenib)</option>
+          <option value="Sadachbia">Nam – sôi nổi (Sadachbia)</option>
+          <option value="Zubenelgenubi">Nam – bình dân (Zubenelgenubi)</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="gemini">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Miễn phí ít lượt/ngày. Các câu sát nhau được gộp lại đọc 1 lần để đỡ tốn lượt.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="fish">
+        <summary>3. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-fish"> Dùng Fish Audio</label>
+        <label class="nhan">Mã Fish Audio (API key)</label>
+        <input id="o-khoa-fish" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (miễn phí, không cần thẻ)</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a> (đăng nhập bằng Google).</li>
+            <li>Vào <a href="https://fish.audio/app/api-keys" target="_blank" rel="noopener">API Keys</a> → tạo mã → sao chép dán vào đây.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-fish"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-fish" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="fish">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Dùng bản S2.1 Pro Free (miễn phí, giới hạn "dùng hợp lý"). Danh sách là các giọng Việt được dùng nhiều nhất. Cần đăng nhập app PHAHA (đi qua máy chủ PHAHA).</p>
+      </details>
+
+      <details class="dv-doc" data-dv="az">
+        <summary>4. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-az"> Dùng Azure</label>
+        <label class="nhan">Mã Azure (Key 1)</label>
+        <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
+        <label class="nhan">Vùng (Location/Region)</label>
+        <input id="o-vung-az" autocomplete="off" placeholder="southeastasia">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Tạo tài khoản tại <a href="https://azure.microsoft.com/free" target="_blank" rel="noopener">azure.microsoft.com/free</a> (cần thẻ để xác minh).</li>
+            <li><a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices" target="_blank" rel="noopener">Tạo dịch vụ Speech</a> → Region <b>Southeast Asia</b> → Pricing tier <b>Free F0</b> → <b>Create</b>.</li>
+            <li>Mở dịch vụ → <b>Keys and Endpoint</b> → sao chép <b>KEY 1</b> và <b>Location/Region</b>.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-az"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-az" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="az">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Gồm giọng Việt (Hoài My, Nam Minh) và các giọng "đa ngôn ngữ" đọc được tiếng Việt.</p>
+        <p class="goi-y" id="chu-ky-tu-az"></p>
+      </details>
+
+      <details class="dv-doc" data-dv="edge">
+        <summary>5. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-edge"> Dùng giọng Edge</label>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-edge">
+          <option value="vi-VN-HoaiMyNeural">Nữ – Hoài My (giọng Việt)</option>
+          <option value="vi-VN-NamMinhNeural">Nam – Nam Minh (giọng Việt)</option>
+          <option value="en-US-AvaMultilingualNeural">Nữ – Ava (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-AndrewMultilingualNeural">Nam – Andrew (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-EmmaMultilingualNeural">Nữ – Emma (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-BrianMultilingualNeural">Nam – Brian (đa ngôn ngữ, thử nghiệm)</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="edge">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng "Đọc to" của trình duyệt Edge: không cần mã, gần như không giới hạn. Không chính thức – Microsoft có thể chặn bất cứ lúc nào. Cần đăng nhập app PHAHA.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="gc">
+        <summary>Thêm: Google Cloud (không bắt buộc) <span class="tt" id="tt-gc"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-gc"> Dùng Google Cloud (đứng sau Azure)</label>
+        <label class="nhan">Mã Google Cloud</label>
+        <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-gc"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-gc" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="gc">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y" id="chu-ky-tu-gc"></p>
+      </details>
+
+      <details class="dv-doc" data-dv="may">
+        <summary>Cuối cùng: Giọng máy (luôn có)</summary>
+        <p class="goi-y">Giọng nữ đọc tiếng Việt chạy ngay trên điện thoại – dùng khi mọi giọng trên đều không được. Lần đầu tải khoảng 90MB.</p>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="may">🔊 Nghe thử</button>
+        </div>
+      </details>
 
       <details class="muc-dp">
         <summary>🔁 Dự phòng khi Gemini hết lượt (miễn phí)</summary>

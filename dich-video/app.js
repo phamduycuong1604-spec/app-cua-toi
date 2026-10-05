@@ -19,14 +19,18 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dichVu: "gc", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
+  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
 caiDat.dv.gc = Object.assign({ khoa: caiDat.khoaGc || "", giong: caiDat.giongGc || "", ds: caiDat.dsGiongGc || [] }, caiDat.dv.gc);
 caiDat.dv.az = Object.assign({ khoa: "", vung: "southeastasia", giong: "", ds: [] }, caiDat.dv.az);
 caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, caiDat.dv.el);
-if (caiDat.dichVu === "gcloud") caiDat.dichVu = "gc";
+caiDat.dv.fish = Object.assign({ khoa: "", giong: "", ds: [] }, caiDat.dv.fish);
+caiDat.dv.edge = Object.assign({ giong: "vi-VN-HoaiMyNeural" }, caiDat.dv.edge);
+// Bật/tắt từng dịch vụ đọc (Google Cloud chỉ bật sẵn nếu trước đây đã cài)
+caiDat.bat = Object.assign({ el: true, gemini: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
+delete caiDat.dichVu;
 // Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
 {
   const md = macDinhLop(), cu = caiDat.lop || {};
@@ -67,6 +71,7 @@ let dangChay = false;
 let amThanh = null; // AudioContext để nghe thử
 let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm lại không phải tách lại
 let anhLogo = null; // ảnh logo đã nạp
+let dangTachNhac = null; // AI tách nhạc đang chạy (giọng máy phải chờ xong mới chạy, tránh tràn bộ nhớ)
 
 // ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
 let nhatKyChay = [];
@@ -127,6 +132,8 @@ $("o-video").addEventListener("change", (e) => {
   ["the-tien-do", "the-ket-qua", "the-loi-thoai"].forEach((id) => $(id).classList.add("an"));
   nhacNen = null;
   $("the-tuy-chon").classList.remove("an");
+  // Tải sẵn bộ xử lý video trong lúc người dùng chỉnh tuỳ chọn → bấm Bắt đầu chạy ngay
+  if (!dangChay) taiFfmpeg().catch(() => {});
   xem.onloadeddata = xem.onseeked = xem.onpause = () => veXemTruoc();
 });
 
@@ -134,19 +141,27 @@ $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
-const CAC_DV = ["gc", "az", "el"]; // các dịch vụ có danh sách giọng
+// Thứ tự dùng giọng: trên hết lượt/lỗi thì đọc lại cả video bằng cái kế tiếp
+const THU_TU = ["el", "gemini", "fish", "az", "gc", "edge", "may"];
+const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
+const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
+const daDangNhap = () => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } };
+const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
+
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-giong").value = caiDat.giong;
-  $("o-dich-vu").value = caiDat.dichVu;
   for (const dv of CAC_DV) {
     $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
     veDsGiong(dv);
-    const da = kyTuThang(dv), toiDa = DICH_VU[dv].mienPhi;
-    $("chu-ky-tu-" + dv).textContent = dv === "gc"
+    const o = $("chu-ky-tu-" + dv);
+    if (!o) continue;
+    o.textContent = dv === "gc"
       ? "Tháng này (đếm trên máy này): " + Object.entries(LOAI_GC).map(([k, l]) => `${l.ten} ${kyTuThang("gc-" + k).toLocaleString("vi-VN")}/${(l.mienPhi / 1e6).toLocaleString("vi-VN")} triệu`).join(" · ") + ". Hết loại này app tự chuyển loại khác."
-      : `Tháng này đã dùng ${da.toLocaleString("vi-VN")} / ${toiDa.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
+      : `Tháng này đã dùng ${kyTuThang(dv).toLocaleString("vi-VN")} / ${DICH_VU[dv].mienPhi.toLocaleString("vi-VN")} lượt miễn phí (đếm trên máy này).`;
   }
+  for (const dv of THU_TU) if ($("bat-" + dv)) $("bat-" + dv).checked = caiDat.bat[dv];
+  $("o-giong-edge").value = caiDat.dv.edge.giong;
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-dp-groq").value = caiDat.dp.groq;
   $("o-dp-or").value = caiDat.dp.or;
@@ -154,23 +169,26 @@ function moCaiDat() {
   $("o-dp-az-dich-vung").value = caiDat.dp.azDichVung;
   $("o-dp-cf").checked = caiDat.dp.cf;
   $("o-dp-az-nghe").checked = caiDat.dp.azNghe;
-  const daDangNhap = (() => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } })();
-  $("chu-dp-cf").textContent = typeof DIA_CHI_MAY_CHU === "string" && DIA_CHI_MAY_CHU
-    ? (daDangNhap ? "✅ Đã đăng nhập app PHAHA – dùng được" : "⚠️ Chưa đăng nhập app PHAHA trên máy này – mở tab Lịch việc để đăng nhập")
+  $("chu-dp-cf").textContent = coMayChu()
+    ? (daDangNhap() ? "✅ Đã đăng nhập app PHAHA – dùng được" : "⚠️ Chưa đăng nhập app PHAHA trên máy này – mở tab Lịch việc để đăng nhập")
     : "⚠️ Chưa có máy chủ PHAHA";
   $("o-mh-el").value = caiDat.dv.el.mh;
-  hienDichVu();
   $("o-mh-nghe").value = caiDat.mhNghe;
   $("o-mh-doc").value = caiDat.mhDoc;
+  hienTrangThai();
+  // Mở sẵn mục giọng đang được dùng đầu tiên
+  const dau = dvDocDung(true)[0];
+  document.querySelectorAll(".dv-doc").forEach((d) => (d.open = d.dataset.dv === dau));
   $("hop-cai-dat").showModal();
 }
 $("hop-cai-dat").addEventListener("close", layTuForm);
 function layTuForm() {
-  caiDat.dichVu = $("o-dich-vu").value;
   for (const dv of CAC_DV) {
     caiDat.dv[dv].khoa = $("o-khoa-" + dv).value.trim();
     caiDat.dv[dv].giong = $("o-giong-" + dv).value || caiDat.dv[dv].giong;
   }
+  for (const dv of THU_TU) if ($("bat-" + dv)) caiDat.bat[dv] = $("bat-" + dv).checked;
+  caiDat.dv.edge.giong = $("o-giong-edge").value || caiDat.dv.edge.giong;
   caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
   caiDat.dv.el.mh = $("o-mh-el").value;
   caiDat.dp.groq = $("o-dp-groq").value.trim();
@@ -188,11 +206,25 @@ function layTuForm() {
   try { localStorage.removeItem("phaha-dv-het-thang"); } catch {}
 }
 
-function hienDichVu() {
-  const chon = $("o-dich-vu").value;
-  for (const dv of [...CAC_DV, "gemini", "may"]) $("phan-" + dv).classList.toggle("an", dv !== chon);
+// Chữ nhỏ cạnh tên mỗi dịch vụ: sẵn sàng / thiếu gì
+function trangThai(dv) {
+  if (dv !== "may" && !caiDat.bat[dv]) return "⏸ đang tắt";
+  const thieu = {
+    el: !caiDat.dv.el.khoa && "chưa có mã",
+    gemini: !caiDat.khoa && "chưa có mã Gemini",
+    fish: (!caiDat.dv.fish.khoa && "chưa có mã") || (!coMayChu() || !daDangNhap()) && "cần đăng nhập app PHAHA",
+    az: !caiDat.dv.az.khoa && "chưa có mã",
+    gc: !caiDat.dv.gc.khoa && !caiDat.khoa && "chưa có mã",
+    edge: (!coMayChu() || !daDangNhap()) && "cần đăng nhập app PHAHA",
+  }[dv];
+  if (thieu) return "⚠️ " + thieu;
+  if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
+  return "✅ sẵn sàng";
 }
-$("o-dich-vu").addEventListener("change", hienDichVu);
+function hienTrangThai() {
+  for (const dv of THU_TU) if ($("tt-" + dv)) $("tt-" + dv).textContent = trangThai(dv);
+}
+document.querySelectorAll(".dv-doc input").forEach((o) => o.addEventListener("change", () => { layTuForm(); hienTrangThai(); }));
 
 function veDsGiong(dv) {
   const o = $("o-giong-" + dv), c = caiDat.dv[dv];
@@ -202,20 +234,26 @@ function veDsGiong(dv) {
   o.value = c.giong || c.ds[0].ten;
 }
 
+// Tải danh sách giọng; chưa chọn giọng thì lấy giọng hay nhất (đầu danh sách) làm mặc định
+async function taiDsGiong(dv) {
+  const c = caiDat.dv[dv];
+  if (dv !== "gc" && !c.khoa) throw new Error("Dán mã " + DICH_VU[dv].ten + " trước đã.");
+  c.ds = await DICH_VU[dv].taiGiong();
+  if (!c.ds.length) throw new Error(DICH_VU[dv].ten + " chưa có giọng nào dùng được.");
+  if (!c.ds.some((g) => g.ten === c.giong)) c.giong = c.ds[0].ten;
+  luuCaiDat();
+}
+
 for (const dv of CAC_DV) {
   $("nut-tai-giong-" + dv).addEventListener("click", async () => {
     layTuForm();
-    const nut = $("nut-tai-giong-" + dv), c = caiDat.dv[dv];
+    const nut = $("nut-tai-giong-" + dv);
     nut.disabled = true;
     nut.textContent = "Đang tải…";
     try {
-      if (dv !== "gc" && !c.khoa) throw new Error("Dán mã " + DICH_VU[dv].ten + " trước đã.");
-      c.ds = await DICH_VU[dv].taiGiong();
-      if (!c.ds.length) throw new Error(DICH_VU[dv].ten + " chưa có giọng nào dùng được.");
-      if (!c.ds.some((g) => g.ten === c.giong)) c.giong = c.ds[0].ten;
-      luuCaiDat();
+      await taiDsGiong(dv);
       veDsGiong(dv);
-      nut.textContent = `✅ Có ${c.ds.length} giọng`;
+      nut.textContent = `✅ Có ${caiDat.dv[dv].ds.length} giọng`;
     } catch (loi) {
       alert(loiDeHieu(loi));
       nut.textContent = "🔄 Tải danh sách giọng";
@@ -225,17 +263,23 @@ for (const dv of CAC_DV) {
   });
 }
 
-$("nut-thu-giong").addEventListener("click", async () => {
-  layTuForm();
-  const nut = $("nut-thu-giong");
-  nut.disabled = true;
-  try {
-    await phat(await docCau("Xin chào, đây là giọng lồng tiếng của PhaHa."));
-  } catch (loi) {
-    alert(loiDeHieu(loi));
-  } finally {
-    nut.disabled = false;
-  }
+// Nút 🔊 Nghe thử trong từng dịch vụ: đọc câu mẫu bằng đúng dịch vụ + giọng đang chọn
+document.querySelectorAll(".nut-nghe").forEach((nut) => {
+  nut.addEventListener("click", async () => {
+    layTuForm();
+    const dv = nut.dataset.dv, chu = nut.textContent;
+    nut.disabled = true;
+    nut.textContent = "⏳ Đang đọc…";
+    try {
+      if (CAC_DV.includes(dv) && !caiDat.dv[dv].giong) { await taiDsGiong(dv); veDsGiong(dv); }
+      await phat(await docCau(CAU_MAU, dv));
+    } catch (loi) {
+      alert(DICH_VU[dv].ten + ": " + loiDeHieu(loi));
+    } finally {
+      nut.disabled = false;
+      nut.textContent = chu;
+    }
+  });
 });
 
 // =====================================================
@@ -437,7 +481,7 @@ function veLoiThoai() {
 
 async function ngheThu(i) {
   try {
-    await phat(await docCau(cacCau[i].vi));
+    await phat(await docCau(cacCau[i].vi, dvDocDung(true)[0]));
   } catch (loi) {
     alert(loiDeHieu(loi));
   }
@@ -465,11 +509,6 @@ async function chay(lamTuDau) {
     moCaiDat();
     return;
   }
-  if (CAC_DV.includes(caiDat.dichVu) && !caiDat.dv[caiDat.dichVu].giong) {
-    alert(`Chưa chọn giọng ${DICH_VU[caiDat.dichVu].ten}. Mở Cài đặt → bấm “Tải danh sách giọng”.`);
-    moCaiDat();
-    return;
-  }
   dangChay = true;
   geminiNghi = false;
   napMoHinhNghi();
@@ -480,7 +519,7 @@ async function chay(lamTuDau) {
   nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
   nhat(`Máy: ${moTaMay()}`);
   nhat(`Video: ${tepVideo.name} · ${(tepVideo.size / 1048576).toFixed(1)}MB`);
-  nhat(`Cài đặt: đọc bằng ${caiDat.dichVu}${caiDat.dichVu === "gemini" ? "" : " / " + caiDat.dv[caiDat.dichVu].giong} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
+  nhat(`Cài đặt: thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
   ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = true));
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");
@@ -510,6 +549,11 @@ async function chay(lamTuDau) {
       veLoiThoai();
     }
 
+    // Lồng tiếng chủ yếu chờ mạng → chạy song song với tách nhạc (AI chạy trên máy) cho nhanh
+    buoc("long", "dang");
+    const huaLong = Promise.resolve().then(longTieng).then((r) => { buoc("long", "xong"); return r; });
+    huaLong.catch(() => {});
+
     buocDang = "nhac";
     let wavNen = null, giamTheoLoi = false;
     if (caiDat.tachNhac && thongTin.coTieng && caiDat.mhTach === "giam") {
@@ -519,11 +563,13 @@ async function chay(lamTuDau) {
       buoc("nhac", "dang");
       try {
         if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
-          nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await tachNhacNen() };
+          dangTachNhac = tachNhacNen();
+          nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await dangTachNhac };
         }
         wavNen = nhacNen.wav;
         buoc("nhac", "xong");
       } catch (loi) {
+        nhacNen = null;
         // AI không chạy được trên máy này → vẫn làm tiếp, chỉ giảm tiếng gốc lúc có lời
         nhat("Tách nhạc hỏng: " + (loi?.message || loi));
         giamTheoLoi = true;
@@ -531,16 +577,10 @@ async function chay(lamTuDau) {
       }
     } else buoc("nhac", "bo", "Không bật");
 
-    buocDang = "long";
-    buoc("long", "dang");
-    const tiengViet = await longTieng();
-    buoc("long", "xong");
-
-    // Bộ xử lý video có thể đã được tắt để nhường bộ nhớ cho AI tách nhạc → bật lại
-    if (!ff) {
-      await taiFfmpeg();
-      thongTin = await ganVideo();
-    }
+    dangTachNhac = null;
+    // Bộ xử lý video có thể đã được tắt để nhường bộ nhớ cho AI tách nhạc → bật lại (song song với chèn chữ)
+    const huaFf = ff ? null : taiFfmpeg().then(ganVideo);
+    huaFf?.catch(() => {});
 
     buocDang = "ve";
     let hinh = null;
@@ -567,6 +607,10 @@ async function chay(lamTuDau) {
       }
     } else buoc("ve", "bo", "Không bật");
 
+    buocDang = "long";
+    const tiengViet = await huaLong;
+    if (huaFf) { buocDang = "xuat"; thongTin = await huaFf; }
+
     buocDang = "xuat";
     buoc("xuat", "dang");
     videoKetQua = await xuatVideo(tiengViet, thongTin, wavNen, hinh, giamTheoLoi);
@@ -583,6 +627,7 @@ async function chay(lamTuDau) {
     baoLoi(loiDeHieu(loi));
   } finally {
     dangChay = false;
+    dangTachNhac = null;
     ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = false));
     khoaMan?.release?.().catch(() => {});
   }
@@ -601,8 +646,13 @@ function tatFfmpeg() {
   duongDanVideo = null;
 }
 
-async function taiFfmpeg() {
-  if (ff) return;
+let dangTaiFf = null;
+function taiFfmpeg() {
+  if (ff) return Promise.resolve();
+  dangTaiFf ||= taiFfmpegThat().finally(() => (dangTaiFf = null));
+  return dangTaiFf;
+}
+async function taiFfmpegThat() {
   const moi = new FFmpeg();
   moi.on("log", ({ message }) => {
     nhatKy.push(message);
@@ -821,15 +871,24 @@ Nếu không có lời nói thì trả về mảng rỗng [].`;
 }
 
 // =====================================================
-// ĐỌC TIẾNG VIỆT (Google Cloud, Azure, ElevenLabs hoặc Gemini)
+// ĐỌC TIẾNG VIỆT: ElevenLabs → Gemini → Fish Audio → Azure → (Google Cloud) → Edge → giọng máy
 // =====================================================
 const DICH_VU = {
-  gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud },
-  az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure },
-  el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven },
-  gemini: { ten: "Gemini", doc: docGemini },
-  may: { ten: "Giọng máy", doc: docMay },
+  el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven, cungLuc: 2 },
+  gemini: { ten: "Gemini", doc: docGemini, cungLuc: 3 },
+  fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
+  az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
+  gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
+  edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
+  may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
 };
+// Tên giọng đang chọn của 1 dịch vụ (để ghi nhật ký)
+function tenGiong(dv) {
+  if (dv === "gemini") return caiDat.giong;
+  if (dv === "may") return "";
+  const c = caiDat.dv[dv];
+  return (c.ds?.find((g) => g.ten === c.giong)?.nhan || c.giong || "").replace(/^🇻🇳 |^🌐 /, "");
+}
 
 // ----- Giọng máy: đọc ngay trên điện thoại (doc-may.js), miễn phí, không giới hạn -----
 let thoDocMay = null, soYeuCauMay = 0;
@@ -869,13 +928,13 @@ function ghiDvHetThang(dv) {
   try { localStorage.setItem("phaha-dv-het-thang", JSON.stringify(d)); } catch {}
 }
 
-async function docCau(chu, dv = caiDat.dichVu) {
+async function docCau(chu, dv) {
   chu = chu.trim();
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
   const kq = await DICH_VU[dv].doc(chu);
-  let mau = Float32Array.from(kq.pcm, (v) => v / 32768);
+  let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
   khoGiong.set(khoa, mau);
@@ -923,7 +982,8 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
     let j = {};
     try { j = JSON.parse(chu); } catch {}
     const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
-    const hetLuot = j.detail?.status === "quota_exceeded" || j.detail?.code === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el";
+    const hetLuot = j.detail?.status === "quota_exceeded" || j.detail?.code === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el"
+      || r.status === 402 || (dv === "fish" && /credit|balance|quota|limit exceeded/i.test(thongBao));
     // Gửi quá nhiều câu cùng lúc → chờ chút rồi gửi lại (không tính là lỗi)
     if (r.status === 429 && /concurrent/i.test(chu) && lanDongThoi++ < 40) {
       await new Promise((x) => setTimeout(x, 1000 + Math.random() * 2000));
@@ -1004,13 +1064,25 @@ async function layGiongAz() {
   const ds = await goiDocGiong("az", azApi("/voices/list"), {
     headers: { "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa },
   });
+  // Giọng Việt + giọng "đa ngôn ngữ" đọc được tiếng Việt (nghe tự nhiên, có cảm xúc hơn)
+  const viet = (g) => g.Locale === "vi-VN";
+  const daNgu = (g) => !viet(g) && (g.SecondaryLocaleList || []).includes("vi-VN");
+  const hang = (g) => (viet(g) ? 0 : /HD|Dragon/.test(g.ShortName) ? 2 : 1);
   return (ds || [])
-    .filter((g) => g.Locale === "vi-VN")
-    .map((g) => ({ ten: g.ShortName, nhan: `${g.Gender === "Male" ? "Nam" : "Nữ"} · ${g.LocalName || g.DisplayName}` }));
+    .filter((g) => viet(g) || daNgu(g))
+    .sort((a, b) => hang(a) - hang(b) || a.ShortName.localeCompare(b.ShortName))
+    .map((g) => ({
+      ten: g.ShortName,
+      nhan: `${viet(g) ? "🇻🇳 " : "🌐 "}${g.Gender === "Male" ? "Nam" : "Nữ"} · ${viet(g) ? g.LocalName || g.DisplayName : g.DisplayName + " (đa ngôn ngữ)"}`,
+    }));
 }
+const ssmlViet = (giong, chu) => {
+  const anToan = chu.replace(/[<>&'"]/g, (k) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[k]);
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="vi-VN"><voice name="${giong}">${
+    giong.startsWith("vi-VN-") ? anToan : `<lang xml:lang="vi-VN">${anToan}</lang>`}</voice></speak>`;
+};
 
 async function docAzure(chu) {
-  const anToan = chu.replace(/[<>&'"]/g, (k) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[k]);
   const byte = await goiDocGiong("az", azApi("/v1"), {
     method: "POST",
     headers: {
@@ -1018,7 +1090,7 @@ async function docAzure(chu) {
       "Content-Type": "application/ssml+xml",
       "X-Microsoft-OutputFormat": "riff-24khz-16bit-mono-pcm",
     },
-    body: `<speak version="1.0" xml:lang="vi-VN"><voice name="${caiDat.dv.az.giong}">${anToan}</voice></speak>`,
+    body: ssmlViet(caiDat.dv.az.giong, chu),
   }, "byte");
   congKyTu("az", chu.length);
   return docWav(byte);
@@ -1027,22 +1099,66 @@ async function docAzure(chu) {
 // ----- ElevenLabs -----
 const EL_API = "https://api.elevenlabs.io/v1";
 
+const gioiTinh = (g) => (/^m/i.test(g || "") ? " · Nam" : /^f/i.test(g || "") ? " · Nữ" : "");
 async function layGiongEl() {
-  const j = await goiDocGiong("el", EL_API + "/voices", { headers: { "xi-api-key": caiDat.dv.el.khoa } });
+  const dau = { headers: { "xi-api-key": caiDat.dv.el.khoa } };
+  // Giọng trong tài khoản + giọng Việt được dùng nhiều nhất trong thư viện ElevenLabs
+  const [j, tv] = await Promise.all([
+    goiDocGiong("el", EL_API + "/voices", dau),
+    goiDocGiong("el", EL_API + "/shared-voices?page_size=30&language=vi&sort=usage_character_count_1y", dau).catch((loi) => {
+      nhat("Không tải được thư viện giọng ElevenLabs: " + loi.message);
+      return {};
+    }),
+  ]);
   const laViet = (g) => /^vi|vietnam/i.test(g.labels?.language || "") || /vietnam/i.test(g.labels?.accent || "");
-  return (j.voices || [])
+  const cuaToi = (j.voices || [])
     .sort((a, b) => laViet(b) - laViet(a) || a.name.localeCompare(b.name))
-    .map((g) => ({
-      ten: g.voice_id,
-      nhan: `${laViet(g) ? "🇻🇳 " : ""}${g.name}${g.labels?.gender ? " · " + (g.labels.gender === "male" ? "Nam" : "Nữ") : ""}`,
-    }));
+    .map((g) => ({ ten: g.voice_id, nhan: `${laViet(g) ? "🇻🇳 " : ""}${g.name}${gioiTinh(g.labels?.gender)}` }));
+  const daCo = new Set(cuaToi.map((g) => g.ten));
+  const thuVien = (tv.voices || [])
+    .filter((g) => !daCo.has(g.voice_id))
+    .map((g) => ({ ten: `tv:${g.public_owner_id}:${g.voice_id}`, nhan: `🇻🇳 Thư viện · ${g.name}${gioiTinh(g.gender)}` }));
+  // Giọng Việt trong tài khoản lên đầu, rồi đến giọng thư viện hay nhất, cuối cùng giọng khác
+  return [...cuaToi.filter((g) => g.nhan.startsWith("🇻🇳")), ...thuVien, ...cuaToi.filter((g) => !g.nhan.startsWith("🇻🇳"))];
+}
+
+// Giọng thư viện phải được thêm vào tài khoản trước khi đọc (làm 1 lần)
+let dangThemGiongEl = null;
+async function giongElDung() {
+  const c = caiDat.dv.el;
+  if (!c.giong.startsWith("tv:")) return c.giong;
+  dangThemGiongEl ||= (async () => {
+    const [, chu, id] = c.giong.split(":");
+    const ten = (c.ds.find((g) => g.ten === c.giong)?.nhan || "PhaHa").replace(/^🇻🇳 Thư viện · /, "").replace(/ · (Nam|Nữ)$/, "");
+    try {
+      const j = await goiDocGiong("el", `${EL_API}/voices/add/${chu}/${id}`, {
+        method: "POST",
+        headers: { "xi-api-key": c.khoa, "Content-Type": "application/json" },
+        body: JSON.stringify({ new_name: ten }),
+      });
+      const moi = j.voice_id || id;
+      nhat(`Đã thêm giọng "${ten}" từ thư viện vào tài khoản ElevenLabs`);
+      c.ds = c.ds.map((g) => (g.ten === c.giong ? { ten: moi, nhan: g.nhan.replace("Thư viện · ", "") } : g));
+      c.giong = moi;
+      luuCaiDat();
+      return moi;
+    } catch (loi) {
+      // Không thêm được (hết chỗ lưu giọng…) → thử đọc thẳng bằng mã giọng thư viện
+      nhat("Không thêm được giọng thư viện ElevenLabs (" + loi.message + ") → thử đọc thẳng");
+      return id;
+    } finally {
+      dangThemGiongEl = null;
+    }
+  })();
+  return dangThemGiongEl;
 }
 
 async function docEleven(chu) {
   const c = caiDat.dv.el;
+  const giong = await giongElDung();
   const noiDung = { text: chu, model_id: c.mh };
   if (c.mh !== "eleven_v3") noiDung.language_code = "vi";
-  const byte = await goiDocGiong("el", `${EL_API}/text-to-speech/${c.giong}?output_format=pcm_24000`, {
+  const byte = await goiDocGiong("el", `${EL_API}/text-to-speech/${giong}?output_format=pcm_24000`, {
     method: "POST",
     headers: { "xi-api-key": c.khoa, "Content-Type": "application/json" },
     body: JSON.stringify(noiDung),
@@ -1050,6 +1166,55 @@ async function docEleven(chu) {
   congKyTu("el", Math.ceil(chu.length * (c.mh === "eleven_v3" ? 1 : 0.5)));
   const ban = byte.slice(0, byte.length & ~1);
   return { pcm: new Int16Array(ban.buffer), tanSo: 24000 };
+}
+
+// ----- Fish Audio (S2.1 Pro Free, miễn phí) – đi qua máy chủ PHAHA vì Fish chặn gọi thẳng từ trình duyệt -----
+const FISH_API = "https://api.fish.audio";
+const veDangNhap = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
+const quaMayChu = (url, tuyChon = {}) => [DIA_CHI_MAY_CHU + "/ai/chuyen", { ...tuyChon, headers: { ...tuyChon.headers, "X-Dich-Den": url, "X-Ve": veDangNhap() } }];
+
+async function layGiongFish() {
+  const lay = (sapXep) => goiDocGiong("fish", ...quaMayChu(`${FISH_API}/model?page_size=40&language=vi&sort_by=${sapXep}`, {
+    headers: { Authorization: "Bearer " + caiDat.dv.fish.khoa },
+  }));
+  // Giọng Việt được dùng nhiều nhất + được thích nhiều nhất
+  const [a, b] = await Promise.all([lay("task_count"), lay("score").catch(() => ({}))]);
+  const daCo = new Set(), ds = [];
+  for (const g of [...(a.items || []), ...(b.items || [])]) {
+    if (daCo.has(g._id) || (g.languages?.length && !g.languages.includes("vi"))) continue;
+    daCo.add(g._id);
+    ds.push({ ten: g._id, nhan: `${g.title}${g.task_count ? ` · ${g.task_count.toLocaleString("vi-VN")} lượt dùng` : ""}`, dung: g.task_count || 0 });
+  }
+  return ds.sort((x, y) => y.dung - x.dung).map(({ ten, nhan }) => ({ ten, nhan }));
+}
+
+async function docFish(chu) {
+  const byte = await goiDocGiong("fish", ...quaMayChu(`${FISH_API}/v1/tts`, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + caiDat.dv.fish.khoa, "Content-Type": "application/json", model: "s2.1-pro-free" },
+    body: JSON.stringify({ text: chu, reference_id: caiDat.dv.fish.giong, format: "wav", sample_rate: TAN_SO_DOC, normalize: true, latency: "normal" }),
+  }), "byte");
+  return docWav(byte);
+}
+
+// ----- Microsoft Edge "Đọc to" (miễn phí, không cần mã) – máy chủ PHAHA đọc hộ, trả về MP3 -----
+async function docEdge(chu) {
+  const byte = await goiDocGiong("edge", DIA_CHI_MAY_CHU + "/ai/edge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Ve": veDangNhap() },
+    body: JSON.stringify({ text: chu, voice: caiDat.dv.edge.giong }),
+  }, "byte");
+  return { mau: await giaiMp3(byte), tanSo: TAN_SO_DOC };
+}
+
+// Giải nén MP3 thành âm thanh 24.000 mẫu/giây bằng bộ giải mã có sẵn của trình duyệt
+async function giaiMp3(byte) {
+  const ctx = new OfflineAudioContext(1, 1, TAN_SO_DOC);
+  const b = await ctx.decodeAudioData(byte.buffer.slice(byte.byteOffset, byte.byteOffset + byte.byteLength));
+  if (b.numberOfChannels === 1) return b.getChannelData(0);
+  const ra = new Float32Array(b.length);
+  for (let k = 0; k < b.numberOfChannels; k++) b.getChannelData(k).forEach((v, i) => (ra[i] += v / b.numberOfChannels));
+  return ra;
 }
 
 // Lấy phần âm thanh trong file WAV
@@ -1093,19 +1258,21 @@ function chiaNhom(cau, dv) {
   return nhom;
 }
 
-// Dịch vụ đọc đã cài được (đã có mã + giọng), cái đang chọn đứng đầu
-function dvDocDung() {
+// Dịch vụ đọc dùng được, theo đúng thứ tự ưu tiên; giọng máy luôn có, đứng cuối làm lớp dự phòng
+function dvDocDung(imLang) {
+  const vao = coMayChu() && daDangNhap();
   const co = {
-    gc: () => !!caiDat.dv.gc.giong,
-    az: () => !!(caiDat.dv.az.khoa && caiDat.dv.az.giong),
-    el: () => !!(caiDat.dv.el.khoa && caiDat.dv.el.giong),
+    el: () => !!caiDat.dv.el.khoa,
     gemini: () => !!caiDat.khoa,
+    fish: () => !!caiDat.dv.fish.khoa && vao,
+    az: () => !!caiDat.dv.az.khoa,
+    gc: () => !!(caiDat.dv.gc.giong || caiDat.dv.gc.khoa),
+    edge: () => vao,
     may: () => true,
   };
-  // Giọng máy luôn có, đứng cuối cùng làm lớp dự phòng
-  const ds = [...new Set([caiDat.dichVu, "gc", "az", "gemini", "el", "may"])].filter((dv) => dv === caiDat.dichVu || co[dv]());
+  const ds = THU_TU.filter((dv) => (dv === "may" || caiDat.bat[dv]) && co[dv]());
   const conLai = ds.filter((dv) => !dvHetThang(dv));
-  if (conLai.length < ds.length) nhat(`Bỏ qua ${ds.filter(dvHetThang).map((dv) => DICH_VU[dv].ten).join(", ")} (đã hết lượt tháng này)`);
+  if (!imLang && conLai.length < ds.length) nhat(`Bỏ qua ${ds.filter(dvHetThang).map((dv) => DICH_VU[dv].ten).join(", ")} (đã hết lượt tháng này)`);
   return conLai.length ? conLai : ds;
 }
 
@@ -1123,13 +1290,19 @@ async function longTiengThu() {
   let loiCuoi;
   const ds = dvDocDung();
   for (let i = 0; i < ds.length; i++) {
+    const dv = ds[i];
     try {
-      if (i > 0) ghiChu("long", `Chuyển sang đọc bằng ${DICH_VU[ds[i]].ten}…`);
-      return await longTiengBang(ds[i]);
+      if (i > 0) ghiChu("long", `Chuyển sang đọc bằng ${DICH_VU[dv].ten}…`);
+      // Có mã nhưng chưa chọn giọng → tự lấy giọng hay nhất làm mặc định
+      if (CAC_DV.includes(dv) && !caiDat.dv[dv].giong) {
+        await taiDsGiong(dv);
+        nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
+      }
+      return await longTiengBang(dv);
     } catch (loi) {
       loiCuoi = loi;
-      if (loi.hetLuot && ds[i] === "el") ghiDvHetThang("el");
-      if (i < ds.length - 1) nhat(`↪️ Đọc bằng ${DICH_VU[ds[i]].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${DICH_VU[ds[i + 1]].ten}`);
+      if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
+      if (i < ds.length - 1) nhat(`↪️ Đọc bằng ${DICH_VU[dv].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${DICH_VU[ds[i + 1]].ten}`);
     }
   }
   throw loiCuoi;
@@ -1141,10 +1314,15 @@ async function longTiengBang(dv) {
   const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()), dv);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;
-  // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs miễn phí chỉ cho 2 cùng lúc)
+  // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs/Fish miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
-  const soLuong = dv === "el" ? 2 : dv === "may" ? 1 : 3;
+  const soLuong = DICH_VU[dv].cungLuc;
+  if (dv === "may" && dangTachNhac) {
+    ghiChu("long", "Chờ tách nhạc xong rồi đọc bằng giọng máy…");
+    await dangTachNhac.catch(() => {});
+  }
+  const bd = Date.now();
   await Promise.all(Array.from({ length: soLuong }, async () => {
     while (hang.length && !hong) {
       const i = hang.shift();
@@ -1157,7 +1335,7 @@ async function longTiengBang(dv) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
-  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}`);
+  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   // Đặt từng phần vào đúng thời điểm
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
@@ -1485,14 +1663,23 @@ function loiDeHieu(loi) {
   }
   if (loi?.dv === "az") {
     if (loi.status === 401) return "Mã Azure hoặc Vùng không đúng. Mở ⚙️ Cài đặt, kiểm tra lại KEY 1 và Location/Region (ví dụ southeastasia).";
-    if (loi.status === 403 || loi.status === 429) return "Azure đã hết lượt miễn phí tháng này (hoặc đang quá tải). Chọn dịch vụ khác trong ⚙️ Cài đặt.";
+    if (loi.status === 403 || loi.status === 429) return "Azure đã hết lượt miễn phí tháng này (hoặc đang quá tải). App tự chuyển sang giọng kế tiếp.";
     return "Azure báo lỗi: " + m;
   }
   if (loi?.dv === "el") {
-    if (loi.hetLuot) return "ElevenLabs đã hết lượt miễn phí tháng này.\nChọn dịch vụ khác trong ⚙️ Cài đặt, hoặc cài Google Cloud để app tự chuyển sang khi hết lượt.";
+    if (loi.hetLuot) return "ElevenLabs đã hết lượt tháng này. App tự chuyển sang giọng kế tiếp; muốn dùng tiếp thì mua thêm gói ElevenLabs.";
     if (loi.status === 401) return "Mã ElevenLabs không đúng hoặc thiếu quyền. Tạo lại mã, bật quyền Text to Speech và Voices (Read).\n" + m;
     if (/model/i.test(m)) return "Giọng/chất lượng này chưa đọc được tiếng Việt. Trong ⚙️ đổi Chất lượng sang “Nhanh (Flash)” rồi thử lại.\n" + m;
     return "ElevenLabs báo lỗi: " + m;
+  }
+  if (loi?.dv === "fish") {
+    if (loi.status === 401 || loi.status === 403) return "Mã Fish Audio không đúng hoặc chưa đăng nhập app PHAHA. Mở ⚙️ Cài đặt kiểm tra lại.\n" + m;
+    if (loi.hetLuot || loi.status === 429) return "Fish Audio đã hết lượt miễn phí (hoặc đang quá tải). App tự chuyển sang giọng kế tiếp.";
+    return "Fish Audio báo lỗi: " + m;
+  }
+  if (loi?.dv === "edge") {
+    if (loi.status === 401) return "Giọng Edge cần đăng nhập app PHAHA trên máy này (mở tab Lịch việc để đăng nhập).";
+    return "Giọng Edge tạm không dùng được (Microsoft có thể đã chặn): " + m;
   }
   if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Gemini không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
   if (loi?.status === 403) return "Mã Gemini không có quyền dùng (403). Kiểm tra mã ở aistudio.google.com.\n" + m;
