@@ -152,7 +152,6 @@ function moCaiDat() {
   $("o-khoa-doc").value = caiDat.khoaDoc;
   $("o-dich-bang").value = caiDat.dichBang;
   $("o-khoa-ds").value = caiDat.dp.ds;
-  $("phan-deepseek").classList.toggle("an", caiDat.dichBang !== "deepseek" && !caiDat.dp.ds);
   $("o-giong").value = caiDat.giong;
   for (const dv of CAC_DV) {
     $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
@@ -185,7 +184,6 @@ function moCaiDat() {
   $("hop-cai-dat").showModal();
 }
 $("hop-cai-dat").addEventListener("close", layTuForm);
-$("o-dich-bang").addEventListener("change", () => $("phan-deepseek").classList.toggle("an", $("o-dich-bang").value !== "deepseek" && !$("o-khoa-ds").value));
 function layTuForm() {
   for (const dv of CAC_DV) {
     caiDat.dv[dv].khoa = $("o-khoa-" + dv).value.trim();
