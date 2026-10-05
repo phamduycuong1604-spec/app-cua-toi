@@ -267,6 +267,7 @@ for (const dv of CAC_DV) {
 document.querySelectorAll(".nut-nghe").forEach((nut) => {
   nut.addEventListener("click", async () => {
     layTuForm();
+    moKhoaLoa();
     const dv = nut.dataset.dv, chu = nut.textContent;
     nut.disabled = true;
     nut.textContent = "⏳ Đang đọc…";
@@ -480,6 +481,7 @@ function veLoiThoai() {
 }
 
 async function ngheThu(i) {
+  moKhoaLoa();
   try {
     await phat(await docCau(cacCau[i].vi, dvDocDung(true)[0]));
   } catch (loi) {
@@ -487,15 +489,36 @@ async function ngheThu(i) {
   }
 }
 
+// iPhone chỉ cho phát tiếng ngay lúc bấm nút, và tắt tiếng Web Audio khi gạt chế độ im lặng.
+// → Lúc bấm: "mở khoá" 1 cái loa (thẻ audio) bằng tiếng im lặng; đọc xong thì phát qua đúng loa đó
+// (thẻ audio vẫn kêu khi iPhone đang để im lặng, giống xem video).
+const loa = new Audio();
+loa.playsInline = true;
+let diaChiLoa = null;
+const TIENG_IM = "data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQgAAAAAAAAAAAAAAA==";
+function moKhoaLoa() {
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+  try { loa.src = TIENG_IM; loa.play().catch(() => {}); } catch {}
+}
+
 async function phat(mau) {
-  amThanh ||= new AudioContext();
-  await amThanh.resume();
-  const b = amThanh.createBuffer(1, mau.length, TAN_SO_DOC);
-  b.copyToChannel(mau, 0);
-  const nguon = amThanh.createBufferSource();
-  nguon.buffer = b;
-  nguon.connect(amThanh.destination);
-  nguon.start();
+  if (diaChiLoa) URL.revokeObjectURL(diaChiLoa);
+  diaChiLoa = URL.createObjectURL(new Blob([taoWav(mau, TAN_SO_DOC)], { type: "audio/wav" }));
+  loa.src = diaChiLoa;
+  try {
+    await loa.play();
+  } catch {
+    // Loa bị chặn → thử cách cũ (Web Audio)
+    amThanh ||= new AudioContext();
+    await amThanh.resume();
+    if (amThanh.state !== "running") throw new Error("iPhone chặn phát tiếng. Bấm 🔊 lần nữa (giọng đã đọc sẵn, phát ngay).");
+    const b = amThanh.createBuffer(1, mau.length, TAN_SO_DOC);
+    b.copyToChannel(mau, 0);
+    const nguon = amThanh.createBufferSource();
+    nguon.buffer = b;
+    nguon.connect(amThanh.destination);
+    nguon.start();
+  }
 }
 
 // =====================================================
