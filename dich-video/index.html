@@ -171,13 +171,10 @@
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
         → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
 
-      <label class="nhan">Dịch tiếng Trung bằng</label>
-      <select id="o-dich-bang">
-        <option value="gemini">Gemini – nghe & dịch cùng lúc (như cũ)</option>
-        <option value="deepseek">DeepSeek – Groq/Cloudflare nghe, DeepSeek dịch</option>
-      </select>
+      <label class="cong-tac"><input type="checkbox" id="bat-deepseek"> Dịch bằng DeepSeek (Groq/Cloudflare nghe, DeepSeek dịch)</label>
+      <p class="goi-y">Tắt = Gemini nghe & dịch như cũ (DeepSeek không được dùng, kể cả khi dự phòng).</p>
       <div id="phan-deepseek">
-        <label class="nhan">Mã DeepSeek (API key) – chỉ dùng khi chọn "DeepSeek" ở trên</label>
+        <label class="nhan">Mã DeepSeek (API key) – chỉ dùng khi bật công tắc ở trên</label>
         <input id="o-khoa-ds" type="password" autocomplete="off" placeholder="sk-...">
         <details class="huong-dan">
           <summary>Cách lấy mã (trả trước, rất rẻ)</summary>
