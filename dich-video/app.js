@@ -990,7 +990,7 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
       lan--;
       continue;
     }
-    if (!hetLuot && (r.status === 429 || r.status >= 500) && lan < 5) { await cho(5 * (lan + 1), "long"); continue; }
+    if (!hetLuot && (r.status === 429 || r.status >= 500) && lan < (dv === "edge" && r.status !== 429 ? 1 : 5)) { await cho(5 * (lan + 1), "long"); continue; }
     const e = new Error(thongBao);
     Object.assign(e, { status: r.status, dv, hetLuot });
     throw e;
