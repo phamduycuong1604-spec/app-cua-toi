@@ -131,7 +131,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     return [
       {
         role: "system",
-        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh, NGẮN GỌN để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây). Không thêm chú thích, không giải thích.",
+        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh, NGẮN GỌN để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây). Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm).",
       },
       {
         role: "user",
