@@ -349,7 +349,9 @@ async function chiTietHanMuc(ten, r) {
       if (!r2.ok) return `không xem được hạn mức (mã thiếu quyền "User – Read")`;
       const j = await r2.json();
       const ngay = j.next_character_count_reset_unix ? new Date(j.next_character_count_reset_unix * 1000).toLocaleDateString("vi-VN") : "";
-      return `tháng này ${hanMuc(j.character_count || 0, j.character_limit || 1, "ký tự", false, "")}${ngay ? `, làm mới ngày ${ngay}` : ""}`;
+      const con = (j.character_limit || 0) - (j.character_count || 0);
+      const canhBao = con < 300 ? " · ⚠️ HẾT lượt → app tự đọc bằng giọng kế tiếp (mua thêm gói để dùng lại)" : "";
+      return `tháng này ${hanMuc(j.character_count || 0, j.character_limit || 1, "ký tự", false, "")}${ngay ? `, làm mới ngày ${ngay}` : ""}${canhBao}`;
     }
     if (ten === "Azure") return `đọc: ${hanMuc(kyTuThang("az"), 500000, "ký tự tháng này", true, "")}`;
   } catch {}
@@ -382,7 +384,10 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
         const tat = caiDat.dichBang === "deepseek" ? "" : " (công tắc đang TẮT)";
         return j.is_available === false ? `⚠️ DeepSeek: mã đúng nhưng hết tiền (còn ${tien || 0}) – nạp thêm${tat}` : `✅ DeepSeek: mã đúng, còn ${tien || "?"} (trả trước, không giới hạn lượt)${tat}`;
       }
-      if (r.ok) return `✅ ${ten}: mã đúng · ${await chiTietHanMuc(ten, r)}`;
+      if (r.ok) {
+        const ct = await chiTietHanMuc(ten, r);
+        return `${/HẾT lượt|còn 0%/.test(ct) ? "⚠️" : "✅"} ${ten}: mã đúng · ${ct}`;
+      }
       if (r.status === 402) return `⚠️ ${ten}: mã đúng nhưng hết tiền – nạp thêm`;
       if (r.status === 429) return `⚠️ ${ten}: mã đúng nhưng đang hết lượt, chờ một lúc`;
       if ([400, 401, 403].includes(r.status)) return `❌ ${ten}: mã sai hoặc thiếu quyền (mã ${r.status}) – dán lại mã`;
