@@ -28,8 +28,9 @@ caiDat.dv.az = Object.assign({ khoa: "", vung: "southeastasia", giong: "", ds: [
 caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, caiDat.dv.el);
 caiDat.dv.fish = Object.assign({ khoa: "", giong: "", ds: [] }, caiDat.dv.fish);
 caiDat.dv.edge = Object.assign({ giong: "vi-VN-HoaiMyNeural" }, caiDat.dv.edge);
+caiDat.dv.fpt = Object.assign({ khoa: "", giong: "banmai" }, caiDat.dv.fpt);
 // Bật/tắt từng dịch vụ đọc (Google Cloud chỉ bật sẵn nếu trước đây đã cài)
-caiDat.bat = Object.assign({ el: true, gemini: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
+caiDat.bat = Object.assign({ el: true, gemini: true, fpt: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
 delete caiDat.dichVu;
 // Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
 {
@@ -183,7 +184,7 @@ $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
 // Thứ tự dùng giọng: trên hết lượt/lỗi thì đọc lại cả video bằng cái kế tiếp
-const THU_TU = ["el", "gemini", "fish", "az", "gc", "edge", "may"];
+const THU_TU = ["el", "gemini", "fpt", "fish", "az", "gc", "edge", "may"];
 const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
 const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
 const daDangNhap = () => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } };
@@ -206,6 +207,8 @@ function moCaiDat() {
   }
   for (const dv of THU_TU) if ($("bat-" + dv)) $("bat-" + dv).checked = caiDat.bat[dv];
   $("o-giong-edge").value = caiDat.dv.edge.giong;
+  $("o-khoa-fpt").value = caiDat.dv.fpt.khoa;
+  $("o-giong-fpt").value = caiDat.dv.fpt.giong;
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-dp-groq").value = caiDat.dp.groq;
   $("o-dp-or").value = caiDat.dp.or;
@@ -233,6 +236,8 @@ function layTuForm() {
   }
   for (const dv of THU_TU) if ($("bat-" + dv)) caiDat.bat[dv] = $("bat-" + dv).checked;
   caiDat.dv.edge.giong = $("o-giong-edge").value || caiDat.dv.edge.giong;
+  caiDat.dv.fpt.khoa = $("o-khoa-fpt").value.trim();
+  caiDat.dv.fpt.giong = $("o-giong-fpt").value || caiDat.dv.fpt.giong;
   caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
   caiDat.dv.el.mh = $("o-mh-el").value;
   caiDat.dp.groq = $("o-dp-groq").value.trim();
@@ -269,6 +274,7 @@ function trangThai(dv) {
     az: !caiDat.dv.az.khoa && "chưa có mã",
     gc: !caiDat.dv.gc.khoa && !caiDat.khoa && "chưa có mã",
     edge: (!coMayChu() || !daDangNhap()) && "cần đăng nhập app PHAHA",
+    fpt: !caiDat.dv.fpt.khoa && "chưa có mã",
   }[dv];
   if (thieu) return "⚠️ " + thieu;
   if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
@@ -397,7 +403,7 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
     }
   }));
   kq.push(`${coMayChu() && daDangNhap() ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Cloudflare): ${coMayChu() && daDangNhap() ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
-  kq.push("Fish Audio: bấm 🔊 Nghe thử trong mục Fish để kiểm tra (Fish không công bố hạn mức miễn phí).");
+  kq.push("Fish Audio, FPT.AI: bấm 🔊 Nghe thử trong mục của nó để kiểm tra mã (hạn mức xem trong trang của dịch vụ).");
   kq.push("Edge: không giới hạn · Cloudflare: 10.000 đơn vị/ngày (máy chủ không báo số còn lại).");
   kq.push("(ước tính) = app tự đếm trên máy này, dùng ở máy khác sẽ không tính vào.");
   o.textContent = kq.join("\n");
@@ -1115,12 +1121,14 @@ const DICH_VU = {
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
   edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
+  fpt: { ten: "FPT.AI", doc: docFpt, cungLuc: 4 },
   may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
 };
 // Tên giọng đang chọn của 1 dịch vụ (để ghi nhật ký)
 function tenGiong(dv) {
   if (dv === "gemini") return caiDat.giong;
   if (dv === "may") return "";
+  if (dv === "fpt") return GIONG_FPT[caiDat.dv.fpt.giong] || caiDat.dv.fpt.giong;
   const c = caiDat.dv[dv];
   return (c.ds?.find((g) => g.ten === c.giong)?.nhan || c.giong || "").replace(/^🇻🇳 |^🌐 /, "");
 }
@@ -1432,6 +1440,43 @@ async function docFish(chu) {
   return docWav(byte);
 }
 
+// ----- FPT.AI: giọng đọc tiếng Việt của FPT -----
+// Gửi chữ → FPT trả về 1 địa chỉ file MP3, vài giây sau file mới có → chờ rồi tải về.
+// Trình duyệt bị chặn gọi thẳng thì tự đi vòng qua máy chủ PHAHA.
+const FPT_API = "https://api.fpt.ai/hmi/tts/v5";
+const GIONG_FPT = { banmai: "Ban Mai", thuminh: "Thu Minh", leminh: "Lê Minh", myan: "Mỹ An", ngoclam: "Ngọc Lam", giahuy: "Gia Huy", lannhi: "Lan Nhi", linhsan: "Linh San", minhquang: "Minh Quang" };
+async function docFpt(chu) {
+  const c = caiDat.dv.fpt;
+  if (chu.length < 3) chu = chu.padEnd(3, "."); // FPT cần ít nhất 3 ký tự
+  let j = {};
+  for (let lan = 0; ; lan++) {
+    const r = await duPhong.goi(FPT_API, {
+      method: "POST",
+      headers: { "api-key": c.khoa, voice: c.giong, speed: "0", "Content-Type": "text/plain; charset=utf-8" },
+      body: chu,
+    }, "FPT.AI");
+    const t = await r.text().catch(() => "");
+    try { j = JSON.parse(t); } catch { j = { message: t }; }
+    if (r.ok && j.async && !j.error) break;
+    const tb = String(j.message || j.msg || j.error || t || r.statusText).slice(0, 200);
+    nhat(`⚠️ FPT.AI: mã ${r.status} · ${tb}`);
+    if ((r.status === 429 || r.status >= 500) && lan < 4) { await cho(3 * (lan + 1), "long"); continue; }
+    throw Object.assign(new Error(tb), { status: r.status, dv: "fpt", hetLuot: r.status === 402 || /quota|limit|exceed|balance|credit|hết/i.test(tb) });
+  }
+  const bd = Date.now();
+  for (let lan = 0; Date.now() - bd < 120000; lan++) {
+    await new Promise((x) => setTimeout(x, lan ? 1500 : 1200));
+    try {
+      const r = await duPhong.goi(j.async, {}, "FPT.AI");
+      if (r.ok) {
+        const b = new Uint8Array(await r.arrayBuffer());
+        if (b.length > 500) return { mau: await giaiMp3(b), tanSo: TAN_SO_DOC };
+      }
+    } catch {}
+  }
+  throw Object.assign(new Error("FPT.AI tạo giọng quá lâu (hơn 2 phút)"), { dv: "fpt" });
+}
+
 // ----- Microsoft Edge "Đọc to" (miễn phí, không cần mã) – máy chủ PHAHA đọc hộ, trả về MP3 -----
 async function docEdge(chu) {
   const byte = await goiDocGiong("edge", DIA_CHI_MAY_CHU + "/ai/edge", {
@@ -1503,6 +1548,7 @@ function dvDocDung(imLang) {
     az: () => !!caiDat.dv.az.khoa,
     gc: () => !!(caiDat.dv.gc.giong || caiDat.dv.gc.khoa),
     edge: () => vao,
+    fpt: () => !!caiDat.dv.fpt.khoa,
     may: () => true,
   };
   const ds = THU_TU.filter((dv) => (dv === "may" || caiDat.bat[dv]) && co[dv]());
@@ -1939,6 +1985,11 @@ function loiDeHieu(loi) {
     if (loi.status === 401 || loi.status === 403) return "Mã Fish Audio không đúng hoặc chưa đăng nhập app PHAHA. Mở ⚙️ Cài đặt kiểm tra lại.\n" + m;
     if (loi.hetLuot || loi.status === 429) return "Fish Audio đã hết lượt miễn phí (hoặc đang quá tải). App tự chuyển sang giọng kế tiếp.";
     return "Fish Audio báo lỗi: " + m;
+  }
+  if (loi?.dv === "fpt") {
+    if (loi.status === 401 || loi.status === 403) return "Mã FPT.AI không đúng. Mở ⚙️ Cài đặt → mục FPT.AI, dán lại mã.\n" + m;
+    if (loi.hetLuot) return "FPT.AI đã hết lượt dùng thử. App tự chuyển sang giọng kế tiếp; muốn dùng tiếp thì mua gói ở console.fpt.ai.";
+    return "FPT.AI báo lỗi: " + m;
   }
   if (loi?.dv === "edge") {
     if (loi.status === 401) return "Giọng Edge cần đăng nhập app PHAHA trên máy này (mở tab Lịch việc để đăng nhập).";

@@ -69,7 +69,7 @@ function traLoi(duLieu, maTrangThai = 200) {
       "Cache-Control": "no-store", // không cho điện thoại giữ bản cũ
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Ve, X-Dich-Den, Ocp-Apim-Subscription-Key, HTTP-Referer, X-Title, model",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Ve, X-Dich-Den, Ocp-Apim-Subscription-Key, HTTP-Referer, X-Title, model, api-key, voice, speed",
     },
   });
 }

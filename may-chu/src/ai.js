@@ -19,6 +19,8 @@ const DUOC_CHUYEN = [
   /^[a-z0-9]+\.api\.cognitive\.microsoft\.com$/,
   /^api\.fish\.audio$/,
   /^api\.deepseek\.com$/,
+  /^api\.fpt\.ai$/,
+  /^file\d*\.fpt\.ai$/,
 ];
 
 export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
