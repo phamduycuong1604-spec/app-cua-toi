@@ -1068,7 +1068,41 @@ Với mỗi câu trả về:
 - start, end: thời điểm bắt đầu và kết thúc, tính bằng GIÂY (số thập phân) kể từ đầu đoạn âm thanh này, thật chính xác.
 - zh: lời gốc tiếng Trung (chữ Hán).
 - vi: bản dịch tiếng Việt tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch NGẮN GỌN để đọc lồng tiếng vừa khít thời lượng câu (khoảng 4–5 âm tiết mỗi giây). Không thêm chú thích.
+  Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ (vd "hai trăm năm mươi gam"), không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd "DIY" → "tự làm").
 Nếu không có lời nói thì trả về mảng rỗng [].`;
+}
+
+// ----- Sửa chữ trước khi đọc để máy đọc đúng (số, ký hiệu, chữ Trung sót lại) -----
+const SO = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
+function docBaSo(n, dayDu) {
+  const tram = Math.floor(n / 100), chuc = Math.floor((n % 100) / 10), dv = n % 10, ra = [];
+  if (tram || dayDu) ra.push(SO[tram], "trăm");
+  if (chuc > 1) ra.push(SO[chuc], "mươi");
+  else if (chuc === 1) ra.push("mười");
+  else if (dv && (tram || dayDu)) ra.push("linh");
+  if (dv) ra.push(dv === 1 && chuc > 1 ? "mốt" : dv === 5 && chuc ? "lăm" : dv === 4 && chuc > 1 ? "tư" : SO[dv]);
+  return ra.join(" ");
+}
+function docSo(so) {
+  let n = Number(so);
+  if (!Number.isFinite(n) || n > 999999999999) return so.split("").map((k) => SO[k] ?? k).join(" ");
+  if (n === 0) return "không";
+  const hang = ["", "nghìn", "triệu", "tỷ"], nhom = [];
+  for (; n > 0; n = Math.floor(n / 1000)) nhom.push(n % 1000);
+  return nhom.map((g, i) => (g ? `${docBaSo(g, i < nhom.length - 1)} ${hang[i]}` : "")).reverse().filter(Boolean).join(" ").trim();
+}
+function chuanHoaDoc(chu) {
+  return String(chu)
+    .replace(/[\u3400-\u9fff]+/g, " ") // chữ Trung còn sót
+    .replace(/(\d)[.,](\d{3})(?!\d)/g, "$1$2") // 1.500 / 1,500 → 1500
+    .replace(/(\d+)[.,](\d+)/g, (_, a, b) => `${docSo(a)} phẩy ${docSo(b)}`)
+    .replace(/(\d+)\s*%/g, (_, a) => `${docSo(a)} phần trăm`)
+    .replace(/(\d+)\s*[kK]\b/g, (_, a) => `${docSo(a)} nghìn`)
+    .replace(/(\d+)\s*(kg|g|ml|l|cm|mm|m|km)\b/gi, (_, a, d) => `${docSo(a)} ${{ kg: "ki lô gam", g: "gam", ml: "mi li lít", l: "lít", cm: "xen ti mét", mm: "mi li mét", m: "mét", km: "ki lô mét" }[d.toLowerCase()]}`)
+    .replace(/\d+/g, (a) => docSo(a))
+    .replace(/&/g, " và ").replace(/\+/g, " cộng ").replace(/[#~*_|<>\[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // =====================================================
@@ -1130,7 +1164,7 @@ function ghiDvHetThang(dv) {
 }
 
 async function docCau(chu, dv) {
-  chu = chu.trim();
+  chu = chuanHoaDoc(chu);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
