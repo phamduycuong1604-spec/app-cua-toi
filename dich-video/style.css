@@ -161,3 +161,4 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
 .dv-doc .tt { font-weight: 400; font-size: 13px; color: var(--chu-nhat); margin-left: 4px; }
 .hang-nut-giong { display: flex; gap: 8px; }
 .hang-nut-giong .nut-nho { flex: 1; margin-top: 8px; }
+.loa-nghe { display: block; width: 100%; margin-top: 8px; height: 40px; }
