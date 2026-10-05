@@ -262,8 +262,39 @@
         <p class="goi-y">Miễn phí ít lượt/ngày. Các câu sát nhau được gộp lại đọc 1 lần để đỡ tốn lượt.</p>
       </details>
 
+      <details class="dv-doc" data-dv="fpt">
+        <summary>3. FPT.AI (giọng Việt) <span class="tt" id="tt-fpt"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-fpt"> Dùng FPT.AI</label>
+        <label class="nhan">Mã FPT.AI (API key)</label>
+        <input id="o-khoa-fpt" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://console.fpt.ai" target="_blank" rel="noopener">console.fpt.ai</a> (email hoặc Google), xác nhận email.</li>
+            <li>Vào mục <b>API Keys</b> (hoặc <b>Text to Speech</b> → <b>API key</b>) → sao chép mã → dán vào đây.</li>
+            <li>Tài khoản mới có lượt dùng thử miễn phí; hết thì mua gói trong console.fpt.ai.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-fpt">
+          <option value="banmai">Nữ miền Bắc – Ban Mai</option>
+          <option value="thuminh">Nữ miền Bắc – Thu Minh</option>
+          <option value="leminh">Nam miền Bắc – Lê Minh</option>
+          <option value="myan">Nữ miền Trung – Mỹ An</option>
+          <option value="ngoclam">Nữ miền Trung – Ngọc Lam</option>
+          <option value="giahuy">Nam miền Trung – Gia Huy</option>
+          <option value="lannhi">Nữ miền Nam – Lan Nhi</option>
+          <option value="linhsan">Nữ miền Nam – Linh San</option>
+          <option value="minhquang">Nam miền Nam – Minh Quang</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="fpt">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng do FPT làm riêng cho tiếng Việt: đọc đúng dấu, có giọng 3 miền. Mỗi câu FPT cần vài giây để tạo nên chậm hơn các giọng khác một chút.</p>
+      </details>
+
       <details class="dv-doc" data-dv="fish">
-        <summary>3. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
+        <summary>4. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-fish"> Dùng Fish Audio</label>
         <label class="nhan">Mã Fish Audio (API key)</label>
         <input id="o-khoa-fish" type="password" autocomplete="off" placeholder="Dán mã API">
@@ -284,7 +315,7 @@
       </details>
 
       <details class="dv-doc" data-dv="az">
-        <summary>4. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
+        <summary>5. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-az"> Dùng Azure</label>
         <label class="nhan">Mã Azure (Key 1)</label>
         <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
@@ -309,7 +340,7 @@
       </details>
 
       <details class="dv-doc" data-dv="edge">
-        <summary>5. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
+        <summary>6. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-edge"> Dùng giọng Edge</label>
         <label class="nhan">Giọng mặc định</label>
         <select id="o-giong-edge">
