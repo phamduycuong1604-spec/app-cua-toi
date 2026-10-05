@@ -184,6 +184,8 @@ function layTuForm() {
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
   caiDat.mhDoc = $("o-mh-doc").value.trim();
   luuCaiDat();
+  // Lưu cài đặt = có thể vừa mua gói/đổi mã → quên ghi nhớ "hết lượt tháng này", lần sau thử lại
+  try { localStorage.removeItem("phaha-dv-het-thang"); } catch {}
 }
 
 function hienDichVu() {
