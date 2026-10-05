@@ -1,0 +1,4 @@
+name = "phaha-thu-edge"
+main = "index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true

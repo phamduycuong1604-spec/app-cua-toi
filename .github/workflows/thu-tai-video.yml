@@ -1,0 +1,29 @@
+name: Thử giọng Edge (tạm)
+on:
+  push:
+    branches: [thu-tai-video]
+jobs:
+  thu:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: edge-tts (Python) từ máy GitHub
+        run: |
+          pip install -q -U edge-tts
+          python -c "import edge_tts.constants as c; print('SEC_MS_GEC_VERSION =', c.SEC_MS_GEC_VERSION)"
+          timeout 60 edge-tts --voice vi-VN-HoaiMyNeural --text "Xin chào bạn" --write-media /tmp/py.mp3 && ls -la /tmp/py.mp3 || echo "PY LOI"
+      - name: Thử từ Cloudflare
+        working-directory: thu-edge
+        run: |
+          npx --yes wrangler@4.146.0 deploy 2>&1 | tee kq.txt | tail -3
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' kq.txt | head -1); echo "URL=$URL"
+          sleep 8
+          for v in vi-VN-HoaiMyNeural vi-VN-NamMinhNeural; do
+            curl -s -o /tmp/cf.mp3 -w "$v -> HTTP %{http_code} %{size_download} byte\n" "$URL/?v=$v"; head -c 120 /tmp/cf.mp3 | strings | head -2; file /tmp/cf.mp3
+          done
+          npx --yes wrangler@4.146.0 delete --name phaha-thu-edge --force 2>&1 | tail -1
