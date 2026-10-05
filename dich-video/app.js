@@ -199,6 +199,12 @@ function layTuForm() {
   caiDat.dp.azDichVung = $("o-dp-az-dich-vung").value.trim().toLowerCase().replace(/\s+/g, "");
   caiDat.dp.cf = $("o-dp-cf").checked;
   caiDat.dp.azNghe = $("o-dp-az-nghe").checked;
+  // Đổi mã Gemini → quên ghi nhớ "loại Gemini nào hết lượt hôm nay" (đó là của mã cũ), để thử ngay mã mới
+  if ($("o-khoa").value.trim() !== caiDat.khoa || $("o-khoa-doc").value.trim() !== caiDat.khoaDoc) {
+    moHinhNghi.clear();
+    try { localStorage.removeItem("phaha-dv-gemini-nghi"); } catch {}
+    nhat("Đã đổi mã Gemini → thử lại mọi loại Gemini với mã mới");
+  }
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.khoaDoc = $("o-khoa-doc").value.trim();
   caiDat.dichBang = $("o-dich-bang").value;
@@ -1774,7 +1780,7 @@ function layChu(tl) {
 
 function loiDeHieu(loi) {
   const m = String(loi?.message || loi);
-  if (m === "HET_NGAY") return "Mã Gemini miễn phí đã hết lượt hôm nay.\nCách xử lý: chờ đến mai, hoặc bật thanh toán cho mã ở aistudio.google.com (rất rẻ), rồi bấm “Làm lại”. Những câu đã đọc xong được giữ lại, không tốn lượt lần nữa.";
+  if (m === "HET_NGAY") return "Mã Gemini miễn phí đã hết lượt hôm nay.\nCách xử lý: chờ đến mai, hoặc dùng mã Gemini tạo trong DỰ ÁN MỚI (aistudio.google.com → Create API key → Create in new project; mã cùng dự án dùng chung lượt), rồi bấm “Làm lại”. Những câu đã đọc xong được giữ lại, không tốn lượt lần nữa.";
   if (loi?.dv === "gc") {
     if (/billing/i.test(m)) return "Google Cloud cần gắn thẻ thanh toán trước (vẫn miễn phí trong mức cho phép).\nMở ⚙️ Cài đặt → “Cách bật” → bước 1.";
     if (/has not been used|disabled|SERVICE_DISABLED/i.test(m)) return "Chưa bật dịch vụ đọc của Google Cloud cho mã này.\nMở ⚙️ Cài đặt → “Cách bật” → bước 2 (bấm Enable), chờ 1–2 phút rồi thử lại.";
