@@ -7,6 +7,7 @@
 
 const GROQ = "https://api.groq.com/openai/v1";
 const OPENROUTER = "https://openrouter.ai/api/v1";
+const DEEPSEEK = "https://api.deepseek.com";
 // Câu "ảo" Whisper hay tự bịa ra ở đoạn chỉ có nhạc
 const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|字幕提供|字幕志愿者|明镜与点点|Amara|中文字幕|感谢观看|感謝觀看/;
 
@@ -194,6 +195,13 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
   }
 
   const DICH = {
+    deepseek: {
+      ten: "DeepSeek",
+      co: () => !!caiDat.dp.ds,
+      chay: (cau) => chatOpenAI(`${DEEPSEEK}/chat/completions`, caiDat.dp.ds, ["deepseek-chat"], cau, "DeepSeek dịch", {
+        body: () => ({ response_format: { type: "json_object" } }),
+      }),
+    },
     groq: {
       ten: "Groq",
       co: () => !!caiDat.dp.groq,
@@ -275,7 +283,7 @@ export function taoDuPhong({ caiDat, nhat, cho }) {
       const ra = [];
       for (let i = 0; i < cau.length; i += 40) {
         const nhom = cau.slice(i, i + 40);
-        const vi = await thuLanLuot(DICH, ["groq", "cloudflare", "openrouter", "azure"], "dịch", (n) => n.chay(nhom));
+        const vi = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch", (n) => n.chay(nhom));
         nhom.forEach((c, k) => ra.push({ ...c, vi: vi[k] || "" }));
       }
       return ra;

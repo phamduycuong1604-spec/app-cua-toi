@@ -19,7 +19,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", khoaDoc: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
+  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -38,7 +38,7 @@ delete caiDat.dichVu;
 }
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
 // Dịch vụ dự phòng khi Gemini hết lượt
-caiDat.dp = Object.assign({ groq: "", cf: true, azNghe: true, azDich: "", azDichVung: "", or: "" }, caiDat.dp);
+caiDat.dp = Object.assign({ ds: "", groq: "", cf: true, azNghe: true, azDich: "", azDichVung: "", or: "" }, caiDat.dp);
 
 function docLuu(ten) {
   try { return JSON.parse(localStorage.getItem(ten)) || {}; } catch { return {}; }
@@ -150,6 +150,9 @@ const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
   $("o-khoa-doc").value = caiDat.khoaDoc;
+  $("o-dich-bang").value = caiDat.dichBang;
+  $("o-khoa-ds").value = caiDat.dp.ds;
+  $("phan-deepseek").classList.toggle("an", caiDat.dichBang !== "deepseek" && !caiDat.dp.ds);
   $("o-giong").value = caiDat.giong;
   for (const dv of CAC_DV) {
     $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
@@ -182,6 +185,7 @@ function moCaiDat() {
   $("hop-cai-dat").showModal();
 }
 $("hop-cai-dat").addEventListener("close", layTuForm);
+$("o-dich-bang").addEventListener("change", () => $("phan-deepseek").classList.toggle("an", $("o-dich-bang").value !== "deepseek" && !$("o-khoa-ds").value));
 function layTuForm() {
   for (const dv of CAC_DV) {
     caiDat.dv[dv].khoa = $("o-khoa-" + dv).value.trim();
@@ -199,6 +203,8 @@ function layTuForm() {
   caiDat.dp.azNghe = $("o-dp-az-nghe").checked;
   caiDat.khoa = $("o-khoa").value.trim();
   caiDat.khoaDoc = $("o-khoa-doc").value.trim();
+  caiDat.dichBang = $("o-dich-bang").value;
+  caiDat.dp.ds = $("o-khoa-ds").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
   caiDat.mhDoc = $("o-mh-doc").value.trim();
@@ -284,6 +290,7 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
   const ds = [
     ["Gemini (nghe & dịch)", caiDat.khoa, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoa } })],
     ["Gemini riêng cho giọng đọc", caiDat.khoaDoc, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoaDoc } })],
+    ["DeepSeek", caiDat.dp.ds, () => duPhong.goi("https://api.deepseek.com/user/balance", bear(caiDat.dp.ds), "DeepSeek")],
     ["Groq", caiDat.dp.groq, () => duPhong.goi("https://api.groq.com/openai/v1/models", bear(caiDat.dp.groq), "Groq")],
     ["OpenRouter", caiDat.dp.or, () => duPhong.goi("https://openrouter.ai/api/v1/key", bear(caiDat.dp.or), "OpenRouter")],
     ["ElevenLabs", caiDat.dv.el.khoa, () => fetch(EL_API + "/voices", { headers: { "xi-api-key": caiDat.dv.el.khoa } })],
@@ -295,7 +302,13 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
     if (!khoa) return `▫️ ${ten}: chưa dán mã`;
     try {
       const r = await thu();
+      if (r.ok && ten === "DeepSeek") {
+        const j = await r.json().catch(() => ({}));
+        const tien = (j.balance_infos || []).map((b) => `${b.total_balance} ${b.currency}`).join(", ");
+        return j.is_available === false ? `⚠️ DeepSeek: mã đúng nhưng hết tiền (còn ${tien || 0}) – nạp thêm` : `✅ DeepSeek: mã đúng, còn ${tien || "?"}`;
+      }
       if (r.ok) return `✅ ${ten}: mã đúng, dùng được`;
+      if (r.status === 402) return `⚠️ ${ten}: mã đúng nhưng hết tiền – nạp thêm`;
       if (r.status === 429) return `⚠️ ${ten}: mã đúng nhưng đang hết lượt, chờ một lúc`;
       if ([400, 401, 403].includes(r.status)) return `❌ ${ten}: mã sai hoặc thiếu quyền (mã ${r.status}) – dán lại mã`;
       return `⚠️ ${ten}: chưa kiểm tra được (mã ${r.status}), thử lại sau`;
@@ -598,6 +611,7 @@ async function chay(lamTuDau) {
   }
   dangChay = true;
   geminiNghi = false;
+  deepSeekNghi = false;
   napMoHinhNghi();
   duPhong.batDauLanMoi();
   nhatKyChay = [];
@@ -606,7 +620,7 @@ async function chay(lamTuDau) {
   nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
   nhat(`Máy: ${moTaMay()}`);
   nhat(`Video: ${tepVideo.name} · ${(tepVideo.size / 1048576).toFixed(1)}MB`);
-  nhat(`Cài đặt: thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
+  nhat(`Cài đặt: dịch bằng ${dungDeepSeek() ? "DeepSeek (nghe bằng Groq/Cloudflare)" : "Gemini"} · thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
   ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = true));
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");
@@ -884,6 +898,16 @@ async function ngheMotDoan(mau, batDau) {
   const dai = mau.length / TAN_SO_NGHE;
   const wav = taoWav(mau, TAN_SO_NGHE);
   const duLieu = await sangBase64(wav);
+  // Chọn dịch bằng DeepSeek: Groq/Cloudflare nghe → DeepSeek dịch; hỏng hết thì quay về Gemini
+  if (dungDeepSeek() && !deepSeekNghi) {
+    try {
+      return await ngheDuPhong(wav, duLieu, dai, batDau);
+    } catch (loi) {
+      if (!caiDat.khoa) throw loi;
+      deepSeekNghi = true;
+      nhat(`↪️ Nghe/dịch bằng DeepSeek không được (${loi.message.split("\n")[0]}) → quay về Gemini`);
+    }
+  }
   if (caiDat.khoa && !geminiNghi) {
     try {
       return await ngheGemini(duLieu, dai, batDau);
@@ -893,7 +917,14 @@ async function ngheMotDoan(mau, batDau) {
       nhat(`↪️ Gemini không dùng được (${loiDeHieu(loi).split("\n")[0]}) → chuyển sang dịch vụ dự phòng`);
     }
   }
-  nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} cho dịch vụ dự phòng`);
+  return ngheDuPhong(wav, duLieu, dai, batDau);
+}
+
+const dungDeepSeek = () => caiDat.dichBang === "deepseek" && !!caiDat.dp.ds && duPhong.coDuPhong();
+let deepSeekNghi = false; // DeepSeek (hoặc bước nghe) hỏng trong lần chạy này → các đoạn sau dùng Gemini
+
+async function ngheDuPhong(wav, duLieu, dai, batDau) {
+  nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} cho dịch vụ ${dungDeepSeek() && !deepSeekNghi ? "nghe + DeepSeek dịch" : "dự phòng"}`);
   const cau = await duPhong.ngheVaDich(wav, duLieu);
   const ra = cau
     .filter((c) => c.vi)
@@ -901,7 +932,7 @@ async function ngheMotDoan(mau, batDau) {
       const s = Math.max(0, Math.min(c.start, dai)), e = Math.min(Math.max(c.end, s + 0.5), dai);
       return { start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: c.zh, vi: c.vi };
     });
-  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (dự phòng)`);
+  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (${dungDeepSeek() && !deepSeekNghi ? "DeepSeek" : "dự phòng"})`);
   return ra;
 }
 
