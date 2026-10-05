@@ -153,3 +153,11 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
 .muc-dp { margin-top: 14px; }
 .muc-dp summary { font-weight: 600; }
 .muc-dp input + input { margin-top: 8px; }
+
+/* ===== GIỌNG LỒNG TIẾNG ===== */
+.tieu-de-giong { margin: 18px 0 4px; font-size: 16px; }
+.dv-doc { border: 1px solid var(--vien); border-radius: 12px; padding: 8px 12px; margin-top: 8px; }
+.dv-doc > summary { font-weight: 600; cursor: pointer; padding: 4px 0; }
+.dv-doc .tt { font-weight: 400; font-size: 13px; color: var(--chu-nhat); margin-left: 4px; }
+.hang-nut-giong { display: flex; gap: 8px; }
+.hang-nut-giong .nut-nho { flex: 1; margin-top: 8px; }

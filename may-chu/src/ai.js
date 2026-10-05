@@ -3,10 +3,12 @@
 // Chỉ người đã đăng nhập app PHAHA mới dùng được (vé gửi trong header X-Ve).
 //  /ai/nghe   : nghe tiếng Trung bằng Whisper của Cloudflare (miễn phí 10.000 "neuron"/ngày)
 //  /ai/dich   : dịch chữ bằng mô hình ngôn ngữ của Cloudflare
+//  /ai/edge   : đọc tiếng Việt bằng giọng "Đọc to" của Edge (miễn phí, trả về MP3)
 //  /ai/chuyen : chuyển tiếp yêu cầu tới Groq / OpenRouter / Azure khi trình duyệt
 //               không gọi thẳng được (bị chặn CORS)
 // =====================================================
 import { xacThuc } from "./tai-khoan.js";
+import { docEdge } from "./edge-tts.js";
 
 const MO_HINH_NGHE = "@cf/openai/whisper-large-v3-turbo";
 const MO_HINH_DICH = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/qwen/qwen3-30b-a3b-fp8"];
@@ -15,6 +17,7 @@ const DUOC_CHUYEN = [
   /^openrouter\.ai$/,
   /^api\.cognitive\.microsofttranslator\.com$/,
   /^[a-z0-9]+\.api\.cognitive\.microsoft\.com$/,
+  /^api\.fish\.audio$/,
 ];
 
 export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
@@ -42,6 +45,22 @@ export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
         const kq = await env.AI.run(mh, { messages, max_tokens: 4096, temperature: 0.3 });
         const chu = typeof kq.response === "string" ? kq.response : JSON.stringify(kq.response ?? kq);
         return traLoi({ text: chu, model: mh });
+      } catch (loi) {
+        loiCuoi = loi;
+      }
+    }
+    return traLoi({ loi: String(loiCuoi?.message || loiCuoi) }, 502);
+  }
+
+  if (duongDan === "/ai/edge" && yeuCau.method === "POST") {
+    const { text, voice } = await yeuCau.json();
+    if (!text || String(text).length > 3000) return traLoi({ loi: "Chữ trống hoặc quá dài" }, 400);
+    if (voice && !/^[a-z]{2}-[A-Z]{2}-\w+Neural$/.test(voice)) return traLoi({ loi: "Tên giọng không hợp lệ" }, 400);
+    let loiCuoi;
+    for (let lan = 0; lan < 2; lan++) {
+      try {
+        const mp3 = await docEdge(String(text), voice || undefined);
+        return new Response(mp3, { headers: { "Content-Type": "audio/mpeg", "Access-Control-Allow-Origin": "*" } });
       } catch (loi) {
         loiCuoi = loi;
       }
