@@ -24,6 +24,6 @@ jobs:
           URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' kq.txt | head -1); echo "URL=$URL"
           sleep 8
           for v in vi-VN-HoaiMyNeural vi-VN-NamMinhNeural; do
-            curl -s -o /tmp/cf.mp3 -w "$v -> HTTP %{http_code} %{size_download} byte\n" "$URL/?v=$v"; head -c 120 /tmp/cf.mp3 | strings | head -2; file /tmp/cf.mp3
+            curl -s -o /tmp/cf.mp3 -w "$v -> HTTP %{http_code} %{size_download} byte\n" "$URL/?v=$v"; file /tmp/cf.mp3; head -c 300 /tmp/cf.mp3 | grep -a LOI || true
           done
           npx --yes wrangler@4.146.0 delete --name phaha-thu-edge --force 2>&1 | tail -1
