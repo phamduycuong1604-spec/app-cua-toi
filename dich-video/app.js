@@ -575,13 +575,45 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
     ["OpenRouter", caiDat.dp.or, () => duPhong.goi("https://openrouter.ai/api/v1/key", bear(caiDat.dp.or), "OpenRouter")],
     ["ElevenLabs", caiDat.dv.el.khoa, () => fetch(EL_API + "/voices", { headers: { "xi-api-key": caiDat.dv.el.khoa } })],
     ["Azure", caiDat.dv.az.khoa, () => fetch(azApi("/voices/list"), { headers: { "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa } })],
+    // Viettel, FPT không có chỗ hỏi riêng → thử đọc 1 chữ rất ngắn (tốn vài ký tự)
+    ["Viettel AI", caiDat.dv.vt.khoa, () => duPhong.goi(VT_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", accept: "*/*" },
+      body: JSON.stringify({ text: "Xin.", voice: caiDat.dv.vt.giong, speed: 1, tts_return_option: 3, token: caiDat.dv.vt.khoa, without_filter: false }),
+    }, "Viettel AI"), async (r) => {
+      const kieu = r.headers.get("content-type") || "";
+      if (r.ok && !/json|text\/html/i.test(kieu)) return `✅ Viettel AI: mã đúng, đọc được · tháng này app đã đọc ${kyTuThang("vt").toLocaleString("vi-VN")} ký tự (đếm trên máy này; số còn lại xem ở viettelai.vn)`;
+      const t = await r.text().catch(() => ""); let j = {}; try { j = JSON.parse(t); } catch {}
+      const tb = String(j.message || j.msg || j.error || t || r.status).slice(0, 120);
+      return /quota|limit|hết|vượt|không đủ|balance/i.test(tb) ? `⚠️ Viettel AI: mã đúng nhưng hết ký tự – mua thêm gói (${tb})` : `❌ Viettel AI: ${tb} – kiểm tra lại mã`;
+    }],
+    ["FPT.AI", caiDat.dv.fpt.khoa, () => duPhong.goi(FPT_API, {
+      method: "POST",
+      headers: { "api-key": caiDat.dv.fpt.khoa, voice: caiDat.dv.fpt.giong, speed: "0", "Content-Type": "text/plain; charset=utf-8" },
+      body: "Xin chào",
+    }, "FPT.AI"), async (r) => {
+      const t = await r.text().catch(() => ""); let j = {}; try { j = JSON.parse(t); } catch {}
+      if (r.ok && j.async && !j.error) return "✅ FPT.AI: mã đúng, đọc được";
+      const tb = String(j.message || j.msg || t || r.status).slice(0, 120);
+      return /cannot consume/i.test(tb) ? "⚠️ FPT.AI: mã đúng nhưng FPT không cho dùng đọc giọng (tài khoản cá nhân đã bị ngừng) – nên bỏ tích Dùng FPT.AI" : `❌ FPT.AI: ${tb}`;
+    }],
+    ["Fish Audio", caiDat.dv.fish.khoa, () => fetch(...quaMayChu(`${FISH_API}/wallet/self/api-credit`, { headers: { Authorization: "Bearer " + caiDat.dv.fish.khoa } })), async (r) => {
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}));
+        return `✅ Fish Audio: mã đúng${j.credit != null ? ` · còn ${j.credit} tín dụng` : ""} (bản S2.1 Pro Free miễn phí)`;
+      }
+      if (r.status === 401 || r.status === 403) return "❌ Fish Audio: mã sai – dán lại mã";
+      return "▫️ Fish Audio: đã dán mã – bấm 🔊 Nghe thử trong mục Fish để chắc chắn";
+    }],
+    ["Google Cloud", caiDat.bat.gc ? caiDat.dv.gc.khoa || "" : "", () => fetch("https://texttospeech.googleapis.com/v1/voices?languageCode=vi-VN", { headers: { "x-goog-api-key": caiDat.dv.gc.khoa } })],
   ];
   nut.disabled = true;
   nut.textContent = "⏳ Đang kiểm tra…";
-  const kq = await Promise.all(ds.map(async ([ten, khoa, thu]) => {
+  const kq = await Promise.all(ds.map(async ([ten, khoa, thu, rieng]) => {
     if (!khoa) return `▫️ ${ten}: chưa dán mã`;
     try {
       const r = await thu();
+      if (rieng) return await rieng(r);
       if (r.ok && ten === "DeepSeek") {
         const j = await r.json().catch(() => ({}));
         const tien = (j.balance_infos || []).map((b) => `${b.total_balance} ${b.currency}`).join(", ");
@@ -600,8 +632,7 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
       return `⚠️ ${ten}: không kết nối được (${loi.message})`;
     }
   }));
-  kq.push(`${coMayChu() && daDangNhap() ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Cloudflare): ${coMayChu() && daDangNhap() ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
-  kq.push("Fish Audio, FPT.AI: bấm 🔊 Nghe thử trong mục của nó để kiểm tra mã (hạn mức xem trong trang của dịch vụ).");
+  kq.push(`${coMayChu() && daDangNhap() ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Viettel, Cloudflare): ${coMayChu() && daDangNhap() ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
   kq.push("Edge: không giới hạn · Cloudflare: 10.000 đơn vị/ngày (máy chủ không báo số còn lại).");
   kq.push("(ước tính) = app tự đếm trên máy này, dùng ở máy khác sẽ không tính vào.");
   o.textContent = kq.join("\n");
@@ -1656,7 +1687,7 @@ async function docViettel(chu) {
     const kieu = r.headers.get("content-type") || "";
     if (r.ok && !/json|text\/html/i.test(kieu)) {
       const b = new Uint8Array(await r.arrayBuffer());
-      if (b.length > 500) return { mau: await giaiMp3(b), tanSo: TAN_SO_DOC };
+      if (b.length > 500) { congKyTu("vt", chu.length); return { mau: await giaiMp3(b), tanSo: TAN_SO_DOC }; }
     }
     const t = await r.text().catch(() => "");
     let j = {};
