@@ -1,29 +1,19 @@
-name: Thử giọng Edge (tạm)
+name: Thử Fish Audio (tạm)
 on:
   push:
     branches: [thu-tai-video]
 jobs:
   thu:
     runs-on: ubuntu-latest
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - name: edge-tts (Python) từ máy GitHub
-        run: |
-          pip install -q -U edge-tts
-          python -c "import edge_tts.constants as c; print('SEC_MS_GEC_VERSION =', c.SEC_MS_GEC_VERSION)"
-          timeout 60 edge-tts --voice vi-VN-HoaiMyNeural --text "Xin chào bạn" --write-media /tmp/py.mp3 && ls -la /tmp/py.mp3 || echo "PY LOI"
-      - name: Thử từ Cloudflare
-        working-directory: thu-edge
-        run: |
-          npx --yes wrangler@4.146.0 deploy 2>&1 | tee kq.txt | tail -3
-          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' kq.txt | head -1); echo "URL=$URL"
-          sleep 8
-          for v in vi-VN-HoaiMyNeural vi-VN-NamMinhNeural; do
-            curl -s -o /tmp/cf.mp3 -w "$v -> HTTP %{http_code} %{size_download} byte\n" "$URL/?v=$v"; file /tmp/cf.mp3; head -c 300 /tmp/cf.mp3 | grep -a LOI || true
-          done
-          npx --yes wrangler@4.146.0 delete --name phaha-thu-edge --force 2>&1 | tail -1
+      - run: |
+          echo "=== danh sách giọng tiếng Việt"
+          curl -s "https://api.fish.audio/model?page_size=8&language=vi&sort_by=score" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin); print('keys', list(d.keys()), 'total', d.get('total'))
+          for m in d.get('items',[])[:8]: print(m.get('_id'), '|', m.get('title'), '|', m.get('languages'), '| like', m.get('like_count'), '| task', m.get('task_count'), '| state', m.get('state'), '| visibility', m.get('visibility'))
+          " || echo "LOI danh sach"
+          echo "=== tts không có mã"
+          curl -s -w "\nHTTP %{http_code}\n" -X POST https://api.fish.audio/v1/tts -H "model: s2.1-pro-free" -H "Content-Type: application/json" -d '{"text":"xin chao","format":"mp3"}' | head -c 400
+          echo; echo "=== CORS preflight"
+          curl -s -o /dev/null -D - -X OPTIONS https://api.fish.audio/v1/tts -H "Origin: https://phamduycuong1604-spec.github.io" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,content-type,model" | grep -i "access-control\|HTTP/"
