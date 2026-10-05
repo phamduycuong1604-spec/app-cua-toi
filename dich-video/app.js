@@ -19,7 +19,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
+  { khoa: "", khoaDoc: "", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -149,6 +149,7 @@ const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
 
 function moCaiDat() {
   $("o-khoa").value = caiDat.khoa;
+  $("o-khoa-doc").value = caiDat.khoaDoc;
   $("o-giong").value = caiDat.giong;
   for (const dv of CAC_DV) {
     $("o-khoa-" + dv).value = caiDat.dv[dv].khoa;
@@ -197,6 +198,7 @@ function layTuForm() {
   caiDat.dp.cf = $("o-dp-cf").checked;
   caiDat.dp.azNghe = $("o-dp-az-nghe").checked;
   caiDat.khoa = $("o-khoa").value.trim();
+  caiDat.khoaDoc = $("o-khoa-doc").value.trim();
   caiDat.giong = $("o-giong").value;
   caiDat.mhNghe = $("o-mh-nghe").value.trim();
   caiDat.mhDoc = $("o-mh-doc").value.trim();
@@ -210,7 +212,7 @@ function trangThai(dv) {
   if (dv !== "may" && !caiDat.bat[dv]) return "⏸ đang tắt";
   const thieu = {
     el: !caiDat.dv.el.khoa && "chưa có mã",
-    gemini: !caiDat.khoa && "chưa có mã Gemini",
+    gemini: !caiDat.khoa && !caiDat.khoaDoc && "chưa có mã Gemini",
     fish: (!caiDat.dv.fish.khoa && "chưa có mã") || (!coMayChu() || !daDangNhap()) && "cần đăng nhập app PHAHA",
     az: !caiDat.dv.az.khoa && "chưa có mã",
     gc: !caiDat.dv.gc.khoa && !caiDat.khoa && "chưa có mã",
@@ -218,7 +220,7 @@ function trangThai(dv) {
   }[dv];
   if (thieu) return "⚠️ " + thieu;
   if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
-  return "✅ sẵn sàng";
+  return dv === "gemini" && caiDat.khoaDoc ? "✅ sẵn sàng (mã riêng)" : "✅ sẵn sàng";
 }
 function hienTrangThai() {
   for (const dv of THU_TU) if ($("tt-" + dv)) $("tt-" + dv).textContent = trangThai(dv);
@@ -1292,7 +1294,7 @@ function dvDocDung(imLang) {
   const vao = coMayChu() && daDangNhap();
   const co = {
     el: () => !!caiDat.dv.el.khoa,
-    gemini: () => !!caiDat.khoa,
+    gemini: () => !!(caiDat.khoa || caiDat.khoaDoc),
     fish: () => !!caiDat.dv.fish.khoa && vao,
     az: () => !!caiDat.dv.az.khoa,
     gc: () => !!(caiDat.dv.gc.giong || caiDat.dv.gc.khoa),
@@ -1534,13 +1536,18 @@ function luuMoHinhNghi(m, giay) {
   try { localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(d)); } catch {}
 }
 
+// Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (trả phí)
+const khoaGemini = (loai) => (loai === "doc" && caiDat.khoaDoc) || caiDat.khoa;
+// Ghi nhớ "hết lượt" riêng cho mã đọc (mã miễn phí hết lượt không có nghĩa mã trả phí hết)
+const tenNghi = (m, loai) => (loai === "doc" && caiDat.khoaDoc ? "rieng:" : "") + m;
+
 async function goiGemini(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   if (tuChon) return goiMoHinh(tuChon, noiDung, loai);
   let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
   let daHoi = false, loiCuoi = null;
   for (let i = 0; i < ds.length; i++) {
-    if (moHinhNghi.has(ds[i])) continue;
+    if (moHinhNghi.has(tenNghi(ds[i], loai))) continue;
     try {
       const kq = await goiMoHinh(ds[i], noiDung, loai);
       moHinhDung[loai] = ds[i];
@@ -1548,14 +1555,14 @@ async function goiGemini(loai, noiDung) {
     } catch (loi) {
       if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
       loiCuoi = loi;
-      if (loi.status === 404) { moHinhNghi.add(ds[i]); luuMoHinhNghi(ds[i], 30 * 86400); }
+      if (loi.status === 404) { moHinhNghi.add(tenNghi(ds[i], loai)); luuMoHinhNghi(tenNghi(ds[i], loai), 30 * 86400); }
       if (loi.goiY && !ds.includes(loi.goiY)) {
         ds.splice(i + 1, 0, loi.goiY);
         nhat(`↪️ ${ds[i]} đã ngừng, Google gợi ý dùng ${loi.goiY} → thử ngay`);
       }
       if (loi.doiMoHinh) {
-        moHinhNghi.add(ds[i]);
-        if (loi.message === "HET_NGAY") luuMoHinhNghi(ds[i], Math.min(loi.choGiay || 3600, 86400));
+        moHinhNghi.add(tenNghi(ds[i], loai));
+        if (loi.message === "HET_NGAY") luuMoHinhNghi(tenNghi(ds[i], loai), Math.min(loi.choGiay || 3600, 86400));
         if (moHinhDung[loai] === ds[i]) delete moHinhDung[loai];
         nhat(`↪️ Bỏ qua ${ds[i]} (${loi.message === "HET_NGAY" ? "hết lượt miễn phí hôm nay" : "đang quá tải"}), thử loại Gemini khác`);
       }
@@ -1568,14 +1575,14 @@ async function goiGemini(loai, noiDung) {
   }
   if (loiCuoi?.message === "HET_NGAY") throw loiCuoi;
   // Mọi mô hình đều đang được nhớ là hết lượt/ngừng → coi như hết lượt hôm nay
-  if (!loiCuoi && ds.every((m) => moHinhNghi.has(m))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
+  if (!loiCuoi && ds.every((m) => moHinhNghi.has(tenNghi(m, loai)))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }
 
 async function timMoHinh(loai) {
   try {
-    const r = await fetch(`${API}/models?pageSize=200`, { headers: { "x-goog-api-key": caiDat.khoa } });
+    const r = await fetch(`${API}/models?pageSize=200`, { headers: { "x-goog-api-key": khoaGemini(loai) } });
     const j = await r.json();
     return (j.models || [])
       .map((m) => m.name.replace("models/", ""))
@@ -1604,7 +1611,7 @@ async function goiMoHinh(moHinh, noiDung, loai) {
     try {
       r = await fetch(`${API}/models/${moHinh}:generateContent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": caiDat.khoa },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": khoaGemini(loai) },
         body: JSON.stringify(guiDi),
         signal: huy.signal,
       });
