@@ -88,6 +88,7 @@ let dangChay = false;
 let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm lại không phải tách lại
 let anhLogo = null; // ảnh logo đã nạp
 let dangTachNhac = null; // AI tách nhạc đang chạy (giọng máy phải chờ xong mới chạy, tránh tràn bộ nhớ)
+let dangVeHinh = null, xongVeHinh = () => {}; // chèn chữ/logo đang chạy (giọng máy cũng phải chờ)
 
 // ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
 let nhatKyChay = [];
@@ -972,6 +973,7 @@ async function chay(lamTuDau) {
 
     // Lồng tiếng chủ yếu chờ mạng → chạy song song với tách nhạc (AI chạy trên máy) cho nhanh
     buoc("long", "dang");
+    dangVeHinh = canVe(caiDat.lop, cacCau, anhLogo) ? new Promise((x) => (xongVeHinh = x)) : null;
     const huaLong = Promise.resolve().then(longTieng).then((r) => { buoc("long", "xong"); return r; });
     huaLong.catch(() => {});
 
@@ -1027,6 +1029,8 @@ async function chay(lamTuDau) {
         buoc("ve", "loi", loi.message + " Video sẽ xuất không có chữ/logo.");
       }
     } else buoc("ve", "bo", "Không bật");
+    xongVeHinh();
+    dangVeHinh = null;
 
     buocDang = "long";
     const tiengViet = await huaLong;
@@ -1049,6 +1053,8 @@ async function chay(lamTuDau) {
   } finally {
     dangChay = false;
     dangTachNhac = null;
+    xongVeHinh();
+    dangVeHinh = null;
     ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = false));
     khoaMan?.release?.().catch(() => {});
   }
@@ -1351,7 +1357,7 @@ const DICH_VU = {
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
-  edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
+  edge: { ten: "Edge", doc: docEdge, cungLuc: 2 },
   fpt: { ten: "FPT.AI", doc: docFpt, cungLuc: 4 },
   vt: { ten: "Viettel AI", doc: docViettel, cungLuc: 3 },
   may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
@@ -1406,6 +1412,7 @@ function ghiDvHetThang(dv) {
 
 async function docCau(chu, dv) {
   chu = chuanHoaDoc(chu);
+  if (!chu) return new Float32Array(0);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   if (khoGiong.has(khoa)) return khoGiong.get(khoa);
@@ -1417,7 +1424,7 @@ async function docCau(chu, dv) {
   return mau;
 }
 
-async function docGemini(chu) {
+async function docGemini(chu, lan = 0) {
   const tl = await goiGemini("doc", {
     contents: [{ parts: [{ text: `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu}` }] }],
     generationConfig: {
@@ -1426,7 +1433,11 @@ async function docGemini(chu) {
     },
   });
   const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-  if (!phan) throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
+  if (!phan) {
+    // Gemini thỉnh thoảng trả lời mà không kèm tiếng (lỗi ngẫu nhiên) → gửi lại câu đó
+    if (lan < 2) { nhat(`Gemini đọc thiếu tiếng (${tl.candidates?.[0]?.finishReason || "?"}) → gửi lại câu này`); return docGemini(chu, lan + 1); }
+    throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
+  }
   const byte = tuBase64(phan.inlineData.data);
   return {
     pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
@@ -1855,16 +1866,18 @@ async function longTiengThu() {
 async function longTiengBang(dv) {
   const tong = new Float32Array(Math.ceil(thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
   let xong = 0, hong = false;
-  const cau = chiaNhom(cacCau.filter((c) => c.vi.trim()), dv);
+  // Bỏ câu rỗng (vd câu chỉ có chữ Trung/ký hiệu, sửa chữ xong thành trống) – dịch vụ đọc sẽ báo lỗi nếu gửi chữ trống
+  const cau = chiaNhom(cacCau.filter((c) => chuanHoaDoc(c.vi)), dv);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;
   // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs/Fish miễn phí chỉ cho 2 cùng lúc)
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
   const soLuong = DICH_VU[dv].cungLuc;
-  if (dv === "may" && dangTachNhac) {
-    ghiChu("long", "Chờ tách nhạc xong rồi đọc bằng giọng máy…");
-    await dangTachNhac.catch(() => {});
+  if (dv === "may" && (dangTachNhac || dangVeHinh)) {
+    ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
+    await dangTachNhac?.catch(() => {});
+    await dangVeHinh;
   }
   const bd = Date.now();
   await Promise.all(Array.from({ length: soLuong }, async () => {
