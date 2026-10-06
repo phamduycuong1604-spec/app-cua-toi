@@ -1227,7 +1227,7 @@ async function ngheMotDoan(mau, batDau) {
   // Chọn dịch bằng DeepSeek: Groq/Cloudflare nghe → DeepSeek dịch; hỏng hết thì quay về Gemini
   if (dungDeepSeek() && !deepSeekNghi) {
     try {
-      return await ngheDuPhong(wav, duLieu, dai, batDau);
+      return await ngheDuPhong(wav, duLieu, dai, batDau, mau);
     } catch (loi) {
       if (!caiDat.khoa) throw loi;
       deepSeekNghi = true;
@@ -1243,15 +1243,16 @@ async function ngheMotDoan(mau, batDau) {
       nhat(`↪️ Gemini không dùng được (${loiDeHieu(loi).split("\n")[0]}) → chuyển sang dịch vụ dự phòng`);
     }
   }
-  return ngheDuPhong(wav, duLieu, dai, batDau);
+  return ngheDuPhong(wav, duLieu, dai, batDau, mau);
 }
 
 const dungDeepSeek = () => caiDat.dichBang === "deepseek" && !!caiDat.dp.ds && duPhong.coDuPhong();
 let deepSeekNghi = false; // DeepSeek (hoặc bước nghe) hỏng trong lần chạy này → các đoạn sau dùng Gemini
 
-async function ngheDuPhong(wav, duLieu, dai, batDau) {
+async function ngheDuPhong(wav, duLieu, dai, batDau, mau) {
   nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} cho dịch vụ ${dungDeepSeek() && !deepSeekNghi ? "nghe + DeepSeek dịch" : "dự phòng"}`);
   const cau = await duPhong.ngheVaDich(wav, duLieu);
+  if (mau) await ngheBu(mau, cau, batDau);
   const thieu = cau.filter((c) => !c.vi).length;
   if (thieu) nhat(`⚠️ ${thieu} câu chưa dịch được – vẫn giữ trong bảng lời thoại để bạn tự điền`);
   const ra = cau
@@ -1262,6 +1263,56 @@ async function ngheDuPhong(wav, duLieu, dai, batDau) {
     });
   nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (${dungDeepSeek() && !deepSeekNghi ? "DeepSeek" : "dự phòng"})`);
   return ra;
+}
+
+// NGHE BÙ: bộ nghe (Whisper) hay "nhảy cóc" khi người nói nhanh, liền mạch trên nền nhạc.
+// Tìm chỗ có tiếng to cỡ lời nói mà chưa có câu nào → gửi riêng chỗ đó nghe + dịch lại, rồi ghép vào.
+async function ngheBu(mau, cau, batDau) {
+  const buoc = Math.round(TAN_SO_NGHE / 4); // ô 0,25 giây
+  const soO = Math.floor(mau.length / buoc);
+  if (soO < 8) return;
+  const nl = new Float32Array(soO);
+  for (let o = 0; o < soO; o++) {
+    let e = 0;
+    for (let k = o * buoc; k < (o + 1) * buoc; k += 2) e += mau[k] * mau[k];
+    nl[o] = Math.sqrt(e / (buoc / 2));
+  }
+  const coCau = new Uint8Array(soO);
+  for (const c of cau) for (let o = Math.max(0, Math.floor(c.start * 4) - 1); o <= Math.min(soO - 1, Math.ceil(c.end * 4)); o++) coCau[o] = 1;
+  // mức to của lời nói = trung vị các ô đã có câu
+  const noi = [...nl].filter((_, o) => coCau[o]).sort((a, b) => a - b);
+  const mucNoi = noi.length ? noi[Math.floor(noi.length / 2)] : 0;
+  if (!mucNoi) return;
+  const khoang = [];
+  for (let o = 0; o < soO; ) {
+    if (coCau[o] || nl[o] < mucNoi * 0.5) { o++; continue; }
+    let h = o;
+    while (h < soO && !coCau[h] && nl[h] >= mucNoi * 0.35) h++;
+    if (h - o >= 6) khoang.push([o / 4, h / 4]); // ít nhất 1,5 giây có tiếng mà chưa có câu
+    o = h;
+  }
+  if (!khoang.length) return;
+  const chon = khoang.sort((a, b) => b[1] - b[0] - (a[1] - a[0])).slice(0, 6);
+  nhat(`🔎 Đoạn ${dongHo(batDau)}: thấy ${chon.length} chỗ có tiếng nói chưa được nghe (${chon.map(([a, b]) => `${dongHo(batDau + a)}–${dongHo(batDau + b)}`).join(", ")}) → nghe bù`);
+  let them = 0;
+  for (const [a, b] of chon) {
+    const tu = Math.max(0, a - 0.4), den = Math.min(mau.length / TAN_SO_NGHE, b + 0.4);
+    const doan = mau.subarray(Math.round(tu * TAN_SO_NGHE), Math.round(den * TAN_SO_NGHE));
+    try {
+      const w = taoWav(doan, TAN_SO_NGHE);
+      const moi = await duPhong.ngheVaDich(w, await sangBase64(w));
+      for (const c of moi) {
+        const s = tu + c.start, e = tu + c.end;
+        if (cau.some((x) => s < x.end - 0.2 && e > x.start + 0.2)) continue; // trùng câu đã có
+        cau.push({ ...c, start: s, end: e });
+        them++;
+      }
+    } catch (loi) {
+      nhat("Nghe bù không được: " + loi.message.split("\n")[0]);
+    }
+  }
+  cau.sort((x, y) => x.start - y.start);
+  if (them) nhat(`🔎 Nghe bù thêm được ${them} câu`);
 }
 
 async function ngheGemini(duLieu, dai, batDau) {
@@ -1896,16 +1947,26 @@ async function longTiengBang(dv) {
     }
   }));
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
-  // Đặt từng phần vào đúng thời điểm
+  // Đặt từng câu vào đúng thời điểm. Câu Việt dài hơn chỗ trống thì đọc nhanh hơn (tối đa 1,6 lần);
+  // vẫn dài thì câu sau LÙI lại một chút thay vì đè lên nhau (2 giọng chồng nhau nghe như mất chữ).
+  // Đang bị trễ so với hình thì cho đọc nhanh hơn nữa (tối đa 1,9 lần) để đuổi kịp.
+  let conTro = 0, soTre = 0, treMax = 0;
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
+    if (!mau.length) return;
+    const batDau = Math.max(c.start, conTro + 0.05);
+    const tre = batDau - c.start;
     const sau = cau[i + 1] ? cau[i + 1].start : thoiLuong;
-    const choPhep = Math.max(c.end - c.start, sau - c.start - 0.08);
+    const choPhep = Math.max(c.end - batDau, sau - batDau - 0.08, 0.3);
     const dai = mau.length / TAN_SO_DOC;
-    if (choPhep > 0.3 && dai > choPhep * 1.02) mau = coGian(mau, Math.min(dai / choPhep, NHANH_TOI_DA));
-    const viTri = Math.round(c.start * TAN_SO_DOC);
+    const nhanhNhat = tre > 1 ? 1.9 : NHANH_TOI_DA;
+    if (dai > choPhep * 1.02) mau = coGian(mau, Math.min(dai / choPhep, nhanhNhat));
+    const viTri = Math.round(batDau * TAN_SO_DOC);
     for (let k = 0; k < mau.length && viTri + k < tong.length; k++) tong[viTri + k] += mau[k];
+    conTro = batDau + mau.length / TAN_SO_DOC;
+    if (tre > 0.3) { soTre++; treMax = Math.max(treMax, tre); }
   });
+  if (soTre) nhat(`Lời Việt dài hơn lời gốc: ${soTre} câu phải lùi lại cho khỏi đè nhau (trễ nhiều nhất ${treMax.toFixed(1)} giây)`);
   return taoWav(tong, TAN_SO_DOC);
 }
 
