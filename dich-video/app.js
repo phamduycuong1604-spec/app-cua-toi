@@ -1252,8 +1252,10 @@ let deepSeekNghi = false; // DeepSeek (hoặc bước nghe) hỏng trong lần c
 async function ngheDuPhong(wav, duLieu, dai, batDau) {
   nhat(`Gửi đoạn ${dongHo(batDau)}–${dongHo(batDau + dai)} cho dịch vụ ${dungDeepSeek() && !deepSeekNghi ? "nghe + DeepSeek dịch" : "dự phòng"}`);
   const cau = await duPhong.ngheVaDich(wav, duLieu);
+  const thieu = cau.filter((c) => !c.vi).length;
+  if (thieu) nhat(`⚠️ ${thieu} câu chưa dịch được – vẫn giữ trong bảng lời thoại để bạn tự điền`);
   const ra = cau
-    .filter((c) => c.vi)
+    .filter((c) => c.vi || c.zh)
     .map((c) => {
       const s = Math.max(0, Math.min(c.start, dai)), e = Math.min(Math.max(c.end, s + 0.5), dai);
       return { start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: c.zh, vi: c.vi };
@@ -1306,11 +1308,12 @@ async function ngheGemini(duLieu, dai, batDau) {
 
 function loiNhacDich(dai) {
   return `Đây là ${dai.toFixed(1)} giây âm thanh lấy từ một video tiếng Trung.
-Hãy nghe kỹ phần LỜI NÓI (bỏ qua nhạc nền, tiếng động) và chia thành từng câu ngắn, mỗi câu tối đa khoảng 8 giây.
+Hãy nghe kỹ TOÀN BỘ phần LỜI NÓI từ đầu đến cuối (bỏ qua nhạc nền, tiếng động) và chia thành từng câu ngắn, mỗi câu tối đa khoảng 8 giây.
+KHÔNG được bỏ sót câu nào – kể cả câu nói nhỏ, nói nhanh, nói chen, lời thuyết minh trên nền nhạc, lời ở đầu và cuối đoạn.
 Với mỗi câu trả về:
 - start, end: thời điểm bắt đầu và kết thúc, tính bằng GIÂY (số thập phân) kể từ đầu đoạn âm thanh này, thật chính xác.
 - zh: lời gốc tiếng Trung (chữ Hán).
-- vi: bản dịch tiếng Việt tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch NGẮN GỌN để đọc lồng tiếng vừa khít thời lượng câu (khoảng 4–5 âm tiết mỗi giây). Không thêm chú thích.
+- vi: bản dịch tiếng Việt tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng câu (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Không thêm chú thích.
   Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ (vd "hai trăm năm mươi gam"), không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd "DIY" → "tự làm").
 Nếu không có lời nói thì trả về mảng rỗng [].`;
 }
@@ -2381,5 +2384,5 @@ function taoSrt() {
     const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), g = Math.floor((ms % 60000) / 1000);
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(g).padStart(2, "0")},${String(ms % 1000).padStart(3, "0")}`;
   };
-  return cacCau.map((c, i) => `${i + 1}\n${gio(c.start)} --> ${gio(c.end)}\n${c.vi}\n`).join("\n");
+  return cacCau.filter((c) => c.vi.trim()).map((c, i) => `${i + 1}\n${gio(c.start)} --> ${gio(c.end)}\n${c.vi}\n`).join("\n");
 }

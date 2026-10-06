@@ -84,7 +84,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
             const j = await r.json();
             dem("groq", Math.round((wav.length - 44) / 32000)); // giây âm thanh đã gửi (16kHz, 1 kênh)
             return (j.segments || [])
-              .filter((s) => !(s.no_speech_prob > 0.6 && s.avg_logprob < -0.8))
+              .filter((s) => !(s.no_speech_prob > 0.85 && s.avg_logprob < -1)) // chỉ bỏ đoạn gần như chắc chắn là tiếng ồn
               .map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
           } catch (loi) {
             loiCuoi = loi;
@@ -131,7 +131,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     return [
       {
         role: "system",
-        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh, NGẮN GỌN để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây). Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm).",
+        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý từng câu: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Mỗi câu gốc phải có đúng 1 câu dịch, không gộp, không bỏ câu nào. Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm).",
       },
       {
         role: "user",
@@ -286,6 +286,17 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
       for (let i = 0; i < cau.length; i += 40) {
         const nhom = cau.slice(i, i + 40);
         const vi = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch", (n) => n.chay(nhom));
+        // Câu nào AI bỏ sót → dịch bù riêng những câu đó (không lặng lẽ bỏ qua)
+        const sot = nhom.map((c, k) => k).filter((k) => !vi[k]);
+        if (sot.length) {
+          nhat(`Dịch bù ${sot.length} câu bị sót`);
+          try {
+            const bu = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(sot.map((k) => nhom[k])));
+            sot.forEach((k, j) => (vi[k] = bu[j] || ""));
+          } catch (loi) {
+            nhat("Dịch bù không được: " + loi.message.split("\n")[0]);
+          }
+        }
         nhom.forEach((c, k) => ra.push({ ...c, vi: vi[k] || "" }));
       }
       return ra;
