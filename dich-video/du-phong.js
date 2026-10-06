@@ -11,6 +11,9 @@ const DEEPSEEK = "https://api.deepseek.com";
 // Câu "ảo" Whisper hay tự bịa ra ở đoạn chỉ có nhạc
 const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|字幕提供|字幕志愿者|明镜与点点|Amara|中文字幕|感谢观看|感謝觀看/;
 
+// Câu "dịch" mà vẫn còn chữ Trung (AI chép lại nguyên văn) = chưa dịch
+export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 2;
+
 export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
   const ve = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
@@ -276,6 +279,8 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     // Có dịch vụ dự phòng nào dùng được không
     coDuPhong: () => Object.values(NGHE).some((n) => n.co()) && Object.values(DICH).some((n) => n.co()),
     batDauLanMoi: () => hong.clear(),
+    // Dịch lại những câu chưa dịch được (vd Gemini trả về còn chữ Trung) → mảng lời Việt
+    dichBu: (cau) => thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(cau)),
     // Nghe 1 đoạn âm thanh + dịch → [{start, end, zh, vi}] (giây, tính từ đầu đoạn)
     async ngheVaDich(wav, b64) {
       let cau = await thuLanLuot(NGHE, ["groq", "cloudflare", "azure"], "nghe", (n) => n.chay(wav, b64));
@@ -287,12 +292,12 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
         const nhom = cau.slice(i, i + 40);
         const vi = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch", (n) => n.chay(nhom));
         // Câu nào AI bỏ sót → dịch bù riêng những câu đó (không lặng lẽ bỏ qua)
-        const sot = nhom.map((c, k) => k).filter((k) => !vi[k]);
+        const sot = nhom.map((c, k) => k).filter((k) => chuaDich(vi[k]));
         if (sot.length) {
-          nhat(`Dịch bù ${sot.length} câu bị sót`);
+          nhat(`Dịch bù ${sot.length} câu bị sót hoặc còn chữ Trung`);
           try {
             const bu = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(sot.map((k) => nhom[k])));
-            sot.forEach((k, j) => (vi[k] = bu[j] || ""));
+            sot.forEach((k, j) => (vi[k] = chuaDich(bu[j]) ? "" : bu[j]));
           } catch (loi) {
             nhat("Dịch bù không được: " + loi.message.split("\n")[0]);
           }
