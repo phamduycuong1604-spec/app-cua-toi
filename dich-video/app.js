@@ -6,7 +6,7 @@
 // =====================================================
 import { FFmpeg } from "./ffmpeg/index.js";
 import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
-import { taoDuPhong } from "./du-phong.js";
+import { taoDuPhong, chuaDich } from "./du-phong.js";
 import { khoaLai, moKhoa, layTuMayChu, guiLenMayChu, layLichSuMayChu } from "./dong-bo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -1354,6 +1354,18 @@ async function ngheGemini(duLieu, dai, batDau) {
     ra.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: String(c.zh || ""), vi: String(c.vi).trim() });
   }
   nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu`);
+  // Câu Gemini để nguyên chữ Trung → nhờ dịch vụ dịch (DeepSeek/Groq/…) dịch lại
+  const conTrung = ra.filter((c) => c.zh && chuaDich(c.vi));
+  if (conTrung.length) {
+    nhat(`Dịch bù ${conTrung.length} câu Gemini chưa dịch (còn chữ Trung)`);
+    try {
+      const vi = await duPhong.dichBu(conTrung);
+      conTrung.forEach((c, k) => (c.vi = chuaDich(vi[k]) ? "" : vi[k]));
+    } catch (loi) {
+      nhat("Dịch bù không được: " + loi.message.split("\n")[0]);
+      conTrung.forEach((c) => (c.vi = ""));
+    }
+  }
   return ra;
 }
 
@@ -1922,6 +1934,8 @@ async function longTiengBang(dv) {
   let xong = 0, hong = false;
   // Bỏ câu rỗng (vd câu chỉ có chữ Trung/ký hiệu, sửa chữ xong thành trống) – dịch vụ đọc sẽ báo lỗi nếu gửi chữ trống
   const cau = chiaNhom(cacCau.filter((c) => chuanHoaDoc(c.vi)), dv);
+  const boQua = cacCau.filter((c) => !chuanHoaDoc(c.vi)).length;
+  if (boQua) nhat(`⚠️ ${boQua}/${cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;
   // Đọc nhiều phần cùng lúc cho nhanh (ElevenLabs/Fish miễn phí chỉ cho 2 cùng lúc)
