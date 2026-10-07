@@ -95,6 +95,7 @@ async function chay(ten, o) {
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
     const b = JSON.parse(rt.request().postData()); goi.vtGiong = b.voice; goi.vtDinhDang = b.tts_return_option;
     if (!b.text) { dem("vtRong"); return rt.fulfill({ status: 400, headers: J, body: JSON.stringify({ code: 400, en_message: "Not empty text" }) }); }
+    if (b.token === "vt-het") return rt.fulfill({ status: 403, headers: J, body: JSON.stringify({ code: 403, en_message: "Total unit for this request greater than your remaining unit. Please upgrade your package to keep continue service", vi_message: "Hạn mức sử dụng của Request vượt quá số hạn mức còn lại" }) });
     if (b.token !== "vt-ok") return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ message: "Invalid token" }) });
     rt.fulfill({ headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "audio/mpeg" }, body: fs.readFileSync(`${S}/sine.mp3`) }); });
   let fptCho = {};
@@ -219,6 +220,7 @@ const KICH_BAN = {
   "29h-gemini-con-chu-trung": { caiDat: { ...CD, dp: { groq: "gsk" } }, cau: [{ start: 1, end: 3, zh: "你好朋友", vi: "你好朋友" }, { start: 4, end: 5.5, zh: "谢谢", vi: "Cảm ơn nhé" }] },
   "25-nghe-thu": { caiDat: { ...CD, bat: DU, dv: { ...CD.dv, fpt: { khoa: "fk-fpt", giong: "myan" }, vt: { khoa: "vt-ok", giong: "hcm-diemmy" } } }, chiCaiDat: true },
   "33-viettel-doc": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, vt: { khoa: "vt-ok", giong: "hue-maingoc" } } } },
+  "33d-viettel-het-ky-tu": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, vt: { khoa: "vt-het", giong: "hn-quynhanh" } } } },
   "33b-viettel-sai-ma": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, vt: { khoa: "sai", giong: "hn-quynhanh" } } } },
   "26-nghe-thu-iphone-chan": { caiDat: { ...CD, bat: DU }, chiCaiDat: true, chanLoa: true },
   "4c-gemini-nho-het-luot": { caiDat: { ...CD, dp: { groq: "gsk" } }, gemini: "het", sau: async (p, kq, goi) => {

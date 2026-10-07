@@ -585,8 +585,8 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
       const kieu = r.headers.get("content-type") || "";
       if (r.ok && !/json|text\/html/i.test(kieu)) return `✅ Viettel AI: mã đúng, đọc được · tháng này app đã đọc ${kyTuThang("vt").toLocaleString("vi-VN")} ký tự (đếm trên máy này; số còn lại xem ở viettelai.vn)`;
       const t = await r.text().catch(() => ""); let j = {}; try { j = JSON.parse(t); } catch {}
-      const tb = String(j.message || j.msg || j.error || t || r.status).slice(0, 120);
-      return /quota|limit|hết|vượt|không đủ|balance/i.test(tb) ? `⚠️ Viettel AI: mã đúng nhưng hết ký tự – mua thêm gói (${tb})` : `❌ Viettel AI: ${tb} – kiểm tra lại mã`;
+      const tb = String(j.vi_message || j.en_message || j.message || j.msg || j.error || t || r.status).slice(0, 120);
+      return /quota|limit|exceed|remaining|upgrade|hết|vượt|không đủ|hạn mức|balance/i.test(tb) ? `⚠️ Viettel AI: mã đúng nhưng HẾT ký tự → app tự đọc bằng giọng kế tiếp (mua thêm gói ở viettelai.vn để dùng lại) · ${tb}` : `❌ Viettel AI: ${tb} – kiểm tra lại mã`;
     }],
     ["FPT.AI", caiDat.dv.fpt.khoa, () => duPhong.goi(FPT_API, {
       method: "POST",
@@ -1769,12 +1769,12 @@ async function docViettel(chu) {
     const t = await r.text().catch(() => "");
     let j = {};
     try { j = JSON.parse(t); } catch {}
-    const tb = String(j.message || j.msg || j.error || j.detail || t || r.statusText).slice(0, 200);
-    nhat(`⚠️ Viettel AI: mã ${r.status} · ${tb}`);
+    const tb = String(j.vi_message || j.en_message || j.message || j.msg || j.error || j.detail || t || r.statusText).slice(0, 200);
+    nhat(`⚠️ Viettel AI: mã ${r.status} · ${tb || "(Viettel không ghi lý do)"}`);
     if ((r.status === 429 || r.status >= 500) && lan < 3) { await cho(3 * (lan + 1), "long"); continue; }
     throw Object.assign(new Error(tb || "Viettel AI không trả về giọng đọc"), {
       status: r.status, dv: "vt",
-      hetLuot: r.status === 402 || /quota|limit|exceed|balance|credit|hết|vượt|không đủ/i.test(tb),
+      hetLuot: r.status === 402 || /quota|limit|exceed|balance|credit|remaining|upgrade|hết|vượt|không đủ|hạn mức/i.test(tb),
     });
   }
 }
