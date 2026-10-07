@@ -2341,6 +2341,7 @@ function loiDeHieu(loi) {
     return "Fish Audio báo lỗi: " + m;
   }
   if (loi?.dv === "vt") {
+    if (/remaining unit|upgrade your package|vượt quá|hạn mức/i.test(m)) return "Viettel AI đã hết ký tự trong gói (mã vẫn đúng). App tự chuyển sang giọng kế tiếp; mua thêm gói ở viettelai.vn để dùng tiếp.";
     if (loi.status === 401 || loi.status === 403 || /token|key|auth/i.test(m)) return "Mã Viettel AI không đúng hoặc hết hạn. Mở ⚙️ Cài đặt → mục Viettel AI, dán lại mã.\n" + m;
     if (loi.hetLuot) return "Viettel AI đã hết ký tự. App tự chuyển sang giọng kế tiếp; mua thêm gói ở viettelai.vn để dùng tiếp.";
     return "Viettel AI báo lỗi: " + m;
