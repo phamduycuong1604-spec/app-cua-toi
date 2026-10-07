@@ -135,7 +135,6 @@ async function chay(ten, o) {
   const t0 = Date.now();
   await p.click("#nut-bat-dau");
   await p.waitForSelector("#the-ket-qua:not(.an), #loi:not(.an)", { timeout: o.han || 300000 });
-  for (const k of ["khoaNghe", "khoaDoc"]) if (goi[k] instanceof Set) goi[k] = [...goi[k]];
   let kq = { ten, giay: ((Date.now() - t0) / 1000).toFixed(1), loi: (await p.textContent("#loi")).trim(), goi, elMax, loiTrang };
   kq.buoc = await p.$$eval(".cac-buoc li", (ls) => ls.map((l) => l.querySelector(".dau").textContent).join(""));
   kq.cau = await p.$$eval(".cau textarea", (t) => t.map((x) => x.value));
@@ -284,7 +283,7 @@ for (const [ten, o] of Object.entries(KICH_BAN)) {
   try {
     const kq = await chay(ten, o);
     const { nhatKy, ...gon } = kq;
-    console.log(JSON.stringify(gon));
+    console.log(JSON.stringify(gon, (k, v) => (v instanceof Set ? [...v] : v)));
     fs.writeFileSync(`${S}/kt-${ten}.log`, nhatKy);
   } catch (e) { console.log(JSON.stringify({ ten, NGOAI_LE: String(e.message).slice(0, 300) })); }
 }
