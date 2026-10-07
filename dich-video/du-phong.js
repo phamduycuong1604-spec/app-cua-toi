@@ -14,6 +14,15 @@ const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|�
 // Câu "dịch" mà vẫn còn chữ Trung (AI chép lại nguyên văn) = chưa dịch
 export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 2;
 
+// AI dịch xong nhưng chèn kèm chữ Trung (vd "màu nghệ (姜黄色)") → bỏ phần chữ Trung, giữ lời Việt.
+// Chỉ bỏ khi lời Việt đã đủ dài; còn lại (chép nguyên câu gốc) giữ nguyên để bị coi là chưa dịch.
+export function boChuTrung(x) {
+  let s = String(x ?? "").replace(/\s*[（(][^()（）]*[\u3400-\u9fff][^()（）]*[)）]/g, "").trim();
+  const han = (s.match(/[\u3400-\u9fff]/g) || []).length, viet = (s.match(/[a-zà-ỹđ]/gi) || []).length;
+  if (han >= 2 && viet >= 8 && viet >= han * 3) s = s.replace(/[\u3400-\u9fff\u3000-\u303f\uff01-\uff0f\uff1a-\uff20]+/g, " ").replace(/\s+([,.!?])/g, "$1").replace(/\s{2,}/g, " ").trim();
+  return s;
+}
+
 export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
   const ve = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
@@ -157,7 +166,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     const ra = [];
     for (let i = 1; i <= so; i++) {
       const x = Array.isArray(j) ? j[i - 1] : j[i] ?? j[String(i)];
-      ra.push(String((typeof x === "object" && x ? x.vi ?? x.text ?? Object.values(x)[0] : x) ?? "").trim());
+      ra.push(boChuTrung((typeof x === "object" && x ? x.vi ?? x.text ?? Object.values(x)[0] : x) ?? ""));
     }
     const thieu = ra.filter((x) => !x).length;
     if (thieu > Math.max(1, so * 0.2)) throw new Error(`dịch thiếu ${thieu}/${so} câu`);
@@ -297,6 +306,8 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
           nhat(`Dịch bù ${sot.length} câu bị sót hoặc còn chữ Trung`);
           try {
             const bu = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(sot.map((k) => nhom[k])));
+            const k0 = sot.find((k, j) => chuaDich(bu[j]));
+            if (k0 !== undefined) nhat(`Ví dụ câu AI trả về vẫn chưa phải tiếng Việt: «${nhom[k0].zh}» → «${String(bu[sot.indexOf(k0)] || "(trống)").slice(0, 80)}»`);
             sot.forEach((k, j) => (vi[k] = chuaDich(bu[j]) ? "" : bu[j]));
           } catch (loi) {
             nhat("Dịch bù không được: " + loi.message.split("\n")[0]);
