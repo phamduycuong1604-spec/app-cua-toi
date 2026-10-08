@@ -833,7 +833,7 @@ function veLoiThoai() {
     o.querySelector(".gio").addEventListener("click", () => {
       const xem = $("xem-goc");
       xem.currentTime = c.start;
-      xem.play();
+      xem.play().catch((loi) => nhat("Không phát được video gốc ở đoạn này: " + loi.message));
       xem.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     const nutNghe = o.querySelector(".nghe-thu");
