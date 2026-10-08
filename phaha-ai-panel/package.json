@@ -1,0 +1,32 @@
+{
+  "name": "phaha-ai-panel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PhaHa AI — panel AI sửa ảnh chạy trong Photoshop (UXP)",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "watch": "vite build --watch --mode development",
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/run.mjs",
+    "mock": "node mock-server/server.mjs",
+    "package": "npm run build && node scripts/package-ccx.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "fast-png": "6.2.0",
+    "jpeg-js": "0.4.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zustand": "4.5.5"
+  },
+  "devDependencies": {
+    "@types/photoshop": "25.0.2",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "adm-zip": "0.5.16",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}

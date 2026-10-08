@@ -1,0 +1,4 @@
+tests/.out/
+node_modules/
+dist/
+*.ccx

@@ -1,0 +1,47 @@
+{
+  "manifestVersion": 5,
+  "id": "com.phaha.ai.panel",
+  "name": "PhaHa AI",
+  "version": "0.1.0",
+  "main": "index.html",
+  "host": {
+    "app": "PS",
+    "minVersion": "24.4"
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "phahaPanel",
+      "label": { "default": "PhaHa AI" },
+      "minimumSize": { "width": 300, "height": 420 },
+      "maximumSize": { "width": 1200, "height": 4000 },
+      "preferredDockedSize": { "width": 340, "height": 720 },
+      "preferredFloatingSize": { "width": 340, "height": 720 },
+      "icons": [
+        {
+          "width": 23,
+          "height": 23,
+          "path": "icons/panel.png",
+          "scale": [1, 2],
+          "theme": ["darkest", "dark", "medium", "lightest", "light"],
+          "species": ["generic"]
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "width": 48,
+      "height": 48,
+      "path": "icons/plugin.png",
+      "scale": [1, 2],
+      "theme": ["darkest", "dark", "medium", "lightest", "light"],
+      "species": ["pluginList"]
+    }
+  ],
+  "requiredPermissions": {
+    "network": { "domains": "all" },
+    "localFileSystem": "request",
+    "launchProcess": { "schemes": ["https", "http"], "extensions": [] }
+  }
+}
