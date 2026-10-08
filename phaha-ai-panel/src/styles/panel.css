@@ -61,6 +61,7 @@ textarea.prompt, input.text {
   border-radius: 4px;
   padding: 6px 8px;
   font-size: 12px;
+  font-family: inherit;
 }
 textarea.prompt { height: 76px; }
 input.text { height: 28px; }
@@ -133,7 +134,7 @@ label.field { display: block; margin: 8px 0 3px 0; color: #a0a0a0; }
 .progress .bar { height: 3px; background-color: #7c5cff; border-radius: 2px; }
 
 /* Toast */
-.toasts { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 50; }
+.toasts { position: absolute; left: 8px; right: 8px; bottom: 44px; z-index: 50; }
 .toast { padding: 8px 10px; border-radius: 5px; margin-top: 6px; color: #fff; background-color: #3a3a3a; border-left: 4px solid #888; }
 .toast.success { border-left-color: #3fb27f; background-color: #23362d; }
 .toast.error { border-left-color: #e5534b; background-color: #3d2422; }

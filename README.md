@@ -20,6 +20,7 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `may-chu/` | Máy chủ nhắc giờ chạy trên Cloudflare: gửi thông báo kể cả khi app tắt |
 | `.github/workflows/may-chu.yml` | Tự động đưa máy chủ lên Cloudflare |
 | `dich-video/` | App **PhaHa lồng tiếng**: video tiếng Trung → dịch → lồng tiếng Việt (xem mục bên dưới) |
+| `phaha-ai-panel/` | **PhaHa AI** — panel AI sửa ảnh chạy trong Photoshop (xem `phaha-ai-panel/README.md`) |
 
 ## Khi sửa code
 
