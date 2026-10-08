@@ -60,13 +60,30 @@ export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
     const { text, voice } = await yeuCau.json();
     if (!text || String(text).length > 3000) return traLoi({ loi: "Chữ trống hoặc quá dài" }, 400);
     if (voice && !/^[a-z]{2}-[A-Z]{2}-\w+Neural$/.test(voice)) return traLoi({ loi: "Tên giọng không hợp lệ" }, 400);
+    const traMp3 = (mp3) => new Response(mp3, { headers: { "Content-Type": "audio/mpeg", "Access-Control-Allow-Origin": "*" } });
+    const thu = async (chu, soLan) => {
+      let loiCuoi;
+      for (let lan = 0; lan < soLan; lan++) {
+        try { return await docEdge(chu, voice || undefined); } catch (loi) { loiCuoi = loi; }
+        await new Promise((x) => setTimeout(x, 400 * (lan + 1)));
+      }
+      throw loiCuoi;
+    };
     let loiCuoi;
-    for (let lan = 0; lan < 2; lan++) {
-      try {
-        const mp3 = await docEdge(String(text), voice || undefined);
-        return new Response(mp3, { headers: { "Content-Type": "audio/mpeg", "Access-Control-Allow-Origin": "*" } });
-      } catch (loi) {
-        loiCuoi = loi;
+    try { return traMp3(await thu(String(text), 3)); } catch (loi) { loiCuoi = loi; }
+    // Edge hay ngắt giữa chừng với câu dài → chia đôi ở chỗ ngắt câu/khoảng trắng gần giữa, đọc từng nửa rồi nối MP3
+    const chu = String(text).trim();
+    if (chu.length >= 16) {
+      const giua = chu.length / 2;
+      const cho = [...chu.matchAll(/[,.;:!?…]\s|\s/g)].map((m) => m.index + m[0].length).filter((k) => k > 3 && k < chu.length - 3);
+      if (cho.length) {
+        const cat = cho.reduce((a, k) => (Math.abs(k - giua) < Math.abs(a - giua) ? k : a));
+        try {
+          const [a, b2] = [await thu(chu.slice(0, cat).trim(), 2), await thu(chu.slice(cat).trim(), 2)];
+          const ra = new Uint8Array(a.length + b2.length);
+          ra.set(a); ra.set(b2, a.length);
+          return traMp3(ra);
+        } catch (loi) { loiCuoi = loi; }
       }
     }
     return traLoi({ loi: String(loiCuoi?.message || loiCuoi) }, 502);

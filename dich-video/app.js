@@ -1948,18 +1948,28 @@ async function longTiengBang(dv) {
     await dangVeHinh;
   }
   const bd = Date.now();
+  // Edge (miễn phí, không chính thức) thỉnh thoảng ngắt kết nối ở vài câu → bỏ trống vài câu đó
+  // thay vì đổi giọng cả video; lỗi quá nhiều câu thì mới chuyển dịch vụ khác
+  const loiEdge = [], toiDaLoiEdge = Math.max(3, Math.ceil(cau.length * 0.1));
   await Promise.all(Array.from({ length: soLuong }, async () => {
     while (hang.length && !hong) {
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
       } catch (loi) {
+        if (dv === "edge" && /đóng kết nối|không trả về âm thanh|quá lâu|Lỗi kết nối/.test(loi.message) && loiEdge.length < toiDaLoiEdge) {
+          loiEdge.push(i);
+          cacGiong[i] = new Float32Array(0);
+          nhat(`⚠️ Edge không đọc được câu ${dongHo(cau[i].start)} «${cau[i].vi.slice(0, 60)}» → bỏ trống câu này (${loiEdge.length}/${toiDaLoiEdge} câu được phép bỏ)`);
+          continue;
+        }
         hong = true; // dừng các luồng khác, khỏi gửi thêm yêu cầu thừa
         throw loi;
       }
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   // Đặt từng câu vào đúng thời điểm. Câu Việt dài hơn chỗ trống thì đọc nhanh hơn (tối đa 1,6 lần);
   // vẫn dài thì câu sau LÙI lại một chút thay vì đè lên nhau (2 giọng chồng nhau nghe như mất chữ).
