@@ -2,3 +2,9 @@
 may-chu/.wrangler/
 may-chu/node_modules/
 may-chu/ket-qua.txt
+# Tool máy tính: cài đặt riêng (có mã bí mật) và file tạm
+may-tinh/cai-dat.json
+may-tinh/nhat-ky.txt
+may-tinh/nghe-thu.mp3
+may-tinh/.venv/
+__pycache__/

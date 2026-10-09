@@ -1,0 +1,4 @@
+requests
+yt-dlp
+edge-tts
+imageio-ffmpeg
