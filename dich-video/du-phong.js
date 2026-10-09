@@ -138,6 +138,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   };
 
   // ---------- DỊCH ----------
+  let lanTraLoiCuoi = ""; // câu trả lời thô gần nhất của AI dịch – ghi vào nhật ký khi dịch hỏng để biết vì sao
   function loiNhac(cau) {
     const ds = cau.map((c, i) => `${i + 1}. (${(c.end - c.start).toFixed(1)}s) ${c.zh}`).join("\n");
     return [
@@ -151,7 +152,21 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
       },
     ];
   }
+  // Một câu trả về có thể là chuỗi, hoặc object/mảng chứa cả câu gốc lẫn bản dịch
+  // (vd {"zh": "...", "vi": "..."}, ["原文", "bản dịch"]) → lấy chuỗi giống tiếng Việt nhất, không lấy nhầm câu gốc
+  function layLoiViet(x) {
+    if (x == null) return "";
+    if (typeof x !== "object") return String(x);
+    const uuTien = x.vi ?? x.vietnamese ?? x.translation ?? x.dich ?? x.ban_dich;
+    if (typeof uuTien === "string" && !chuaDich(uuTien)) return uuTien;
+    const cacChuoi = [];
+    const gom = (v) => (typeof v === "string" ? cacChuoi.push(v) : v && typeof v === "object" && Object.values(v).forEach(gom));
+    gom(x);
+    const diem = (t) => (t.match(/[a-zà-ỹđ]/gi) || []).length - 5 * (t.match(/[\u3400-\u9fff]/g) || []).length;
+    return cacChuoi.sort((m, n) => diem(n) - diem(m))[0] || "";
+  }
   function docKetQuaDich(chu, so) {
+    lanTraLoiCuoi = String(chu || "");
     chu = String(chu || "").replace(/<think>[\s\S]*?<\/think>/g, "");
     // Chấp nhận cả {"1": "...", "2": "..."}, ["...", "..."] và {"vi": ["...", ...]}
     const viTriObj = chu.indexOf("{"), viTriMang = chu.indexOf("[");
@@ -159,14 +174,22 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     const a = laMang ? viTriMang : viTriObj, b = chu.lastIndexOf(laMang ? "]" : "}");
     if (a < 0 || b < a) throw new Error("trả lời không đúng dạng");
     let j = JSON.parse(chu.slice(a, b + 1));
-    if (!Array.isArray(j)) {
-      const mang = Object.values(j).find((v) => Array.isArray(v));
-      if (mang && !("1" in j)) j = mang;
+    // Bọc thêm 1 lớp, vd {"translations": {...}} hoặc {"translations": [...]}
+    for (let lop = 0; lop < 3 && j && typeof j === "object" && !Array.isArray(j) && !("1" in j); lop++) {
+      const trong = Object.values(j).find((v) => v && typeof v === "object");
+      if (!trong) break;
+      j = trong;
+    }
+    // Mảng các object có số thứ tự riêng, vd [{"id": 3, "vi": "..."}] → xếp theo số thứ tự
+    if (Array.isArray(j) && j.every((x) => x && typeof x === "object" && !Array.isArray(x) && Number.isInteger(+(x.id ?? x.so ?? x.index ?? x.stt ?? x.n)))) {
+      const theoSo = {};
+      for (const x of j) theoSo[+(x.id ?? x.so ?? x.index ?? x.stt ?? x.n)] = x;
+      if (Object.keys(theoSo).length === j.length && theoSo[1]) j = theoSo;
     }
     const ra = [];
     for (let i = 1; i <= so; i++) {
       const x = Array.isArray(j) ? j[i - 1] : j[i] ?? j[String(i)];
-      ra.push(boChuTrung((typeof x === "object" && x ? x.vi ?? x.text ?? Object.values(x)[0] : x) ?? ""));
+      ra.push(boChuTrung(layLoiViet(x)));
     }
     const thieu = ra.filter((x) => !x).length;
     if (thieu > Math.max(1, so * 0.2)) throw new Error(`dịch thiếu ${thieu}/${so} câu`);
@@ -283,13 +306,52 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     throw new Error(`Gemini và mọi dịch vụ dự phòng đều không ${viec} được (hết lượt hoặc lỗi).\nCách xử lý: chờ đến mai, hoặc thêm dịch vụ khác trong ⚙️ Cài đặt → 🔁 Dự phòng.\nLỗi cuối: ${loiCuoi.message}`);
   }
 
+  // Dịch bù thật kỹ: dịch vụ đầu chưa dịch được câu nào thì thử dịch vụ kế tiếp,
+  // cuối cùng chia nhóm nhỏ 5 câu (AI ít bị "chép lại nguyên văn" hơn khi danh sách ngắn)
+  const THU_TU_DICH = ["deepseek", "groq", "cloudflare", "openrouter", "azure"];
+  async function dichBuKy(cau) {
+    const vi = new Array(cau.length).fill("");
+    const conLai = () => cau.map((c, k) => k).filter((k) => chuaDich(vi[k]));
+    let viDu = null, loiCuoi = null, daThu = 0;
+    const thu = async (n, cacSo) => {
+      const bd = Date.now();
+      const bu = await n.chay(cacSo.map((k) => cau[k]));
+      daThu++;
+      cacSo.forEach((k, j) => {
+        if (!chuaDich(bu[j])) vi[k] = bu[j];
+        else if (!viDu) viDu = { zh: cau[k].zh, ra: String(bu[j] || "(trống)"), tho: lanTraLoiCuoi };
+      });
+      nhat(`${n.ten} (dịch bù): ${cacSo.length - cacSo.filter((k) => chuaDich(vi[k])).length}/${cacSo.length} câu được dịch · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
+    };
+    for (const k of THU_TU_DICH) {
+      const n = DICH[k];
+      if (!conLai().length) break;
+      if (!n.co() || hong.has("dịch bù" + k)) continue;
+      try {
+        await thu(n, conLai());
+        // còn sót → chia nhóm 5 câu, dịch lại bằng chính dịch vụ này
+        for (let lan = 0; lan < 2 && conLai().length; lan++) {
+          const sot = conLai();
+          for (let i = 0; i < sot.length; i += 5) await thu(n, sot.slice(i, i + 5));
+        }
+      } catch (loi) {
+        loiCuoi = loi;
+        if (loi.hetLuot || /401|403|402/.test(String(loi.status))) hong.add("dịch bù" + k);
+        nhat(`↪️ ${n.ten} (dịch bù) không dùng được: ${loi.message.split("\n")[0]}`);
+      }
+    }
+    if (!daThu && loiCuoi) throw loiCuoi;
+    if (viDu && conLai().length) nhat(`Ví dụ câu AI trả về vẫn chưa phải tiếng Việt: «${viDu.zh}» → «${viDu.ra.slice(0, 80)}» · AI trả lời: ${viDu.tho.replace(/\s+/g, " ").slice(0, 200)}`);
+    return vi;
+  }
+
   return {
     goi, // gọi dịch vụ ngoài (tự đi vòng qua máy chủ PHAHA khi bị chặn) – dùng cho nút Kiểm tra mã
     // Có dịch vụ dự phòng nào dùng được không
     coDuPhong: () => Object.values(NGHE).some((n) => n.co()) && Object.values(DICH).some((n) => n.co()),
     batDauLanMoi: () => hong.clear(),
     // Dịch lại những câu chưa dịch được (vd Gemini trả về còn chữ Trung) → mảng lời Việt
-    dichBu: (cau) => thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(cau)),
+    dichBu: dichBuKy,
     // Nghe 1 đoạn âm thanh + dịch → [{start, end, zh, vi}] (giây, tính từ đầu đoạn)
     async ngheVaDich(wav, b64) {
       let cau = await thuLanLuot(NGHE, ["groq", "cloudflare", "azure"], "nghe", (n) => n.chay(wav, b64));
@@ -299,15 +361,13 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
       const ra = [];
       for (let i = 0; i < cau.length; i += 40) {
         const nhom = cau.slice(i, i + 40);
-        const vi = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch", (n) => n.chay(nhom));
+        const vi = await thuLanLuot(DICH, THU_TU_DICH, "dịch", (n) => n.chay(nhom));
         // Câu nào AI bỏ sót → dịch bù riêng những câu đó (không lặng lẽ bỏ qua)
         const sot = nhom.map((c, k) => k).filter((k) => chuaDich(vi[k]));
         if (sot.length) {
           nhat(`Dịch bù ${sot.length} câu bị sót hoặc còn chữ Trung`);
           try {
-            const bu = await thuLanLuot(DICH, ["deepseek", "groq", "cloudflare", "openrouter", "azure"], "dịch bù", (n) => n.chay(sot.map((k) => nhom[k])));
-            const k0 = sot.find((k, j) => chuaDich(bu[j]));
-            if (k0 !== undefined) nhat(`Ví dụ câu AI trả về vẫn chưa phải tiếng Việt: «${nhom[k0].zh}» → «${String(bu[sot.indexOf(k0)] || "(trống)").slice(0, 80)}»`);
+            const bu = await dichBuKy(sot.map((k) => nhom[k]));
             sot.forEach((k, j) => (vi[k] = chuaDich(bu[j]) ? "" : bu[j]));
           } catch (loi) {
             nhat("Dịch bù không được: " + loi.message.split("\n")[0]);

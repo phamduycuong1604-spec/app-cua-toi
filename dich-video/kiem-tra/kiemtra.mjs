@@ -115,6 +115,10 @@ async function chay(ten, o) {
     if (o.dsHet) return rt.fulfill({ status: 402, headers: J, body: JSON.stringify({ error: { message: "Insufficient Balance" } }) });
     const b = JSON.parse(rt.request().postData()); goi.dsModel = b.model; goi.dsJson = b.response_format?.type;
     goi.dsLoiDan = b.messages?.[0]?.content?.slice(0, 400);
+    const dongDs = (b.messages?.[1]?.content || "").split("\n").map((l) => /^(\d+)\. \([\d.]+s\) (.*)$/.exec(l)).filter(Boolean);
+    if (o.dsChep) { dem("dsChep"); return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], m[2]]))) } }] }) }); }
+    if (o.dsDang === "boc") return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ translations: dongDs.map((m) => ({ id: +m[1], zh: m[2], text: "Câu " + m[1] + " đã dịch (bọc)" })) }) } }] }) });
+    if (o.dsDang === "mang") return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], [m[2], "Câu " + m[1] + " đã dịch (mảng)"]]))) } }] }) });
     if (o.dsTrung && (goi.ds || 0) <= 1) return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ "1": "你好朋友", "2": "Cảm ơn (DS)" }) } }] }) });
     if (o.dsTrung) return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ "1": "Xin chào bạn (bù)" }) } }] }) });
     if (o.dsThieu && (goi.ds || 0) <= 1) return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ "1": "Chào bạn (DS)" }) } }] }) });
@@ -216,6 +220,9 @@ const KICH_BAN = {
   "33c-viettel-cau-rong": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, vt: { khoa: "vt-ok", giong: "hn-quynhanh" } } },
       cau: [{ start: 1, end: 3, zh: "你好", vi: "Xin chào bạn" }, { start: 4, end: 5, zh: "好的", vi: "好的" }, { start: 5.5, end: 6.5, zh: "嗯", vi: "#~" }, { start: 7, end: 8.5, zh: "再见", vi: "Tạm biệt" }] },
   "4g-giong-may-cho-chen-chu": { caiDat: { ...CD, bat: DU, tachNhac: true, lop: LOP, dv: { el: CD.dv.el } }, logo: true, elHet: 0, gemTTS: "het", edge: "hong", han: 600000 },
+  "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
+  "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
+  "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },
   "29f-deepseek-dich-bu": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsThieu: true },
   "29g-deepseek-tra-chu-trung": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsTrung: true },
   "29h-gemini-con-chu-trung": { caiDat: { ...CD, dp: { groq: "gsk" } }, cau: [{ start: 1, end: 3, zh: "你好朋友", vi: "你好朋友" }, { start: 4, end: 5.5, zh: "谢谢", vi: "Cảm ơn nhé" }] },
