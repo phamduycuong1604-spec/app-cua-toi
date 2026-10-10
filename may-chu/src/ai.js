@@ -4,11 +4,14 @@
 //  /ai/nghe   : nghe tiếng Trung bằng Whisper của Cloudflare (miễn phí 10.000 "neuron"/ngày)
 //  /ai/dich   : dịch chữ bằng mô hình ngôn ngữ của Cloudflare
 //  /ai/edge   : đọc tiếng Việt bằng giọng "Đọc to" của Edge (miễn phí, trả về MP3)
+//  /ai/rednote     : dán link RedNote → tìm địa chỉ file video trong bài
+//  /ai/rednote-tai : tải hộ file video đó về app
 //  /ai/chuyen : chuyển tiếp yêu cầu tới Groq / OpenRouter / Azure khi trình duyệt
 //               không gọi thẳng được (bị chặn CORS)
 // =====================================================
 import { xacThuc } from "./tai-khoan.js";
 import { docEdge } from "./edge-tts.js";
+import { layThongTinRednote, taiVideoRednote } from "./rednote.js";
 
 const MO_HINH_NGHE = "@cf/openai/whisper-large-v3-turbo";
 const MO_HINH_DICH = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/qwen/qwen3-30b-a3b-fp8"];
@@ -54,6 +57,23 @@ export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
       }
     }
     return traLoi({ loi: String(loiCuoi?.message || loiCuoi) }, 502);
+  }
+
+  if (duongDan === "/ai/rednote" && yeuCau.method === "POST") {
+    try {
+      const { link } = await yeuCau.json();
+      return traLoi(await layThongTinRednote(link));
+    } catch (loi) {
+      return traLoi({ loi: String(loi.message || loi) }, loi.ma || 502);
+    }
+  }
+  if (duongDan === "/ai/rednote-tai" && yeuCau.method === "POST") {
+    try {
+      const { cacLink } = await yeuCau.json();
+      return await taiVideoRednote(Array.isArray(cacLink) ? cacLink : []);
+    } catch (loi) {
+      return traLoi({ loi: String(loi.message || loi) }, loi.ma || 502);
+    }
   }
 
   if (duongDan === "/ai/edge" && yeuCau.method === "POST") {
