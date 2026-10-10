@@ -62,16 +62,29 @@ export function chonVideo(bai) {
 // Đi theo từng bước chuyển hướng (tối đa 6), không cho nhảy ra ngoài RedNote; giữ nguyên xsec_token trong link
 async function moTrang(link, ua) {
   let url = new URL(link.href);
+  const duong = []; // các trang đã đi qua (chỉ tên miền + đường dẫn, không ghi mã) – để biết bị chặn ở bước nào
   for (let buoc = 0; buoc <= 6; buoc++) {
+    duong.push(url.hostname.replace(/^www\./, "") + url.pathname);
     const r = await fetch(url.href, { headers: { "User-Agent": ua, "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8", Accept: "text/html,application/xhtml+xml" }, redirect: "manual" });
     const den = r.status >= 300 && r.status < 400 && r.headers.get("location");
-    if (!den) return { r, html: await r.text(), cuoi: url };
+    if (!den) return { r, html: await r.text(), cuoi: url, duong };
     const tiep = new URL(den, url);
     if (!TRANG_DUOC_MO.test(tiep.hostname)) throw Object.assign(new Error("Link RedNote chuyển sang trang ngoài (" + tiep.hostname + ") – không mở."), { ma: 400 });
     url = tiep;
-    if (TRANG_CHAN.test(url.pathname)) return { r, html: "", cuoi: url };
+    if (TRANG_CHAN.test(url.pathname)) { duong.push(url.hostname.replace(/^www\./, "") + url.pathname); return { r, html: "", cuoi: url, duong }; }
   }
   throw Object.assign(new Error("Link RedNote chuyển hướng quá nhiều lần."), { ma: 502 });
+}
+
+// Trong địa chỉ trang đăng nhập, tìm tham số chứa đường dẫn bài viết (vd ?redirectPath=https://www.xiaohongshu.com/discovery/item/…)
+function timLinkBai(url) {
+  for (const v of url.searchParams.values()) {
+    try {
+      const u = new URL(v, "https://www.xiaohongshu.com");
+      if (TRANG_DUOC_MO.test(u.hostname) && /\/(explore|discovery\/item|item)\/[0-9a-f]{16,}/i.test(u.pathname)) return u;
+    } catch {}
+  }
+  return null;
 }
 
 export async function layThongTinRednote(chu) {
@@ -82,10 +95,18 @@ export async function layThongTinRednote(chu) {
   for (const ua of [UA_IPHONE, UA]) {
     trang = await moTrang(link, ua);
     if (!TRANG_CHAN.test(trang.cuoi.pathname)) break;
+    // Link rút gọn có thể chuyển thẳng tới trang đăng nhập, kèm địa chỉ bài viết trong tham số → mở thẳng trang bài đó
+    const bai = timLinkBai(trang.cuoi);
+    if (bai && !trang.duong.includes(bai.hostname.replace(/^www\./, "") + bai.pathname)) {
+      const thu = await moTrang(bai, ua);
+      thu.duong = [...trang.duong, ...thu.duong];
+      trang = thu;
+      if (!TRANG_CHAN.test(trang.cuoi.pathname)) break;
+    }
   }
   const { r, html, cuoi } = trang;
   // Vẫn bị đưa tới trang đăng nhập / xác minh → không cố vượt qua, báo cách tải tay
-  if (TRANG_CHAN.test(cuoi.pathname)) throw Object.assign(new Error(`RedNote chặn máy chủ tải hộ (bị đưa tới trang ${cuoi.pathname}). Cách nhanh: trong app RedNote bấm Chia sẻ → Lưu video (保存视频), rồi bấm 🎬 Chọn video ở trên và chọn video vừa lưu.`), { ma: 403 });
+  if (TRANG_CHAN.test(cuoi.pathname)) throw Object.assign(new Error(`RedNote chặn máy chủ tải hộ (đường đi: ${trang.duong.join(" → ")}). Cách nhanh: trong app RedNote bấm Chia sẻ → Lưu video (保存视频), rồi bấm 🎬 Chọn video ở trên và chọn video vừa lưu.`), { ma: 403 });
   const tt = docTrangThai(html);
   const bai = timBaiViet(tt);
   // Dự phòng: một số trang chỉ có thẻ og:video
