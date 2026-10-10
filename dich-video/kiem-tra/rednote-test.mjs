@@ -18,6 +18,10 @@ globalThis.fetch = async (url, o) => {
   if (u.includes("xhslink.com/a/")) return chuyen("https://www.xiaohongshu.com/discovery/item/abc?xsec_token=T1&xsec_source=app_share");
   if (u.includes("xhslink.com/ra/")) return chuyen("https://evil.com/x");
   if (u.includes("/discovery/item/abc")) { kq.push("   trang: " + u.split("?")[1]); return html(trang(ttMay)); }
+  if (u.includes("xhslink.com/o/")) return chuyen("https://www.xiaohongshu.com/login?redirectPath=" + encodeURIComponent("https://www.xiaohongshu.com/discovery/item/68e0aa11bb22cc33dd44ee55?xsec_token=T2"));
+  if (u.includes("/discovery/item/68e0aa11bb22cc33dd44ee55")) return html(trang(ttMay));
+  if (u.includes("xhslink.com/khoa/")) return chuyen("https://www.xiaohongshu.com/discovery/item/68e0aa11bb22cc33dd44ee66?xsec_token=T3");
+  if (u.includes("/discovery/item/68e0aa11bb22cc33dd44ee66")) return chuyen("/login?redirectPath=" + encodeURIComponent("/discovery/item/68e0aa11bb22cc33dd44ee66"));
   if (u.includes("/explore/chanIphone")) return /iPhone/.test(ua) ? chuyen("/website-login/captcha?x=1") : html(trang(ttMay));
   if (trangGia[u]) return trangGia[u].den ? chuyen(trangGia[u].den) : html(trangGia[u].html);
   if (u.includes("xhscdn.com")) {
@@ -37,7 +41,7 @@ ok("lấy tiêu đề", t1.tieuDe === "调色教程");
 trangGia["https://www.xiaohongshu.com/explore/anh1"] = { html: trang(ttAnh).replace(/<meta[^>]+>/, "") };
 await layThongTinRednote("https://www.xiaohongshu.com/explore/anh1").then(() => ok("bài ảnh báo lỗi", false), (e) => ok("bài ảnh báo lỗi: " + e.message, /ảnh/.test(e.message)));
 trangGia["https://www.xiaohongshu.com/explore/dn"] = { den: "https://www.xiaohongshu.com/login?redirect=x" };
-await layThongTinRednote("https://www.xiaohongshu.com/explore/dn").then(() => ok("bắt đăng nhập", false), (e) => ok("bắt đăng nhập: " + e.message, /Lưu video/.test(e.message)));
+await layThongTinRednote("https://www.xiaohongshu.com/explore/dn").then(() => ok("bắt đăng nhập", false), (e) => ok("bắt đăng nhập: " + e.message, /Lưu video/.test(e.message) && /đường đi/.test(e.message)));
 await layThongTinRednote("không có link").then(() => ok("không có link", false), (e) => ok("không có link: " + e.message, e.ma === 400));
 ok("bỏ dấu câu cuối link", layLink("xem http://xhslink.com/a/AbC123.")?.href === "http://xhslink.com/a/AbC123");
 ok("không nhận link có mật khẩu / cổng lạ", layLink("https://a:b@www.xiaohongshu.com/x") === null && layLink("https://www.xiaohongshu.com:8080/x") === null);
@@ -45,6 +49,9 @@ ok("không nhận địa chỉ IP", layLink("http://1.2.3.4/x") === null);
 const t2 = await layThongTinRednote("https://www.xiaohongshu.com/explore/chanIphone");
 ok("iPhone bị chặn → thử lại như máy tính được", t2.cacLink.length === 5);
 await layThongTinRednote("http://xhslink.com/ra/xyz").then(() => ok("chặn chuyển hướng ra ngoài", false), (e) => ok("chặn chuyển hướng ra ngoài: " + e.message, /ngoài/.test(e.message)));
+const t3 = await layThongTinRednote("http://xhslink.com/o/7aiSEg5Upri");
+ok("link /o/ chuyển thẳng tới đăng nhập → mở thẳng trang bài", t3.cacLink.length === 5);
+await layThongTinRednote("http://xhslink.com/khoa/abc").then(() => ok("bài thật sự bắt đăng nhập", false), (e) => ok("bài thật sự bắt đăng nhập (không lặp): " + e.message.split(".")[0], /đường đi: xhslink\.com\/khoa\/abc → xiaohongshu\.com\/discovery/.test(e.message)));
 const r = await taiVideoRednote(["https://evil.com/a.mp4", "https://sns-video-hw.xhscdn.com/h265.mp4", "https://sns-video-bd.xhscdn.com/h264.mp4"]);
 const byte = new Uint8Array(await r.arrayBuffer());
 ok("tải: bỏ link lạ, link lỗi thì thử link sau, đủ byte", byte.length === MP4.length && byte[14] === 3 && r.headers.get("Content-Type") === "video/mp4");
