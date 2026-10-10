@@ -10,12 +10,22 @@ const ttMay = JSON.stringify({ note: { noteDetailMap: { abc: { note: { type: "vi
 const ttAnh = JSON.stringify({ note: { noteDetailMap: { a: { note: { type: "normal", title: "Ảnh" } } } } });
 
 let trangGia = {};
+const MP4 = new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112, 105, 115, 111, 109, 1, 2, 3]); // "....ftypisom…"
+const chuyen = (den) => new Response(null, { status: 302, headers: { location: den } });
+const html = (x) => new Response(x, { headers: { "content-type": "text/html" } });
 globalThis.fetch = async (url, o) => {
-  const u = String(url);
-  if (u.includes("xhslink.com")) return { status: 200, url: "https://www.xiaohongshu.com/discovery/item/abc", text: async () => trang(ttMay) };
-  if (u.includes("/login")) return { status: 200, url: u, text: async () => "" };
-  if (trangGia[u]) return { status: 200, url: trangGia[u].url || u, text: async () => trangGia[u].html };
-  if (u.includes("xhscdn.com")) { kq.push("   tải: " + u + " · Referer " + o.headers.Referer); return u.includes("h264.mp4") ? new Response("VIDEO", { headers: { "content-length": "5" } }) : new Response("", { status: 403 }); }
+  const u = String(url), ua = o.headers["User-Agent"];
+  if (u.includes("xhslink.com/a/")) return chuyen("https://www.xiaohongshu.com/discovery/item/abc?xsec_token=T1&xsec_source=app_share");
+  if (u.includes("xhslink.com/ra/")) return chuyen("https://evil.com/x");
+  if (u.includes("/discovery/item/abc")) { kq.push("   trang: " + u.split("?")[1]); return html(trang(ttMay)); }
+  if (u.includes("/explore/chanIphone")) return /iPhone/.test(ua) ? chuyen("/website-login/captcha?x=1") : html(trang(ttMay));
+  if (trangGia[u]) return trangGia[u].den ? chuyen(trangGia[u].den) : html(trangGia[u].html);
+  if (u.includes("xhscdn.com")) {
+    kq.push("   tải: " + u + " · Referer " + o.headers.Referer);
+    if (u.includes("h264.mp4")) return new Response(MP4, { headers: { "content-length": String(MP4.length) } });
+    if (u.includes("loi.html")) return new Response("<html>bị chặn</html>");
+    return new Response("", { status: 403 });
+  }
   throw new Error("không mong đợi " + u);
 };
 
@@ -26,10 +36,18 @@ ok("chọn h264 trước, rồi h265, link gốc, og:video", JSON.stringify(t1.c
 ok("lấy tiêu đề", t1.tieuDe === "调色教程");
 trangGia["https://www.xiaohongshu.com/explore/anh1"] = { html: trang(ttAnh).replace(/<meta[^>]+>/, "") };
 await layThongTinRednote("https://www.xiaohongshu.com/explore/anh1").then(() => ok("bài ảnh báo lỗi", false), (e) => ok("bài ảnh báo lỗi: " + e.message, /ảnh/.test(e.message)));
-trangGia["https://www.xiaohongshu.com/explore/dn"] = { url: "https://www.xiaohongshu.com/login?redirect=x", html: "" };
+trangGia["https://www.xiaohongshu.com/explore/dn"] = { den: "https://www.xiaohongshu.com/login?redirect=x" };
 await layThongTinRednote("https://www.xiaohongshu.com/explore/dn").then(() => ok("bắt đăng nhập", false), (e) => ok("bắt đăng nhập: " + e.message, /Lưu video/.test(e.message)));
 await layThongTinRednote("không có link").then(() => ok("không có link", false), (e) => ok("không có link: " + e.message, e.ma === 400));
+ok("bỏ dấu câu cuối link", layLink("xem http://xhslink.com/a/AbC123.")?.href === "http://xhslink.com/a/AbC123");
+ok("không nhận link có mật khẩu / cổng lạ", layLink("https://a:b@www.xiaohongshu.com/x") === null && layLink("https://www.xiaohongshu.com:8080/x") === null);
+ok("không nhận địa chỉ IP", layLink("http://1.2.3.4/x") === null);
+const t2 = await layThongTinRednote("https://www.xiaohongshu.com/explore/chanIphone");
+ok("iPhone bị chặn → thử lại như máy tính được", t2.cacLink.length === 5);
+await layThongTinRednote("http://xhslink.com/ra/xyz").then(() => ok("chặn chuyển hướng ra ngoài", false), (e) => ok("chặn chuyển hướng ra ngoài: " + e.message, /ngoài/.test(e.message)));
 const r = await taiVideoRednote(["https://evil.com/a.mp4", "https://sns-video-hw.xhscdn.com/h265.mp4", "https://sns-video-bd.xhscdn.com/h264.mp4"]);
-ok("tải: bỏ link lạ, link lỗi thì thử link sau", (await r.text()) === "VIDEO" && r.headers.get("Content-Length") === "5");
+const byte = new Uint8Array(await r.arrayBuffer());
+ok("tải: bỏ link lạ, link lỗi thì thử link sau, đủ byte", byte.length === MP4.length && byte[14] === 3 && r.headers.get("Content-Type") === "video/mp4");
+await taiVideoRednote(["https://sns-video-bd.xhscdn.com/loi.html"]).then(() => ok("từ chối trang web giả làm video", false), (e) => ok("từ chối trang web giả làm video: " + e.message, /không phải video/.test(e.message)));
 await taiVideoRednote(["https://evil.com/a.mp4"]).then(() => ok("chặn tải từ trang lạ", false), (e) => ok("chặn tải từ trang lạ", e.ma === 502));
 console.log(kq.join("\n"));
