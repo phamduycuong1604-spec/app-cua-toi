@@ -27,7 +27,7 @@ ok("lấy tiêu đề", t1.tieuDe === "调色教程");
 trangGia["https://www.xiaohongshu.com/explore/anh1"] = { html: trang(ttAnh).replace(/<meta[^>]+>/, "") };
 await layThongTinRednote("https://www.xiaohongshu.com/explore/anh1").then(() => ok("bài ảnh báo lỗi", false), (e) => ok("bài ảnh báo lỗi: " + e.message, /ảnh/.test(e.message)));
 trangGia["https://www.xiaohongshu.com/explore/dn"] = { url: "https://www.xiaohongshu.com/login?redirect=x", html: "" };
-await layThongTinRednote("https://www.xiaohongshu.com/explore/dn").then(() => ok("bắt đăng nhập", false), (e) => ok("bắt đăng nhập: " + e.message, /đăng nhập/.test(e.message)));
+await layThongTinRednote("https://www.xiaohongshu.com/explore/dn").then(() => ok("bắt đăng nhập", false), (e) => ok("bắt đăng nhập: " + e.message, /Lưu video/.test(e.message)));
 await layThongTinRednote("không có link").then(() => ok("không có link", false), (e) => ok("không có link: " + e.message, e.ma === 400));
 const r = await taiVideoRednote(["https://evil.com/a.mp4", "https://sns-video-hw.xhscdn.com/h265.mp4", "https://sns-video-bd.xhscdn.com/h264.mp4"]);
 ok("tải: bỏ link lạ, link lỗi thì thử link sau", (await r.text()) === "VIDEO" && r.headers.get("Content-Length") === "5");
