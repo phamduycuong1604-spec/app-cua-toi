@@ -62,7 +62,8 @@ export async function layThongTinRednote(chu) {
   const r = await fetch(link.href, { headers: { "User-Agent": UA, "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8", Accept: "text/html" }, redirect: "follow" });
   const html = await r.text();
   const cuoi = new URL(r.url || link.href);
-  if (/\/(login|website-login)/.test(cuoi.pathname)) throw Object.assign(new Error("RedNote bắt đăng nhập mới xem được bài này – hãy tải video bằng tay rồi chọn file."), { ma: 403 });
+  // RedNote chặn máy chủ (trang đăng nhập / xác minh chống máy tự động) → không cố vượt qua, báo cách tải tay
+  if (/\/(login|website-login|captcha|404)/.test(cuoi.pathname)) throw Object.assign(new Error("RedNote chặn máy chủ tải hộ (bắt đăng nhập/xác minh). Cách nhanh: trong app RedNote bấm Chia sẻ → Lưu video (保存视频), rồi bấm 🎬 Chọn video ở trên và chọn video vừa lưu."), { ma: 403 });
   const tt = docTrangThai(html);
   const bai = timBaiViet(tt);
   // Dự phòng: một số trang chỉ có thẻ og:video
