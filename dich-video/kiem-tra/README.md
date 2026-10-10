@@ -16,6 +16,7 @@ node kiemtra.mjs                 # tất cả kịch bản (~45, mất 15–25 p
 node kiemtra.mjs 1- 29 33        # chỉ các kịch bản có tên bắt đầu bằng 1-, 29, 33
 node dongbo-test.mjs             # đồng bộ cài đặt giữa 2 máy
 node dongbo-test2.mjs            # tình huống từng làm mất dữ liệu đồng bộ (đã sửa)
+node rednote-test.mjs             # máy chủ đọc link RedNote (giả lập trang, không cần mạng)
 ```
 Biến môi trường: `PLAYWRIGHT` (đường dẫn playwright/index.mjs nếu khác `/opt/node-tools/...`),
 `S` (thư mục dữ liệu, mặc định `du-lieu/`).

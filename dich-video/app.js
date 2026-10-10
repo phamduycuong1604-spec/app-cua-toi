@@ -178,7 +178,57 @@ function moTaMay() {
 // =====================================================
 $("o-video").addEventListener("change", (e) => {
   const tep = e.target.files[0];
-  if (!tep) return;
+  if (tep) nhanVideo(tep);
+});
+
+// ----- Tải video từ link RedNote (小红书): máy chủ PHAHA tìm file video trong bài rồi tải hộ -----
+const LINK_REDNOTE = /https?:\/\/[^\s，。]*(xiaohongshu\.com|xhslink\.com|rednote\.com)/i;
+let dangTaiLink = false;
+async function taiTuLink() {
+  const chu = $("o-link").value.trim();
+  const tt = $("tt-tai-link");
+  const bao = (x) => { tt.textContent = x; tt.classList.remove("an"); };
+  if (dangTaiLink || dangChay) return;
+  if (!LINK_REDNOTE.test(chu)) return bao("⚠️ Chưa thấy link RedNote. Trong RedNote bấm Chia sẻ → Sao chép link, rồi dán vào ô trên.");
+  if (!coMayChu() || !daDangNhap()) return bao("⚠️ Cần đăng nhập app PHAHA (tab Lịch việc) để tải video từ link.");
+  dangTaiLink = true;
+  $("nut-tai-link").disabled = true;
+  try {
+    bao("⏳ Đang tìm video trong bài…");
+    const goiMayChu = (duong, than) => fetch(DIA_CHI_MAY_CHU + duong, { method: "POST", headers: { "Content-Type": "application/json", "X-Ve": veDangNhap() }, body: JSON.stringify(than) });
+    const r1 = await goiMayChu("/ai/rednote", { link: chu });
+    const j = await r1.json().catch(() => ({}));
+    if (!r1.ok) throw new Error(r1.status === 401 ? "Phiên đăng nhập PHAHA đã hết hạn – mở tab Lịch việc để đăng nhập lại." : j.loi || `Máy chủ báo lỗi ${r1.status}`);
+    bao(`⏳ Đang tải video${j.tieuDe ? " «" + j.tieuDe + "»" : ""}…`);
+    const r2 = await goiMayChu("/ai/rednote-tai", { cacLink: j.cacLink });
+    if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).loi || `Tải video lỗi ${r2.status}`);
+    const tong = +r2.headers.get("content-length") || 0;
+    const doc = r2.body.getReader(), manh = [];
+    let da = 0;
+    for (;;) {
+      const { done, value } = await doc.read();
+      if (done) break;
+      manh.push(value);
+      da += value.length;
+      bao(`⏳ Đang tải video: ${(da / 1048576).toFixed(1)}MB${tong ? ` / ${(tong / 1048576).toFixed(1)}MB (${Math.round((da / tong) * 100)}%)` : ""}`);
+    }
+    if (da < 10000) throw new Error("File tải về quá nhỏ, không phải video.");
+    const ten = `${(j.tieuDe || "video").replace(/[\\/:*?"<>|]/g, "").trim() || "video"} - rednote.mp4`;
+    nhanVideo(new File(manh, ten, { type: "video/mp4" }));
+    bao(`✅ Đã tải xong ${(da / 1048576).toFixed(1)}MB – bấm ▶ Bắt đầu để dịch`);
+    $("o-link").value = "";
+  } catch (loi) {
+    bao("❌ " + loi.message);
+  } finally {
+    dangTaiLink = false;
+    $("nut-tai-link").disabled = false;
+  }
+}
+$("nut-tai-link").addEventListener("click", taiTuLink);
+// Dán link vào là tự tải luôn, không cần bấm nút
+$("o-link").addEventListener("paste", () => setTimeout(() => LINK_REDNOTE.test($("o-link").value) && taiTuLink(), 50));
+
+function nhanVideo(tep) {
   tepVideo = tep;
   cacCau = [];
   videoKetQua = null;
@@ -194,7 +244,7 @@ $("o-video").addEventListener("change", (e) => {
   // Tải sẵn bộ xử lý video trong lúc người dùng chỉnh tuỳ chọn → bấm Bắt đầu chạy ngay
   if (!dangChay) taiFfmpeg().catch(() => {});
   xem.onloadeddata = xem.onseeked = xem.onpause = () => veXemTruoc();
-});
+}
 
 $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));

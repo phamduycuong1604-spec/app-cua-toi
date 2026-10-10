@@ -66,6 +66,11 @@ main { max-width: 640px; margin: 0 auto; }
   word-break: break-word;
 }
 .nut-chon-video .bieu-tuong { font-size: 36px; }
+.o-link { display: flex; gap: 8px; margin-top: 10px; }
+.o-link input { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--vien); border-radius: 12px; font: inherit; font-size: 16px; background: var(--nen); color: var(--chu); }
+.o-link button { padding: 0 14px; border: none; border-radius: 12px; background: var(--bac-ha); color: #fff; font-weight: 600; font-size: 15px; white-space: nowrap; }
+.o-link button:disabled { opacity: .5; }
+.tt-tai-link { margin: 6px 2px 0; font-size: 14px; word-break: break-word; }
 .khung-video { width: 100%; max-height: 60vh; border-radius: 14px; background: #000; margin-top: 12px; }
 
 .nut-chinh, .nut-phu {

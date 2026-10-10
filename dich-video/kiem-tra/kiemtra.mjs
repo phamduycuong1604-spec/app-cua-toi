@@ -78,6 +78,11 @@ async function chay(ten, o) {
     if (!u.includes("/ai/")) return rt.fulfill({ headers: J, body: "{}" });
     dem("cf");
     if (h["x-ve"] !== "VE") return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: "Cần đăng nhập" }) });
+    if (u.endsWith("/ai/rednote")) { dem("rnTim"); goi.rnLink = JSON.parse(rt.request().postData()).link;
+      if (o.link === "anh") return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ loi: "Bài RedNote này là ảnh, không có video." }) });
+      return rt.fulfill({ headers: J, body: JSON.stringify({ cacLink: ["https://sns-video-bd.xhscdn.com/a.mp4"], tieuDe: "调色/教程" }) }); }
+    if (u.endsWith("/ai/rednote-tai")) { dem("rnTai"); goi.rnCacLink = JSON.parse(rt.request().postData()).cacLink;
+      return rt.fulfill({ headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "Content-Length", "Content-Type": "video/mp4" }, body: fs.readFileSync(`${S}/${o.video || "thu-vp9.mp4"}`) }); }
     if (u.endsWith("/ai/edge")) { dem("edge"); goi.edgeGiong = JSON.parse(rt.request().postData()).voice;
       if (o.edge === "roi" && /Cảm ơn/.test(JSON.parse(rt.request().postData()).text)) { dem("edgeRoi"); return rt.fulfill({ status: 502, headers: J, body: JSON.stringify({ loi: "Edge đóng kết nối (mã 1006 WebSocket disconnected without sending Close frame.; nhận: turn.start,response)" }) }); }
       if (o.edge === "hong") return rt.fulfill({ status: 502, headers: J, body: JSON.stringify({ loi: "Edge từ chối kết nối (mã 403)" }) });
@@ -137,6 +142,15 @@ async function chay(ten, o) {
   }
   if (o.chiCaiDat) return ngheThu(p, goi, loiTrang, ten);
   if (o.doiMa) { await p.click("#nut-cai-dat"); await p.fill("#o-khoa", o.doiMa); await p.click("#hop-cai-dat button[value=luu]"); }
+  if (o.link) {
+    // Dán link chia sẻ RedNote → app tự tải video, không chọn file
+    await p.focus("#o-link");
+    await p.evaluate(() => { const o = document.getElementById("o-link"); o.value = "看看这个 http://xhslink.com/a/AbC123，复制本条信息"; o.dispatchEvent(new Event("paste")); });
+    await p.waitForFunction(() => /✅|❌/.test(document.getElementById("tt-tai-link").textContent), null, { timeout: 30000 });
+    goi.rnTrangThai = await p.textContent("#tt-tai-link");
+    goi.rnTen = await p.textContent("#chu-chon-video");
+    if (o.link === "anh") { await p.close(); return { ten, goi, loiTrang, nhatKy: "" }; }
+  } else
   await p.setInputFiles("#o-video", `${S}/${o.video || "thu-vp9.mp4"}`);
   const t0 = Date.now();
   await p.click("#nut-bat-dau");
@@ -220,6 +234,8 @@ const KICH_BAN = {
   "33c-viettel-cau-rong": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, vt: { khoa: "vt-ok", giong: "hn-quynhanh" } } },
       cau: [{ start: 1, end: 3, zh: "你好", vi: "Xin chào bạn" }, { start: 4, end: 5, zh: "好的", vi: "好的" }, { start: 5.5, end: 6.5, zh: "嗯", vi: "#~" }, { start: 7, end: 8.5, zh: "再见", vi: "Tạm biệt" }] },
   "4g-giong-may-cho-chen-chu": { caiDat: { ...CD, bat: DU, tachNhac: true, lop: LOP, dv: { el: CD.dv.el } }, logo: true, elHet: 0, gemTTS: "het", edge: "hong", han: 600000 },
+  "34-tai-link-rednote": { caiDat: CD, link: true },
+  "34b-link-rednote-la-anh": { caiDat: CD, link: "anh" },
   "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
   "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
   "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },
