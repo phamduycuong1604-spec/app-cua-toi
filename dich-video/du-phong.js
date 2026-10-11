@@ -331,8 +331,10 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
         await thu(n, conLai());
         // còn sót → chia nhóm 5 câu, dịch lại bằng chính dịch vụ này
         for (let lan = 0; lan < 2 && conLai().length; lan++) {
-          const sot = conLai();
-          for (let i = 0; i < sot.length; i += 5) await thu(n, sot.slice(i, i + 5));
+          const sot = conLai(), nhom = [];
+          for (let i = 0; i < sot.length; i += 5) nhom.push(sot.slice(i, i + 5));
+          // gửi 3 nhóm cùng lúc cho nhanh
+          await Promise.all([0, 1, 2].map(async () => { while (nhom.length) await thu(n, nhom.shift()); }));
         }
       } catch (loi) {
         loiCuoi = loi;

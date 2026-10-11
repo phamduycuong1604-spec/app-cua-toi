@@ -132,7 +132,7 @@ async function chay(ten, o) {
   await p.route("https://openrouter.ai/**", (rt) => { dem("or"); rt.fulfill({ headers: J, body: JSON.stringify(rt.request().url().endsWith("/models") ? { data: [{ id: "deepseek/x:free" }] } : { choices: [{ message: { content: "Kết quả: " + DICH } }] }) }); });
 
   await p.goto("http://localhost:8780/dich-video/");
-  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
+  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
     [{ ...o.caiDat, __khongVe: o.khongVe }, o.logo ? "data:image/png;base64," + fs.readFileSync(`${S}/logo.png`).toString("base64") : null]);
   await p.reload();
   if (o.kiemMa) {
@@ -256,6 +256,8 @@ const KICH_BAN = {
     } },
   "4e-google-het-chirp": { caiDat: { ...CD, dv: { ...CD.dv, gc: { giong: "vi-VN-Chirp3-HD-Aoede", ds: [{ ten: "vi-VN-Chirp3-HD-Aoede", nhan: "Tự nhiên nhất · Nữ · Chirp3-HD-Aoede" }, { ten: "vi-VN-Wavenet-B", nhan: "Tốt, rẻ · Nam · Wavenet-B" }, { ten: "vi-VN-Wavenet-A", nhan: "Tốt, rẻ · Nữ · Wavenet-A" }] } },
       __kyTu: { thang: new Date().toISOString().slice(0, 7), "gc-hd": 995000 } }, sau: async (p, kq) => { kq.dem = await p.evaluate(() => localStorage.getItem("phaha-dv-ky-tu")); } },
+  "4i-gemini-khong-du-luot-bo-qua": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 1 } } } },
+  "4j-gemini-du-luot-van-doc": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 15 } } } },
   "4h-edge-roi-vai-cau": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "roi", han: 600000 },
   "4f-giong-may": { caiDat: { ...CD, bat: DU, tachNhac: true, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", han: 600000,
       sau: async (p, kq) => { kq.nhatMay = (await p.textContent("#o-nhat-ky")).split("\n").filter((l) => /Giọng máy|↪️|Đã đọc|Bỏ qua/.test(l)).join("\n"); } },
@@ -266,6 +268,7 @@ const KICH_BAN = {
   "8-du-phong-az-or": { caiDat: { ...CD, dp: { groq: "gsk", cf: true, azNghe: true, or: "sk-or" } }, gemini: "het", groq: "het", cf: "hong" },
   "9-groq-bi-chan": { caiDat: { ...CD, dp: { groq: "gsk", cf: false } }, gemini: "het", groq: "chan" },
   "10-het-sach": { caiDat: { ...CD, dp: { groq: "gsk", cf: true } }, gemini: "het", groq: "het", cf: "hong" },
+  "1b-lan-truoc-tran-bo-nho": { caiDat: { ...CD, tachNhac: true, lop: LOP, __songSong: "dang" }, logo: true },
   "11-ai-tach-hong": { caiDat: { ...CD, tachNhac: true }, ort: "404" },
   "12-giam-tieng": { caiDat: { ...CD, tachNhac: true, mhTach: "giam" } },
   "13-h264-khong-ve-duoc": { caiDat: { ...CD, lop: LOP }, video: "thu.mp4" },

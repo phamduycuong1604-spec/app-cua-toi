@@ -74,6 +74,8 @@ export function veLop(ctx, W, H, t, lop, cacCau, anhLogo, chuMau) {
   }
 }
 
+// Cách ngắt dòng của từng câu (tính 1 lần rồi dùng lại cho mọi khung hình của câu đó)
+const boNhoDong = new Map();
 function vePhuDe(ctx, W, H, chu, p) {
   const co = Math.max(8, (p.co / 100) * H);
   ctx.save();
@@ -81,14 +83,20 @@ function vePhuDe(ctx, W, H, chu, p) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   // xuống dòng khi câu dài quá 90% chiều ngang
-  const dong = [];
-  let hien = "";
-  for (const tu of chu.split(/\s+/)) {
-    const thu = hien ? hien + " " + tu : tu;
-    if (hien && ctx.measureText(thu).width > W * 0.9) { dong.push(hien); hien = tu; }
-    else hien = thu;
+  const khoa = `${W}|${co}|${chu}`;
+  let dong = boNhoDong.get(khoa);
+  if (!dong) {
+    dong = [];
+    let hien = "";
+    for (const tu of chu.split(/\s+/)) {
+      const thu = hien ? hien + " " + tu : tu;
+      if (hien && ctx.measureText(thu).width > W * 0.9) { dong.push(hien); hien = tu; }
+      else hien = thu;
+    }
+    if (hien) dong.push(hien);
+    if (boNhoDong.size > 2000) boNhoDong.clear();
+    boNhoDong.set(khoa, dong);
   }
-  if (hien) dong.push(hien);
   const cao = co * 1.3;
   const giua = Math.min(H - (cao * dong.length) / 2, Math.max((cao * dong.length) / 2, (p.y / 100) * H));
   const dau = giua - (cao * (dong.length - 1)) / 2;
