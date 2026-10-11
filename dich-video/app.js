@@ -851,7 +851,7 @@ function taiXuong(blob, ten) {
 const TEN_BUOC = { tai: "Tải bộ xử lý", tach: "Tách tiếng", dich: "Nghe & dịch", nhac: "Tách nhạc nền", long: "Lồng tiếng", ve: "Chèn chữ/logo", xuat: "Xuất video" };
 const batDauBuoc = {};
 function buoc(ten, trangThai, ghiChu = "") {
-  if (trangThai === "dang") { batDauBuoc[ten] = Date.now(); nhat(`▶ ${TEN_BUOC[ten]}`); }
+  if (trangThai === "dang") { batDauBuoc[ten] = Date.now(); nhat(`▶ ${TEN_BUOC[ten]}`); if (dangChay) ghiDangChay(ten); }
   else if (trangThai !== "cho") {
     const t = batDauBuoc[ten] ? ` (${((Date.now() - batDauBuoc[ten]) / 1000).toFixed(1)} giây)` : "";
     nhat(`${{ xong: "✅", loi: "❌", bo: "–" }[trangThai]} ${TEN_BUOC[ten]}${t}${ghiChu ? " · " + ghiChu : ""}`);
@@ -1086,18 +1086,15 @@ async function chay(lamTuDau) {
       }
     };
 
-    // Tách nhạc (chip đồ hoạ) và chèn chữ (bộ mã hoá video) dùng 2 bộ phận khác nhau → chạy CÙNG LÚC cho nhanh.
-    // Lần trước chạy cùng lúc mà trang bị tắt giữa chừng (tràn bộ nhớ) → máy này chạy lần lượt như cũ.
+    // Tách nhạc và chèn chữ chạy CÙNG LÚC thì nhanh hơn ~1 phút nhưng iPhone hay tràn bộ nhớ và tắt trang
+    // → mặc định chạy LẦN LƯỢT (chỉ chạy cùng lúc khi bật "phaha-song-song" = "bat", dành cho máy mạnh).
     const canTachAI = caiDat.tachNhac && thongTin.coTieng && caiDat.mhTach !== "giam";
-    const songSong = canTachAI && canVe(caiDat.lop, cacCau, anhLogo) && docSongSong() !== "tat";
+    const songSong = canTachAI && canVe(caiDat.lop, cacCau, anhLogo) && docSongSong() === "bat";
     if (songSong) {
       buocDang = "ve";
-      ghiSongSong("dang");
       nhat("Tách nhạc và chèn chữ/logo chạy cùng lúc cho nhanh");
       await Promise.all([tachNhacBuoc(), veHinhBuoc()]);
-      ghiSongSong(null);
     } else {
-      if (canTachAI && canVe(caiDat.lop, cacCau, anhLogo)) nhat("Máy này từng bị tràn bộ nhớ khi chạy cùng lúc → tách nhạc rồi mới chèn chữ");
       buocDang = "nhac";
       await tachNhacBuoc();
     }
@@ -1131,6 +1128,7 @@ async function chay(lamTuDau) {
     baoLoi(loiDeHieu(loi));
   } finally {
     dangChay = false;
+    ghiDangChay(null);
     dangTachNhac = null;
     xongVeHinh();
     dangVeHinh = null;
@@ -1139,11 +1137,20 @@ async function chay(lamTuDau) {
   }
 }
 
-// Ghi nhớ đang chạy tách nhạc + chèn chữ cùng lúc. Trang bị tắt giữa chừng (iPhone tràn bộ nhớ) thì lần mở sau
-// còn thấy "dang" → đổi thành "tat", từ đó máy này chạy lần lượt cho an toàn.
 const docSongSong = () => { try { return localStorage.getItem("phaha-song-song"); } catch { return null; } };
-function ghiSongSong(x) { try { x ? localStorage.setItem("phaha-song-song", x) : localStorage.removeItem("phaha-song-song"); } catch {} }
-if (docSongSong() === "dang") ghiSongSong("tat");
+
+// Ghi lại bước đang chạy. Trang bị tắt giữa chừng (thường do iPhone tràn bộ nhớ) thì lần mở sau
+// vẫn còn dấu này → báo trong nhật ký là bị tắt ở bước nào.
+function ghiDangChay(ten) { try { ten ? localStorage.setItem("phaha-dang-chay", ten) : localStorage.removeItem("phaha-dang-chay"); } catch {} }
+try {
+  const buocDo = localStorage.getItem("phaha-dang-chay");
+  if (buocDo) {
+    const o = $("o-nhat-ky");
+    o.textContent += `\n⚠️ TRANG BỊ TẮT GIỮA CHỪNG ở bước "${TEN_BUOC[buocDo] || buocDo}" (thường do iPhone hết bộ nhớ). Gợi ý: đóng bớt ứng dụng/tab khác, hoặc chọn tách nhạc "Không dùng AI".`;
+    localStorage.setItem("phaha-dv-nhat-ky", o.textContent);
+    ghiDangChay(null);
+  }
+} catch {}
 
 async function giuManHinh() {
   try { return await navigator.wakeLock?.request("screen"); } catch { return null; }

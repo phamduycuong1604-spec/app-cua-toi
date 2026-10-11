@@ -141,9 +141,10 @@ async function chay(ten, o) {
   await p.route("https://openrouter.ai/**", (rt) => { dem("or"); rt.fulfill({ headers: J, body: JSON.stringify(rt.request().url().endsWith("/models") ? { data: [{ id: "deepseek/x:free" }] } : { choices: [{ message: { content: "Kết quả: " + DICH } }] }) }); });
 
   await p.goto("http://localhost:8780/dich-video/");
-  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
+  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
     [{ ...o.caiDat, __khongVe: o.khongVe }, o.logo ? "data:image/png;base64," + fs.readFileSync(`${S}/logo.png`).toString("base64") : null]);
   await p.reload();
+  if (o.caiDat.__dangChay) goi.baoTatGiuaChung = (await p.textContent("#o-nhat-ky")).includes("TRANG BỊ TẮT GIỮA CHỪNG");
   if (o.kiemMa) {
     await p.click("#nut-cai-dat"); await p.click("#nut-kiem-tra-ma");
     await p.waitForSelector("#kq-kiem-tra:not(.an)", { timeout: 30000 });
@@ -288,7 +289,8 @@ const KICH_BAN = {
   "8-du-phong-az-or": { caiDat: { ...CD, dp: { groq: "gsk", cf: true, azNghe: true, or: "sk-or" } }, gemini: "het", groq: "het", cf: "hong" },
   "9-groq-bi-chan": { caiDat: { ...CD, dp: { groq: "gsk", cf: false } }, gemini: "het", groq: "chan" },
   "10-het-sach": { caiDat: { ...CD, dp: { groq: "gsk", cf: true } }, gemini: "het", groq: "het", cf: "hong" },
-  "1b-lan-truoc-tran-bo-nho": { caiDat: { ...CD, tachNhac: true, lop: LOP, __songSong: "dang" }, logo: true },
+  "1b-lan-truoc-bi-tat-giua-chung": { caiDat: { ...CD, tachNhac: true, lop: LOP, __dangChay: "nhac" }, logo: true },
+  "1c-may-manh-chay-song-song": { caiDat: { ...CD, tachNhac: true, lop: LOP, __songSong: "bat" }, logo: true },
   "40-12-phut-300-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
   "41-12-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 500, dsDang: "du", han: 1800000 },
   "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
