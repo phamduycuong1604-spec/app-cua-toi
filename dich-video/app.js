@@ -300,7 +300,18 @@ function moCaiDat() {
   document.querySelectorAll(".dv-doc").forEach((d) => (d.open = d.dataset.dv === dau));
   $("hop-cai-dat").showModal();
 }
-$("hop-cai-dat").addEventListener("close", layTuForm);
+$("hop-cai-dat").addEventListener("close", () => {
+  layTuForm();
+  // Bấm Lưu = có thể vừa nâng mã Gemini lên trả phí → quên giới hạn Gemini đã ghi nhớ, lần chạy sau thử lại thật
+  if ($("hop-cai-dat").returnValue !== "luu") return;
+  moHinhNghi.clear();
+  try {
+    localStorage.removeItem("phaha-dv-gemini-nghi");
+    const d = docLuu("phaha-dv-dung");
+    for (const k of Object.keys(d)) if (/^(max|het):gm:/.test(k)) delete d[k];
+    localStorage.setItem("phaha-dv-dung", JSON.stringify(d));
+  } catch {}
+});
 function layTuForm() {
   for (const dv of CAC_DV) {
     caiDat.dv[dv].khoa = $("o-khoa-" + dv).value.trim();
