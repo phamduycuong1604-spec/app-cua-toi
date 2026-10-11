@@ -18,7 +18,7 @@ const DICH = JSON.stringify({"1":"Chào bạn","2":"Cảm ơn"});
 
 async function chay(ten, o) {
   const p = await b.newPage({ viewport: { width: 400, height: 900 }, acceptDownloads: true });
-  const loiTrang = [], goi = {}; const dem = (k) => (goi[k] = (goi[k] || 0) + 1);
+  const loiTrang = [], goi = {}; const dem = (k, n = 1) => (goi[k] = (goi[k] || 0) + n);
   p.on("pageerror", (e) => loiTrang.push(e.message));
   if (o.chanLoa) await p.addInitScript(() => {
     // Giả lập iPhone: chỉ cho phát tiếng trong 300ms sau khi bấm
@@ -71,6 +71,14 @@ async function chay(ten, o) {
     if (o.groq === "chan") return rt.abort();
     dem("groq");
     if (o.groq === "het") return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "Rate limit reached: requests per day" } }) });
+    if (u.includes("transcriptions") && o.soCau) {
+      // Video dài: sinh đều câu theo độ dài đoạn âm thanh gửi lên (WAV 16.000 mẫu/giây, 2 byte/mẫu)
+      const dai = Math.max(1, (rt.request().postDataBuffer().length - 600) / 32000);
+      const n = Math.max(1, Math.round((o.soCau * dai) / o.daiGiay)), buoc = dai / n;
+      dem("groqCau", n);
+      const seg = Array.from({ length: n }, (_, k) => ({ start: +(k * buoc + 0.05).toFixed(2), end: +(k * buoc + buoc * 0.85).toFixed(2), text: "这是测试句子" + "一二三四五六七八九十"[k % 10] + "号内容", no_speech_prob: 0.01, avg_logprob: -0.2 }));
+      return rt.fulfill({ headers: J, body: JSON.stringify({ segments: seg }) });
+    }
     if (u.includes("transcriptions")) return rt.fulfill({ headers: J, body: JSON.stringify({ segments: SEG }) });
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: o.groqMang ? '["Chào bạn","Cảm ơn"]' : "<think>x</think>" + DICH } }] }) }); });
   await p.route("https://viec-hom-nay-nhac.phamduycuong1604.workers.dev/**", async (rt) => { const u = rt.request().url(); const h = rt.request().headers();
@@ -122,6 +130,7 @@ async function chay(ten, o) {
     goi.dsLoiDan = b.messages?.[0]?.content?.slice(0, 400);
     const dongDs = (b.messages?.[1]?.content || "").split("\n").map((l) => /^(\d+)\. \([\d.]+s\) (.*)$/.exec(l)).filter(Boolean);
     if (o.dsChep) { dem("dsChep"); return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], m[2]]))) } }] }) }); }
+    if (o.dsDang === "du") { dem("dsCau", dongDs.length); return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], "Đây là câu thử nghiệm số " + m[1] + " đã dịch xong"]))) } }] }) }); }
     if (o.dsDang === "boc") return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ translations: dongDs.map((m) => ({ id: +m[1], zh: m[2], text: "Câu " + m[1] + " đã dịch (bọc)" })) }) } }] }) });
     if (o.dsDang === "mang") return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], [m[2], "Câu " + m[1] + " đã dịch (mảng)"]]))) } }] }) });
     if (o.dsTrung && (goi.ds || 0) <= 1) return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ "1": "你好朋友", "2": "Cảm ơn (DS)" }) } }] }) });
@@ -158,6 +167,15 @@ async function chay(ten, o) {
   let kq = { ten, giay: ((Date.now() - t0) / 1000).toFixed(1), loi: (await p.textContent("#loi")).trim(), goi, elMax, loiTrang };
   kq.buoc = await p.$$eval(".cac-buoc li", (ls) => ls.map((l) => l.querySelector(".dau").textContent).join(""));
   kq.cau = await p.$$eval(".cau textarea", (t) => t.map((x) => x.value));
+  if (o.soCau) {
+    // Video dài: chỉ ghi tóm tắt thay vì cả trăm câu
+    const c = kq.cau;
+    kq.cau = { so: c.length, trong: c.filter((x) => !x.trim()).length, conChuTrung: c.filter((x) => /[\u3400-\u9fff]{2}/.test(x)).length };
+    const nk = await p.textContent("#o-nhat-ky");
+    kq.thoiGian = [...nk.matchAll(/✅ ([^(\n]+?) \(([\d.]+) giây\)/g)].map((m) => `${m[1].trim()} ${m[2]}s`).join(" · ");
+    kq.docDuoc = /Đã đọc (\d+) câu/.exec(nk)?.[1];
+    kq.tre = /Lời Việt dài hơn lời gốc: (\d+) câu.*?trễ nhiều nhất ([\d.]+)/.exec(nk)?.slice(1).join(" câu, trễ max ") || "0";
+  }
   if (!kq.loi) {
     const b64 = await p.evaluate(async () => { const r = await fetch(document.getElementById("xem-ket-qua").src); const a = new Uint8Array(await r.arrayBuffer()); let s = ""; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode(...a.subarray(i, i + 8192)); return btoa(s); });
     fs.writeFileSync(`${S}/kt-${ten}.mp4`, Buffer.from(b64, "base64"));
@@ -269,6 +287,10 @@ const KICH_BAN = {
   "9-groq-bi-chan": { caiDat: { ...CD, dp: { groq: "gsk", cf: false } }, gemini: "het", groq: "chan" },
   "10-het-sach": { caiDat: { ...CD, dp: { groq: "gsk", cf: true } }, gemini: "het", groq: "het", cf: "hong" },
   "1b-lan-truoc-tran-bo-nho": { caiDat: { ...CD, tachNhac: true, lop: LOP, __songSong: "dang" }, logo: true },
+  "40-12-phut-300-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
+  "41-12-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 500, dsDang: "du", han: 1800000 },
+  "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
+  "43-12-phut-300-cau-gemini-it-luot": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, tachNhac: false, lop: LOP, __dung: { "max:gm:3t2o:doc": { n: 15 } } }, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
   "11-ai-tach-hong": { caiDat: { ...CD, tachNhac: true }, ort: "404" },
   "12-giam-tieng": { caiDat: { ...CD, tachNhac: true, mhTach: "giam" } },
   "13-h264-khong-ve-duoc": { caiDat: { ...CD, lop: LOP }, video: "thu.mp4" },

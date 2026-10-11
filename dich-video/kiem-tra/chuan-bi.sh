@@ -20,6 +20,8 @@ taoVideo() { # ten, giay, kichthuoc, kenh(0=không tiếng), them
 [ -f khongtieng.mp4 ] || taoVideo khongtieng.mp4 9 640x360 0
 [ -f thu-xoay.mp4 ] || { taoVideo tmp-xoay.mp4 9.12 640x360 2 && ffmpeg -v error -y -display_rotation 90 -i tmp-xoay.mp4 -c copy thu-xoay.mp4 && rm tmp-xoay.mp4; }
 [ -f dai.mp4 ] || taoVideo dai.mp4 266 320x180 2
+[ -f dai12.mp4 ] || taoVideo dai12.mp4 725 320x180 2   # video 12 phút (thử 300/500 câu)
+[ -f dai20.mp4 ] || taoVideo dai20.mp4 1210 320x180 2  # video 20 phút
 [ -f thu.mp4 ] || ffmpeg -v error -y -f lavfi -i "testsrc=d=12:s=320x240:r=25" -f lavfi -i "sine=f=440:d=12" -ac 1 -c:v libx264 -c:a aac thu.mp4
 [ -f logo.png ] || ffmpeg -v error -y -f lavfi -i "color=c=red:s=64x64,format=rgba" -frames:v 1 logo.png
 [ -f sine.mp3 ] || ffmpeg -v error -y -f lavfi -i "sine=f=330:d=1.5" -ar 24000 -ac 1 -b:a 48k sine.mp3
