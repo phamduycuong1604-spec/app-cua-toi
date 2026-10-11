@@ -256,6 +256,8 @@ const KICH_BAN = {
     } },
   "4e-google-het-chirp": { caiDat: { ...CD, dv: { ...CD.dv, gc: { giong: "vi-VN-Chirp3-HD-Aoede", ds: [{ ten: "vi-VN-Chirp3-HD-Aoede", nhan: "Tự nhiên nhất · Nữ · Chirp3-HD-Aoede" }, { ten: "vi-VN-Wavenet-B", nhan: "Tốt, rẻ · Nam · Wavenet-B" }, { ten: "vi-VN-Wavenet-A", nhan: "Tốt, rẻ · Nữ · Wavenet-A" }] } },
       __kyTu: { thang: new Date().toISOString().slice(0, 7), "gc-hd": 995000 } }, sau: async (p, kq) => { kq.dem = await p.evaluate(() => localStorage.getItem("phaha-dv-ky-tu")); } },
+  "4i-gemini-khong-du-luot-bo-qua": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 1 } } } },
+  "4j-gemini-du-luot-van-doc": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 15 } } } },
   "4h-edge-roi-vai-cau": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "roi", han: 600000 },
   "4f-giong-may": { caiDat: { ...CD, bat: DU, tachNhac: true, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", han: 600000,
       sau: async (p, kq) => { kq.nhatMay = (await p.textContent("#o-nhat-ky")).split("\n").filter((l) => /Giọng máy|↪️|Đã đọc|Bỏ qua/.test(l)).join("\n"); } },

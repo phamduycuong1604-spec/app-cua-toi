@@ -1473,7 +1473,7 @@ const DICH_VU = {
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
-  edge: { ten: "Edge", doc: docEdge, cungLuc: 2 },
+  edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
   fpt: { ten: "FPT.AI", doc: docFpt, cungLuc: 4 },
   vt: { ten: "Viettel AI", doc: docViettel, cungLuc: 3 },
   may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
@@ -1969,6 +1969,17 @@ async function longTiengThu() {
         await taiDsGiong(dv);
         nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
       }
+      // Gemini đọc bằng mã miễn phí: chỉ ~3 lượt/phút và ~15 lượt/ngày → video dài sẽ phải chờ rất lâu rồi vẫn hết lượt giữa chừng.
+      // Tính trước số lượt cần; không đủ thì bỏ qua luôn, khỏi mất vài phút chờ.
+      if (dv === "gemini" && i < ds.length - 1) {
+        const can = chiaNhom(cacCau.filter((c) => chuanHoaDoc(c.vi)), "gemini").length;
+        const con = conLuotGeminiDoc();
+        if (con !== null && can > Math.min(con, GM_DOC_NHANH)) {
+          nhat(`⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mã miễn phí chỉ còn ~${con} lượt hôm nay và mỗi phút chỉ được ~3 lượt → đọc thẳng bằng ${DICH_VU[ds[i + 1]].ten} cho nhanh`);
+          loiCuoi = new Error("HET_NGAY");
+          continue;
+        }
+      }
       return await longTiengBang(dv);
     } catch (loi) {
       loiCuoi = loi;
@@ -2255,6 +2266,17 @@ async function goiGemini(loai, noiDung) {
   if (!loiCuoi && ds.every((m) => moHinhNghi.has(tenNghi(m, loai)))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
+}
+
+// Mã Gemini đọc còn bao nhiêu lượt hôm nay. null = chưa biết (mã chưa từng hết lượt, có thể là mã trả phí)
+const GM_DOC_NHANH = 6; // mã miễn phí: tối đa ~6 lượt (khoảng 2 phút chờ giới hạn mỗi phút) mới đáng dùng
+function conLuotGeminiDoc() {
+  const khoa = khoaGemini("doc");
+  if (!khoa) return 0;
+  const vt = vanTayMa(khoa), ngay = ngayMy(), d = docLuu("phaha-dv-dung");
+  if (d[`het:gm:${vt}:doc`]?.ngay === ngay) return 0;
+  const hoc = d[`max:gm:${vt}:doc`]?.n;
+  return hoc ? Math.max(0, hoc - daDung(`gm:${vt}:doc`, ngay)) : null;
 }
 
 // Hết lượt cả ngày: ghi lại số lượt đã dùng được hôm nay = hạn mức thật của mã này
