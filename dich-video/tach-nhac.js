@@ -1,7 +1,9 @@
 // =====================================================
 // TÁCH NHẠC NỀN khỏi giọng nói (chạy ngầm, ngay trên điện thoại)
 // Dùng mô hình AI MDX-Net của dự án Ultimate Vocal Remover (giấy phép MIT).
-// Nhận: âm thanh 2 kênh 44.100 mẫu/giây → Trả: nhạc nền (đã bỏ giọng).
+// Nhận: âm thanh 2 kênh 44.100 mẫu/giây (số nguyên 16 bit, xen kẽ trái/phải) → Trả: file WAV nhạc nền (đã bỏ giọng).
+// Tiết kiệm bộ nhớ (iPhone hay tắt trang khi hết bộ nhớ): không chép âm thanh ra nhiều bản,
+// đọc thẳng từ dữ liệu vào và ghi thẳng vào file WAV kết quả.
 // =====================================================
 const CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
 
@@ -18,7 +20,7 @@ const ghi = (chu) => bao({ loai: "nhat", chu });
 let ort = null, phien = null, phienTen = "", may = "";
 
 self.onmessage = async (e) => {
-  const { L, R, loai } = e.data;
+  const { pcm, loai } = e.data;
   try {
     const mh = MO_HINH[loai] || MO_HINH.nhanh;
     if (phienTen !== loai) {
@@ -29,16 +31,15 @@ self.onmessage = async (e) => {
     }
     let kq;
     try {
-      kq = await tach(L, R, mh);
+      kq = await tach(pcm, mh);
     } catch (loi) {
       // Chip đồ hoạ khởi động được nhưng chạy lỗi → chuyển sang CPU, làm lại
       if (may !== "webgpu") throw loi;
       ghi(`chip đồ hoạ chạy lỗi (${String(loi?.message || loi).slice(0, 150)}), chuyển sang CPU`);
       ({ ort, phien, may } = await taoPhien(await taiMoHinh(mh), true));
-      kq = await tach(L, R, mh);
+      kq = await tach(pcm, mh);
     }
-    const [nL, nR] = kq;
-    self.postMessage({ loai: "xong", L: nL, R: nR }, [nL.buffer, nR.buffer]);
+    self.postMessage({ loai: "xong", wav: kq }, [kq.buffer]);
   } catch (loi) {
     bao({ loai: "loi", chu: String(loi?.message || loi) });
   }
@@ -104,39 +105,54 @@ async function taiMoHinh(mh) {
   return du;
 }
 
-// Chia âm thanh thành từng khúc ~6 giây, mỗi khúc chạy qua AI rồi ghép lại
-async function tach(L, R, mh) {
-  const N = L.length;
+// Chia âm thanh thành từng khúc ~6 giây, mỗi khúc chạy qua AI rồi ghi thẳng vào file WAV kết quả
+async function tach(pcm, mh) {
+  const N = pcm.length >> 1;
   const { nfft, dimF } = mh;
   const trim = nfft / 2;
   const gen = CHUNK - 2 * trim;
   const pad = gen - (N % gen);
-  const dai = trim + N + pad + trim;
-  const vao = [new Float32Array(dai), new Float32Array(dai)];
-  vao[0].set(L, trim);
-  vao[1].set(R, trim);
-  const ra = [new Float32Array(N + pad), new Float32Array(N + pad)];
+  // file WAV kết quả: 44 byte đầu + N mẫu × 2 kênh × 2 byte
+  const wav = new Uint8Array(44 + N * 4);
+  ghiDauWav(wav, N, 44100);
+  const ra = new Int16Array(wav.buffer, 44, N * 2);
+  // mẫu thứ j của kênh c (ngoài khoảng thì là im lặng), đổi sang số thực −1…1
+  const mau = (c, j) => (j >= 0 && j < N ? pcm[2 * j + c] / 32768 : 0);
+  const khuc = new Float32Array(CHUNK);
   const bien = taoBienDoi(nfft);
   const soKhuc = (N + pad) / gen;
   const dauVao = new Float32Array(4 * dimF * DIM_T);
   const batDau = Date.now();
   for (let k = 0; k < soKhuc; k++) {
     const o = k * gen;
-    for (let c = 0; c < 2; c++) bien.stft(vao[c].subarray(o, o + CHUNK), dauVao, c, dimF);
+    for (let c = 0; c < 2; c++) {
+      for (let i = 0; i < CHUNK; i++) khuc[i] = mau(c, o + i - trim);
+      bien.stft(khuc, dauVao, c, dimF);
+    }
     const kq = await phien.run({ [phien.inputNames[0]]: new ort.Tensor("float32", dauVao, [1, 4, dimF, DIM_T]) });
     const pho = kq[phien.outputNames[0]].data;
     for (let c = 0; c < 2; c++) {
       const song = bien.istft(pho, c, dimF);
-      const dich = ra[c], goc = vao[c];
-      for (let i = 0; i < gen; i++) {
+      const het = Math.min(gen, N - o);
+      for (let i = 0; i < het; i++) {
         const v = song[trim + i] * mh.bu;
-        dich[o + i] = mh.giong ? goc[o + trim + i] - v : v;
+        const x = mh.giong ? mau(c, o + i) - v : v;
+        ra[2 * (o + i) + c] = Math.max(-1, Math.min(1, x)) * 32767;
       }
     }
     const conLai = ((Date.now() - batDau) / (k + 1)) * (soKhuc - k - 1) / 1000;
     bao({ loai: "tien-do", chu: `${Math.round(((k + 1) / soKhuc) * 100)}% · còn ~${Math.ceil(conLai)} giây` });
   }
-  return [ra[0].slice(0, N), ra[1].slice(0, N)];
+  return wav;
+}
+
+function ghiDauWav(wav, n, tanSo) {
+  const v = new DataView(wav.buffer);
+  const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
+  chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE");
+  chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
+  v.setUint32(24, tanSo, true); v.setUint32(28, tanSo * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true);
+  chu(36, "data"); v.setUint32(40, n * 4, true);
 }
 
 // ----- Biến đổi âm thanh ↔ phổ (STFT), giống hệt cách mô hình được huấn luyện -----

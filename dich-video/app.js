@@ -2108,8 +2108,14 @@ async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
   let soVao = 2;
   let chonAm;
   if (wavNen) {
-    // gửi bản sao: bộ xử lý video giữ luôn dữ liệu được gửi, bản gốc còn để dùng lại khi bấm "Làm lại"
-    await ff.writeFile(tepNen, wavNen.slice());
+    // Video ngắn: gửi bản sao, bản gốc giữ lại để bấm "Làm lại" khỏi tách nhạc lại.
+    // Video dài (nhạc nền > 60MB, khoảng 6 phút trở lên): gửi luôn bản gốc cho đỡ tốn gấp đôi bộ nhớ (iPhone hay tắt trang);
+    // bấm "Làm lại" thì tách nhạc lại.
+    if (wavNen.byteLength > 60 * 1048576) {
+      nhacNen = null;
+      nhat(`Nhạc nền ${(wavNen.byteLength / 1048576).toFixed(0)}MB → không giữ bản sao để đỡ tốn bộ nhớ`);
+      await ff.writeFile(tepNen, wavNen);
+    } else await ff.writeFile(tepNen, wavNen.slice());
     thamSo.push("-i", tepNen);
     thamSo.push("-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
     chonAm = "[am]";
@@ -2160,12 +2166,12 @@ async function tachNhacNen() {
     "nhac"
   );
   if (ma !== 0) throw new Error("Không lấy được tiếng gốc để tách nhạc.");
-  const du = await ff.readFile(ra);
+  let du = await ff.readFile(ra);
   await ff.deleteFile(ra);
-  const i16 = new Int16Array(du.buffer, du.byteOffset, du.byteLength >> 1);
+  // Gửi thẳng dữ liệu 16 bit sang AI (không đổi ra số thực ở đây → đỡ tốn gấp đôi bộ nhớ)
+  if (du.byteOffset || du.byteLength % 4) du = du.slice(0, du.byteLength - (du.byteLength % 4));
+  const i16 = new Int16Array(du.buffer, 0, du.byteLength >> 1);
   const n = i16.length >> 1;
-  const L = new Float32Array(n), R = new Float32Array(n);
-  for (let i = 0; i < n; i++) { L[i] = i16[2 * i] / 32768; R[i] = i16[2 * i + 1] / 32768; }
   // iPhone ít bộ nhớ: tạm tắt bộ xử lý video trong lúc AI chạy, xuất video sẽ bật lại
   tatFfmpeg();
   nhat("Tạm tắt bộ xử lý video để nhường bộ nhớ cho AI tách nhạc");
@@ -2190,12 +2196,12 @@ async function tachNhacNen() {
       else if (d.loai === "loi") { thoTach?.terminate(); thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + d.chu)); }
     };
     thoTach.onerror = (e) => { thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + (e.message || "không tải được AI"))); };
-    thoTach.postMessage({ L, R, loai: caiDat.mhTach }, [L.buffer, R.buffer]);
+    thoTach.postMessage({ pcm: i16, loai: caiDat.mhTach }, [i16.buffer]);
   });
   // Tách xong thì tắt AI để trả bộ nhớ cho bước dựng hình/xuất video
   thoTach?.terminate();
   thoTach = null;
-  return taoWav2(kq.L, kq.R, 44100);
+  return kq.wav;
 }
 
 // Âm lượng tiếng gốc theo thời gian: gần như tắt trong các câu thoại, bình thường ở chỗ khác
@@ -2213,22 +2219,6 @@ function bieuThucGiam() {
   return `if(gt(${trong},0),0.03,${cao})`;
 }
 
-function taoWav2(L, R, tanSo) {
-  const n = L.length;
-  const buf = new ArrayBuffer(44 + n * 4);
-  const v = new DataView(buf);
-  const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
-  chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE");
-  chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
-  v.setUint32(24, tanSo, true); v.setUint32(28, tanSo * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true);
-  chu(36, "data"); v.setUint32(40, n * 4, true);
-  const ra = new Int16Array(buf, 44, n * 2);
-  for (let i = 0; i < n; i++) {
-    ra[2 * i] = Math.max(-1, Math.min(1, L[i])) * 32767;
-    ra[2 * i + 1] = Math.max(-1, Math.min(1, R[i])) * 32767;
-  }
-  return new Uint8Array(buf);
-}
 
 // =====================================================
 // GỌI GEMINI (tự chờ khi hết lượt/phút, tự tìm mô hình còn dùng được)
