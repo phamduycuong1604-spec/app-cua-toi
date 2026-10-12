@@ -1100,6 +1100,7 @@ async function chay(lamTuDau) {
     }
     // Bộ xử lý video có thể đã được tắt để nhường bộ nhớ cho AI tách nhạc → bật lại (song song với chèn chữ)
     const huaFf = ff ? null : taiFfmpeg().then(ganVideo);
+    dangBatFf = huaFf;
     huaFf?.catch(() => {});
     if (!songSong) {
       buocDang = "ve";
@@ -1111,6 +1112,8 @@ async function chay(lamTuDau) {
     buocDang = "long";
     const tiengViet = await huaLong;
     if (huaFf) { buocDang = "xuat"; thongTin = await huaFf; }
+    // Bộ xử lý video có thể vừa bị tắt để nhường bộ nhớ cho giọng máy → bật lại trước khi xuất
+    if (!ff) { buocDang = "xuat"; await taiFfmpeg(); thongTin = await ganVideo(); }
 
     buocDang = "xuat";
     buoc("xuat", "dang");
@@ -1166,6 +1169,7 @@ function tatFfmpeg() {
 }
 
 let dangTaiFf = null;
+let dangBatFf = null; // đang bật lại bộ xử lý video (sau tách nhạc) – giọng máy chờ xong rồi mới tạm tắt
 function taiFfmpeg() {
   if (ff) return Promise.resolve();
   dangTaiFf ||= taiFfmpegThat().finally(() => (dangTaiFf = null));
@@ -1515,7 +1519,7 @@ const DICH_VU = {
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
-  edge: { ten: "Edge", doc: docEdge, cungLuc: 4 },
+  edge: { ten: "Edge", doc: docEdge, cungLuc: 2 }, // gửi nhiều hơn Microsoft dễ chặn (lỗi 403)
   fpt: { ten: "FPT.AI", doc: docFpt, cungLuc: 4 },
   vt: { ten: "Viettel AI", doc: docViettel, cungLuc: 3 },
   may: { ten: "Giọng máy", doc: docMay, cungLuc: 1 },
@@ -2011,13 +2015,13 @@ async function longTiengThu() {
         await taiDsGiong(dv);
         nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
       }
-      // Gemini đọc bằng mã miễn phí: chỉ ~3 lượt/phút và ~15 lượt/ngày → video dài sẽ phải chờ rất lâu rồi vẫn hết lượt giữa chừng.
-      // Tính trước số lượt cần; không đủ thì bỏ qua luôn, khỏi mất vài phút chờ.
+      // Gemini đọc bằng mã miễn phí: ~15 lượt/ngày → video dài sẽ hết lượt giữa chừng sau vài phút chờ.
+      // Tính trước số lượt cần; không đủ lượt hôm nay thì bỏ qua luôn. Đủ lượt thì vẫn dùng (chậm hơn vì ~3 lượt/phút, nhưng giọng tốt).
       if (dv === "gemini" && i < ds.length - 1) {
         const can = chiaNhom(cacCau.filter((c) => chuanHoaDoc(c.vi)), "gemini").length;
         const con = conLuotGeminiDoc();
-        if (con !== null && can > Math.min(con, GM_DOC_NHANH)) {
-          nhat(`⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mã miễn phí chỉ còn ~${con} lượt hôm nay và mỗi phút chỉ được ~3 lượt → đọc thẳng bằng ${DICH_VU[ds[i + 1]].ten} cho nhanh`);
+        if (con !== null && can > con) {
+          nhat(`⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mã miễn phí chỉ còn ~${con} lượt hôm nay → đọc thẳng bằng ${DICH_VU[ds[i + 1]].ten}`);
           loiCuoi = new Error("HET_NGAY");
           continue;
         }
@@ -2045,10 +2049,15 @@ async function longTiengBang(dv) {
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
   const soLuong = DICH_VU[dv].cungLuc;
-  if (dv === "may" && (dangTachNhac || dangVeHinh)) {
-    ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
-    await dangTachNhac?.catch(() => {});
-    await dangVeHinh;
+  if (dv === "may") {
+    if (dangTachNhac || dangVeHinh) {
+      ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
+      await dangTachNhac?.catch(() => {});
+      await dangVeHinh;
+    }
+    // Giọng máy cần nhiều bộ nhớ → tạm tắt bộ xử lý video trong lúc đọc, xuất video sẽ bật lại
+    await dangBatFf?.catch(() => {});
+    if (ff) { tatFfmpeg(); nhat("Tạm tắt bộ xử lý video để nhường bộ nhớ cho giọng máy"); }
   }
   const bd = Date.now();
   // Edge (miễn phí, không chính thức) thỉnh thoảng ngắt kết nối ở vài câu → bỏ trống vài câu đó
@@ -2301,7 +2310,6 @@ async function goiGemini(loai, noiDung) {
 }
 
 // Mã Gemini đọc còn bao nhiêu lượt hôm nay. null = chưa biết (mã chưa từng hết lượt, có thể là mã trả phí)
-const GM_DOC_NHANH = 6; // mã miễn phí: tối đa ~6 lượt (khoảng 2 phút chờ giới hạn mỗi phút) mới đáng dùng
 function conLuotGeminiDoc() {
   const khoa = khoaGemini("doc");
   if (!khoa) return 0;
