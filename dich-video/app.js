@@ -1537,7 +1537,22 @@ function tenGiong(dv) {
 // ----- Giọng máy: đọc ngay trên điện thoại (doc-may.js), miễn phí, không giới hạn -----
 let thoDocMay = null, soYeuCauMay = 0;
 const choDocMay = new Map();
-function docMay(chu) {
+// iPhone hay báo "Out of memory" khi vừa chạy xong các bước nặng (bộ nhớ của bước trước chưa kịp trả lại)
+// → tắt bộ đọc, chờ vài giây cho máy dọn bộ nhớ rồi thử lại (tối đa 3 lần)
+async function docMay(chu) {
+  for (let lan = 0; ; lan++) {
+    try {
+      return await docMayMotLan(chu);
+    } catch (loi) {
+      if (lan >= 2 || !/out of memory|no available backend/i.test(loi.message)) throw loi;
+      nhat(`Giọng máy thiếu bộ nhớ → chờ ${5 * (lan + 1)} giây cho điện thoại dọn bộ nhớ rồi thử lại (lần ${lan + 2})`);
+      thoDocMay?.terminate();
+      thoDocMay = null;
+      await new Promise((x) => setTimeout(x, 5000 * (lan + 1)));
+    }
+  }
+}
+function docMayMotLan(chu) {
   if (!thoDocMay) {
     thoDocMay = new Worker(new URL("./doc-may.js", import.meta.url));
     thoDocMay.onmessage = ({ data: d }) => {
@@ -2081,6 +2096,8 @@ async function longTiengBang(dv) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  // Đọc xong bằng giọng máy → tắt bộ đọc để trả bộ nhớ cho bước xuất video
+  if (dv === "may") { thoDocMay?.terminate(); thoDocMay = null; }
   if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   // Đặt từng câu vào đúng thời điểm. Câu Việt dài hơn chỗ trống thì đọc nhanh hơn (tối đa 1,6 lần);

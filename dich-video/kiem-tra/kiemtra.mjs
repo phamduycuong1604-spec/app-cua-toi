@@ -20,6 +20,17 @@ async function chay(ten, o) {
   const p = await b.newPage({ viewport: { width: 400, height: 900 }, acceptDownloads: true });
   const loiTrang = [], goi = {}; const dem = (k, n = 1) => (goi[k] = (goi[k] || 0) + n);
   p.on("pageerror", (e) => loiTrang.push(e.message));
+  if (o.mayOom) await p.addInitScript(() => {
+    // Giả lập iPhone: lần đầu mở giọng máy báo hết bộ nhớ, lần sau mới chạy được
+    const W = window.Worker; let lan = 0;
+    window.Worker = function (url, opt) {
+      if (String(url).includes("doc-may.js") && lan++ === 0) {
+        const gia = { onmessage: null, onerror: null, terminate() {}, postMessage({ id }) { setTimeout(() => gia.onmessage?.({ data: { id, loi: "no available backend found. ERR: [wasm] RangeError: Out of memory" } }), 10); } };
+        return gia;
+      }
+      return new W(url, opt);
+    };
+  });
   if (o.chanLoa) await p.addInitScript(() => {
     // Giả lập iPhone: chỉ cho phát tiếng trong 300ms sau khi bấm
     let bam = 0; window.__phat = [];
@@ -280,6 +291,7 @@ const KICH_BAN = {
   "4k-luu-cai-dat-quen-gioi-han-gemini": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 1 } } }, luuLai: true },
   "4j-gemini-du-luot-van-doc": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 15 } } } },
   "4h-edge-roi-vai-cau": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "roi", han: 600000 },
+  "4l-giong-may-het-bo-nho-thu-lai": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", mayOom: true, han: 600000 },
   "4f-giong-may": { caiDat: { ...CD, bat: DU, tachNhac: true, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", han: 600000,
       sau: async (p, kq) => { kq.nhatMay = (await p.textContent("#o-nhat-ky")).split("\n").filter((l) => /Giọng máy|↪️|Đã đọc|Bỏ qua/.test(l)).join("\n"); } },
   "5-gemini-doc": { caiDat: { ...CD, bat: { ...DU, el: false } } },
