@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TransKeep</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>TransKeep</h1>
+    <p>Dịch chữ Trung trong ảnh sang tiếng Việt — giữ nguyên ảnh gốc</p>
+  </header>
+
+  <main>
+    <!-- Cài đặt dịch -->
+    <details id="settings" class="card">
+      <summary>⚙️ Cài đặt dịch</summary>
+      <div class="grid">
+        <label id="pw-row" hidden>Mật khẩu vào app
+          <input id="password" type="password" autocomplete="current-password">
+        </label>
+        <label>Máy dịch
+          <select id="provider"></select>
+        </label>
+        <label>Chìa khóa (API key)
+          <input id="api-key" type="password" placeholder="Dán chìa khóa vào đây">
+          <small id="key-hint"></small>
+        </label>
+        <label>Lĩnh vực
+          <select id="domain"></select>
+        </label>
+        <label>Kiểu chữ mặc định
+          <select id="font"></select>
+        </label>
+      </div>
+    </details>
+
+    <!-- Ô thả file -->
+    <label id="drop" class="card drop">
+      <input id="file" type="file" accept="image/*,.heic,.heif" hidden>
+      <span class="big">🖼️</span>
+      <span>Kéo thả ảnh vào đây hoặc <u>bấm để chọn</u></span>
+      <small>JPG, PNG, WebP, HEIC — video sẽ có ở bản sau</small>
+    </label>
+
+    <!-- Tiến trình -->
+    <section id="progress-box" class="card" hidden>
+      <div class="bar"><div id="bar-fill"></div></div>
+      <p id="progress-msg"></p>
+    </section>
+
+    <!-- Kết quả -->
+    <section id="result-box" hidden>
+      <div class="card">
+        <div id="compare" class="compare">
+          <img id="img-after" alt="Ảnh đã dịch">
+          <img id="img-before" alt="Ảnh gốc">
+          <div id="divider"></div>
+        </div>
+        <input id="slider" type="range" min="0" max="100" value="50" aria-label="Kéo để so sánh">
+        <p class="hint">◀ Ảnh gốc · Kéo thanh trượt · Ảnh đã dịch ▶</p>
+        <div class="actions">
+          <a id="download" class="btn primary" download>⬇️ Tải ảnh đã dịch</a>
+          <button id="again" class="btn">Dịch ảnh khác</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row-head">
+          <h2>Sửa từng vùng chữ</h2>
+          <button id="apply" class="btn primary">Vẽ lại</button>
+        </div>
+        <div id="regions"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

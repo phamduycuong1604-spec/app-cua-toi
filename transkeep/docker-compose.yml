@@ -1,0 +1,12 @@
+# Chạy: docker compose up -d --build   (rồi mở http://<địa-chỉ-máy-chủ>:8000)
+services:
+  transkeep:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - transkeep-data:/data
+volumes:
+  transkeep-data:

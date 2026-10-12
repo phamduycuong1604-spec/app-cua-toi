@@ -1,0 +1,6 @@
+Nguồn font (tất cả đều miễn phí, giấy phép SIL Open Font License 1.1 — được phép dùng và đóng gói kèm app):
+- sans-regular.ttf, sans-bold.ttf : Be Vietnam Pro  (Google Fonts)
+- serif-regular.ttf, serif-bold.ttf : Noto Serif     (Google Fonts)
+- handwriting.ttf                  : Dancing Script Bold (Google Fonts)
+- display.ttf                      : Anton          (Google Fonts)
+Tải qua gói npm @expo-google-fonts/*.

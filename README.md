@@ -19,6 +19,7 @@ App quản lý công việc hàng ngày cho điện thoại (cài được vào 
 | `may-chu.js` | Địa chỉ máy chủ nhắc giờ (tự động điền) |
 | `may-chu/` | Máy chủ nhắc giờ chạy trên Cloudflare: gửi thông báo kể cả khi app tắt |
 | `.github/workflows/may-chu.yml` | Tự động đưa máy chủ lên Cloudflare |
+| `transkeep/` | App **TransKeep**: dịch chữ Trung trong ảnh sang tiếng Việt, giữ nguyên ảnh (xem `transkeep/README.md`) |
 | `dich-video/` | App **PhaHa lồng tiếng**: video tiếng Trung → dịch → lồng tiếng Việt (xem mục bên dưới) |
 
 ## Khi sửa code

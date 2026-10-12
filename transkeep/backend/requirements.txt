@@ -1,0 +1,12 @@
+# Máy chủ web
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1
+# Xử lý ảnh + AI
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
+pillow==12.3.0
+pillow_heif==1.8.1
+onnxruntime==1.31.0
+rapidocr==3.10.0
