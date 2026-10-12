@@ -84,13 +84,18 @@ export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
     const thu = async (chu, soLan) => {
       let loiCuoi;
       for (let lan = 0; lan < soLan; lan++) {
-        try { return await docEdge(chu, voice || undefined); } catch (loi) { loiCuoi = loi; }
+        try { return await docEdge(chu, voice || undefined); } catch (loi) {
+          loiCuoi = loi;
+          // Microsoft từ chối hẳn (403) → thử lại chỉ làm bị chặn lâu hơn, dừng luôn
+          if (/từ chối/.test(loi.message)) throw loi;
+        }
         await new Promise((x) => setTimeout(x, 400 * (lan + 1)));
       }
       throw loiCuoi;
     };
     let loiCuoi;
     try { return traMp3(await thu(String(text), 3)); } catch (loi) { loiCuoi = loi; }
+    if (/từ chối/.test(loiCuoi.message)) return traLoi({ loi: String(loiCuoi.message) }, 502);
     // Edge hay ngắt giữa chừng với câu dài → chia đôi ở chỗ ngắt câu/khoảng trắng gần giữa, đọc từng nửa rồi nối MP3
     const chu = String(text).trim();
     if (chu.length >= 16) {
