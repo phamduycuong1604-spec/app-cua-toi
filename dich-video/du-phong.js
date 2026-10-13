@@ -285,12 +285,13 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     },
   };
 
-  const hong = new Set(); // dịch vụ đã hỏng/hết lượt trong lần chạy này
+  const hong = new Map(); // dịch vụ đã hỏng/hết lượt trong lần chạy này → lỗi của nó
   async function thuLanLuot(bang, thuTu, viec, lam) {
     let loiCuoi = null;
     for (const k of thuTu) {
       const n = bang[k];
-      if (!n.co() || hong.has(viec + k)) continue;
+      if (!n.co()) continue;
+      if (hong.has(viec + k)) { loiCuoi ||= hong.get(viec + k); continue; } // đã hỏng ở đoạn trước → báo đúng lỗi đó, không báo "chưa cài"
       const bd = Date.now();
       try {
         const kq = await lam(n);
@@ -298,7 +299,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
         return kq;
       } catch (loi) {
         loiCuoi = loi;
-        hong.add(viec + k);
+        hong.set(viec + k, loi);
         nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}`);
       }
     }
@@ -338,7 +339,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
         }
       } catch (loi) {
         loiCuoi = loi;
-        if (loi.hetLuot || /401|403|402/.test(String(loi.status))) hong.add("dịch bù" + k);
+        if (loi.hetLuot || /401|403|402/.test(String(loi.status))) hong.set("dịch bù" + k, loi);
         nhat(`↪️ ${n.ten} (dịch bù) không dùng được: ${loi.message.split("\n")[0]}`);
       }
     }

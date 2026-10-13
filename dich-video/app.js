@@ -688,6 +688,7 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
       }
       if (r.status === 402) return `⚠️ ${ten}: mã đúng nhưng hết tiền – nạp thêm`;
       if (r.status === 429) return `⚠️ ${ten}: mã đúng nhưng đang hết lượt, chờ một lúc`;
+      if (r.status === 400 && /location is not supported/i.test(await r.clone().text().catch(() => ""))) return `⚠️ ${ten}: Google chặn theo vị trí mạng (VPN/mạng nước ngoài) – tắt VPN hoặc đổi wifi ↔ 4G; mã có thể vẫn đúng`;
       if ([400, 401, 403].includes(r.status)) return `❌ ${ten}: mã sai hoặc thiếu quyền (mã ${r.status}) – dán lại mã`;
       return `⚠️ ${ten}: chưa kiểm tra được (mã ${r.status}), thử lại sau`;
     } catch (loi) {
@@ -1623,6 +1624,9 @@ async function docGemini(chu, lan = 0) {
 }
 
 // Gọi dịch vụ đọc: tự thử lại khi mạng chập chờn hoặc bị giới hạn lượt/phút
+// Edge hỏng liên tục (Microsoft chặn/ngắt) → bỏ Edge sớm, chuyển giọng kế tiếp thay vì cố hàng chục phút
+let edgeLoi = 0, edgeXong = 0;
+const edgeYeu = () => edgeLoi >= 10 && edgeLoi > edgeXong * 0.2;
 async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
   let lanDongThoi = 0;
   for (let lan = 0; ; lan++) {
@@ -1638,11 +1642,14 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
       throw e;
     }
     if (r.ok) {
+      if (dv === "edge") edgeXong++;
       if (Date.now() - bd > 8000) nhat(`🐢 ${DICH_VU[dv].ten} trả lời chậm: ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
       return kieu === "json" ? r.json() : new Uint8Array(await r.arrayBuffer());
     }
     const chu = await r.text().catch(() => "");
     nhat(`⚠️ ${DICH_VU[dv].ten}: mã ${r.status} · ${chu.slice(0, 150)}`);
+    if (dv === "edge" && r.status >= 500 && ++edgeLoi && edgeYeu())
+      throw Object.assign(new Error(`Edge lỗi liên tục (${edgeLoi} lần lỗi, mới đọc được ${edgeXong} câu)`), { status: r.status, dv, edgeYeu: true });
     let j = {};
     try { j = JSON.parse(chu); } catch {}
     const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
@@ -2078,6 +2085,7 @@ async function longTiengBang(dv) {
   // Edge (miễn phí, không chính thức) thỉnh thoảng ngắt kết nối ở vài câu → bỏ trống vài câu đó
   // thay vì đổi giọng cả video; lỗi quá nhiều câu thì mới chuyển dịch vụ khác
   const loiEdge = [], toiDaLoiEdge = Math.max(3, Math.ceil(cau.length * 0.1));
+  if (dv === "edge") edgeLoi = edgeXong = 0;
   await Promise.all(Array.from({ length: soLuong }, async () => {
     while (hang.length && !hong) {
       const i = hang.shift();
@@ -2259,6 +2267,15 @@ const moHinhNghi = new Set(); // mô hình đang quá tải hoặc hết lượt
 // Lưu trên máy: mô hình nào hết lượt tới lúc nào / đã ngừng → lần sau khỏi thử lại
 function napMoHinhNghi() {
   moHinhNghi.clear();
+  // Bản cũ ghi nhầm lỗi "Google chặn theo vị trí mạng" thành "mô hình đã ngừng" (bỏ qua 30 ngày) → xoá 1 lần các ghi nhớ dài hạn
+  try {
+    if (!localStorage.getItem("phaha-sua-gemini-vi-tri")) {
+      const cu = docLuu("phaha-dv-gemini-nghi");
+      for (const k of Object.keys(cu)) if (cu[k] > Date.now() + 2 * 86400000) delete cu[k];
+      localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cu));
+      localStorage.setItem("phaha-sua-gemini-vi-tri", "1");
+    }
+  } catch {}
   const d = docLuu("phaha-dv-gemini-nghi");
   for (const [m, han] of Object.entries(d)) if (han > Date.now()) moHinhNghi.add(m);
 }
@@ -2429,6 +2446,9 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       throw Object.assign(new Error("Gemini đang quá tải"), { status: 503, doiMoHinh: true });
     }
     if (r.status >= 500 && lan < 3) { await cho(5); continue; }
+    // Google chặn theo vị trí mạng (VPN, mạng nước ngoài…) – không phải lỗi mô hình hay mã → dừng luôn, không ghi nhớ
+    if (/location is not supported/i.test(thongBao))
+      throw Object.assign(new Error("Google đang chặn Gemini theo vị trí mạng của bạn (thường do VPN/proxy hoặc mạng nước ngoài). Tắt VPN hoặc đổi mạng (wifi ↔ 4G) rồi thử lại. Mã Gemini vẫn đúng."), { status: 400, viTri: true });
     const e = new Error(thongBao);
     e.status = r.status === 400 && /not found|not supported|is not/i.test(thongBao) ? 404 : r.status;
     // Google gợi ý mô hình thay thế, vd "use models/gemini-3.8-flash"
@@ -2493,6 +2513,7 @@ function loiDeHieu(loi) {
   }
   if (loi?.dv === "edge") {
     if (loi.status === 401) return "Giọng Edge cần đăng nhập app PHAHA trên máy này (mở tab Lịch việc để đăng nhập).";
+    if (loi.edgeYeu) return m + " – Microsoft đang chặn hoặc quá tải, app chuyển sang giọng kế tiếp.";
     return "Giọng Edge tạm không dùng được (Microsoft có thể đã chặn): " + m;
   }
   if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Gemini không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
