@@ -124,7 +124,7 @@ let baoChonGiong = () => {};
 let nhatKyChay = [];
 let mocNhat = Date.now();
 function nhat(chu) {
-  chu=String(chu);for(const key of [caiDat.khoa,caiDat.khoaDoc,...Object.values(caiDat.dv).map(v=>v.khoa),...Object.values(caiDat.dp).filter(v=>typeof v==='string')].filter(v=>v&&v.length>=8))chu=chu.split(key).join("[đã ẩn]");
+  chu=String(chu);for(const key of [caiDat.khoa,caiDat.khoaDoc,...dsKhoaDoc(),...Object.values(caiDat.dv).map(v=>v.khoa),...Object.values(caiDat.dp).filter(v=>typeof v==='string')].filter(v=>v&&v.length>=8))chu=chu.split(key).join("[đã ẩn]");
   const s = (Date.now() - mocNhat) / 1000;
   const dong = `[${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}] ${chu}`;
   if(globalThis.PHARunLog){globalThis.PHARunLog.add('Dịch & lồng tiếng',dong);return;}
@@ -623,7 +623,9 @@ async function chiTietHanMuc(ten, r) {
     if (ten === "Gemini (nghe & dịch)") {
       return hanMucGemini(caiDat.khoa, "nghe") + (caiDat.khoaDoc ? "" : " · " + hanMucGemini(caiDat.khoa, "doc"));
     }
-    if (ten === "Gemini riêng cho giọng đọc") return hanMucGemini(caiDat.khoaDoc, "doc");
+    if (ten === "Gemini riêng cho giọng đọc") return hanMucGemini(dsKhoaDoc()[0], "doc");
+    const soMa = /^Gemini giọng đọc – mã (\d+)$/.exec(ten);
+    if (soMa) return hanMucGemini(dsKhoaDoc()[soMa[1] - 1], "doc");
     if (ten === "Groq") {
       const giay = daDung(`groq:${vanTayMa(caiDat.dp.groq)}`);
       return `nghe: ${hanMuc(Math.round(giay / 60), 480, "phút âm thanh", true, gioLamMoiQT())}`;
@@ -654,7 +656,7 @@ $("nut-kiem-tra-ma").addEventListener("click", async () => {
   const bear = (k) => ({ headers: { Authorization: "Bearer " + k } });
   const ds = [
     ["Gemini (nghe & dịch)", caiDat.khoa, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoa } })],
-    ["Gemini riêng cho giọng đọc", caiDat.khoaDoc, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": caiDat.khoaDoc } })],
+    ...(dsKhoaDoc().length ? dsKhoaDoc() : [""]).map((k, i, a) => [a.length > 1 ? `Gemini giọng đọc – mã ${i + 1}` : "Gemini riêng cho giọng đọc", k, () => fetch(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": k } })]),
     ["DeepSeek", caiDat.dp.ds, () => duPhong.goi("https://api.deepseek.com/user/balance", bear(caiDat.dp.ds), "DeepSeek")],
     ["Groq", caiDat.dp.groq, () => duPhong.goi("https://api.groq.com/openai/v1/models", bear(caiDat.dp.groq), "Groq")],
     ["OpenRouter", caiDat.dp.or, () => duPhong.goi("https://openrouter.ai/api/v1/key", bear(caiDat.dp.or), "OpenRouter")],
@@ -2377,7 +2379,12 @@ function luuMoHinhNghi(m, giay) {
 }
 
 // Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (dự án khác → lượt miễn phí riêng)
-const khoaGemini = (loai) => (loai === "doc" && caiDat.khoaDoc) || caiDat.khoa;
+// Ô "Gemini riêng cho giọng đọc" nhận tối đa 5 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng):
+// mã đang dùng hết lượt hôm nay thì tự chuyển sang mã kế tiếp
+const TOI_DA_MA_DOC = 5;
+const dsKhoaDoc = () => [...new Set(String(caiDat.khoaDoc || "").split(/[\s,;]+/).filter(Boolean))].slice(0, TOI_DA_MA_DOC);
+let soMaDoc = 0; // vị trí mã đọc đang dùng trong danh sách
+const khoaGemini = (loai) => (loai === "doc" && dsKhoaDoc()[soMaDoc]) || (loai === "doc" && dsKhoaDoc()[0]) || caiDat.khoa;
 // Ghi nhớ "hết lượt" theo TỪNG MÃ (dấu vân tay ngắn của mã, không lưu mã): đổi mã là có sổ ghi nhớ mới
 function vanTayMa(khoa) {
   let h = 5381;
@@ -2388,6 +2395,25 @@ const tenNghi = (m, loai) => vanTayMa(khoaGemini(loai) || "") + ":" + m;
 let daBaoNghi = new Set(); // đã ghi nhật ký "bỏ qua vì ghi nhớ" (mỗi lần chạy 1 lần)
 
 async function goiGemini(loai, noiDung) {
+  const ds = loai === "doc" ? dsKhoaDoc() : [];
+  if (ds.length < 2) return goiGeminiMotMa(loai, noiDung);
+  if (soMaDoc >= ds.length) soMaDoc = 0;
+  for (let daThu = 0; ; daThu++) {
+    const dang = soMaDoc;
+    try {
+      return await goiGeminiMotMa(loai, noiDung);
+    } catch (loi) {
+      // Hết lượt hôm nay (hoặc mọi loại Gemini của mã này đã được nhớ là hết) → đổi sang mã kế tiếp
+      if (loi?.message !== "HET_NGAY" || daThu >= ds.length - 1) throw loi;
+      if (soMaDoc !== dang) continue; // luồng đọc khác vừa đổi mã rồi → dùng luôn mã mới
+      const cu = soMaDoc;
+      soMaDoc = (soMaDoc + 1) % ds.length;
+      daBaoNghi = new Set();
+      nhat(`🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} hết lượt hôm nay → chuyển sang mã số ${soMaDoc + 1}`);
+    }
+  }
+}
+async function goiGeminiMotMa(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   let ds = [...new Set([tuChon, moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
   let daHoi = false, loiCuoi = null;

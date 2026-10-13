@@ -52,7 +52,7 @@ async function chay(ten, o) {
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
-    if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD") { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
+    if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts")) { dem("gemTTS"); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
     if (o.gemini === "het") return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) });
@@ -244,6 +244,9 @@ const KICH_BAN = {
   "24-edge-chua-dang-nhap": { caiDat: { ...CD, bat: { ...DU, el: false, gemini: false, az: false }, dv: { ...CD.dv, fish: { khoa: "fk" } } }, khongVe: true, han: 600000 },
   "27-gemini-ma-rieng": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het",
       sau: async (p, kq) => { kq.goi.khoaDoc = [...kq.goi.khoaDoc]; kq.goi.khoaNghe = [...kq.goi.khoaNghe]; } },
+  // Dán 3 mã đọc: mã 1, 2 hết lượt → tự chuyển sang mã 3 và đọc bằng Gemini
+  "27c-gemini-xoay-nhieu-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222\nMA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", maDocTot: ["MA-DOC-333333"],
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongVe: true },
