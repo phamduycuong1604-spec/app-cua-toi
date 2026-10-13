@@ -116,6 +116,9 @@ let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm l�
 let anhLogo = null; // ảnh logo đã nạp
 let dangTachNhac = null; // AI tách nhạc đang chạy (giọng máy phải chờ xong mới chạy, tránh tràn bộ nhớ)
 let dangVeHinh = null, xongVeHinh = () => {}; // chèn chữ/logo đang chạy (giọng máy cũng phải chờ)
+let veDangChay = false; // đang dựng hình thật (không chỉ "sẽ dựng")
+// Báo cho luồng chính biết lồng tiếng đã chốt giọng: "may" = Giọng máy, "khac" = giọng khác đã đọc được câu đầu
+let baoChonGiong = () => {};
 
 // ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
 let nhatKyChay = [];
@@ -1073,8 +1076,19 @@ async function chay(lamTuDau) {
     // Lồng tiếng chủ yếu chờ mạng → chạy song song với tách nhạc (AI chạy trên máy) cho nhanh
     buoc("long", "dang");
     dangVeHinh = needsRender ? new Promise((x) => (xongVeHinh = x)) : null;
+    const daChonGiong = new Promise((x) => (baoChonGiong = x));
     huaLong = Promise.resolve().then(longTieng).then((r) => { buoc("long", "xong"); return r; });
     huaLong.catch(() => {});
+    // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
+    // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
+    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 15000))]);
+    if (giongChon === "may") {
+      if (ff) { tatFfmpeg(); nhat("Tạm tắt bộ xử lý video để Giọng máy đọc trước (đỡ tràn bộ nhớ)"); }
+      buocDang = "long";
+      await huaLong; // Giọng máy hỏng thì báo luôn, khỏi tách nhạc/chèn chữ vô ích
+      assertRunning();
+      if (!ff) { huaFf = taiFfmpeg().then(ganVideo); thongTin = await huaFf; }
+    }
 
     buocDang = "nhac";
     let wavNen = null, giamTheoLoi = false;
@@ -1110,6 +1124,7 @@ async function chay(lamTuDau) {
       const batDau = Date.now();
       let mocVe = -1;
       try {
+        veDangChay = true;
         hinh = await xuatHinh(
           tepVideo,
           (ctx, W, H, t) => veLop(ctx, W, H, t, caiDat.lop, cacCau, anhLogo),
@@ -1129,6 +1144,7 @@ async function chay(lamTuDau) {
         buoc("ve", "loi", loi.message + " Video sẽ xuất không có chữ/logo.");
       }
     } else buoc("ve", "bo", "Không bật");
+    veDangChay = false;
     xongVeHinh();
     dangVeHinh = null;
 
@@ -1158,6 +1174,7 @@ async function chay(lamTuDau) {
     baoLoi(loiDeHieu(loi));
   } finally {
     if(!videoKetQua && !runController.signal.aborted)runController.abort(new DOMException('Lượt xử lý đã kết thúc.','AbortError'));
+    veDangChay = false;
     xongVeHinh();
     await Promise.allSettled([huaLong,huaFf,dangTachNhac].filter(Boolean));
     if(hinh?.blob)await globalThis.PHAVideoDownload?.release?.(hinh.blob);
@@ -2098,7 +2115,8 @@ async function longTiengBang(dv) {
   const hang = cau.map((c, i) => i);
   const cacGiong = new Array(cau.length);
   const soLuong = DICH_VU[dv].cungLuc;
-  if (dv === "may" && (dangTachNhac || dangVeHinh)) {
+  if (dv === "may") baoChonGiong("may");
+  if (dv === "may" && (dangTachNhac || veDangChay)) {
     ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
     await dangTachNhac?.catch(() => {});
     await dangVeHinh;
@@ -2114,6 +2132,7 @@ async function longTiengBang(dv) {
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
+        if (dv !== "may") baoChonGiong("khac");
       } catch (loi) {
         if (dv === "edge" && /đóng kết nối|không trả về âm thanh|quá lâu|Lỗi kết nối/.test(loi.message) && loiEdge.length < toiDaLoiEdge) {
           loiEdge.push(i);
@@ -2127,6 +2146,7 @@ async function longTiengBang(dv) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  if (dv === "may") { thoDocMay?.terminate(); thoDocMay = null; } // đọc xong tắt bộ đọc, trả bộ nhớ cho các bước sau
   if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   // Đặt từng câu vào đúng thời điểm. Câu Việt dài hơn chỗ trống thì đọc nhanh hơn (tối đa 1,6 lần);
