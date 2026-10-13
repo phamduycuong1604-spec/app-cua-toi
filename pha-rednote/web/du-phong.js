@@ -31,7 +31,19 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
   const quaMayChu = new Set(); // các tên miền phải đi vòng qua máy chủ PHAHA (trình duyệt bị chặn)
 
   // Gọi một dịch vụ bên ngoài; trình duyệt bị chặn thì đi vòng qua máy chủ PHAHA
-  async function goi(url, tuyChon, ten) {
+  // Mỗi lần gọi có hạn chờ: mạng chập chờn thì báo lỗi sớm để chuyển dịch vụ, không treo vài phút
+  const hanCho = (url) => (/transcri/.test(url) ? 75 : /chat\/completions|translate/.test(url) ? 120 : 60);
+  async function goi(url, tuyChonGoc, ten) {
+    const han = hanCho(url);
+    const tuyChon = { ...tuyChonGoc, signal: tuyChonGoc.signal ? AbortSignal.any([tuyChonGoc.signal, AbortSignal.timeout(han * 1000)]) : AbortSignal.timeout(han * 1000) };
+    try {
+      return await goiThat(url, tuyChon, ten);
+    } catch (loi) {
+      if (loi?.name === "TimeoutError") throw Object.assign(new Error(`${ten}: không trả lời sau ${han} giây (mạng chậm hoặc dịch vụ đang treo)`), { quaHan: true });
+      throw loi;
+    }
+  }
+  async function goiThat(url, tuyChon, ten) {
     assertRunning();
     const host = new URL(url).hostname;
     const quaMC = async () => {
@@ -44,6 +56,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       try {
         r = await fetch(url, tuyChon);
       } catch (loi) {
+        if (loi?.name === "TimeoutError" || loi?.name === "AbortError") throw loi;
         nhat(`${ten}: không gọi thẳng được (${loi.message}), thử đi vòng qua máy chủ PHAHA`);
         quaMayChu.add(host);
         r = await quaMC();
@@ -68,7 +81,14 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
   // Thử lại khi bị giới hạn theo phút (chờ ngắn), còn lại báo lỗi để chuyển dịch vụ
   async function goiCoThuLai(url, tuyChonFn, ten) {
     for (let lan = 0; ; lan++) {
-      const r = await goi(url, tuyChonFn(), ten);
+      let r;
+      try {
+        r = await goi(url, tuyChonFn(), ten);
+      } catch (loi) {
+        if (!loi.quaHan || lan >= 1) throw loi;
+        nhat(`⏱️ ${loi.message} → gửi lại 1 lần`); // quá hạn chờ: thử lại 1 lần rồi mới chuyển dịch vụ
+        continue;
+      }
       if (r.ok) return r;
       const loi = await docLoi(r, ten);
       nhat("⚠️ " + loi.message);
@@ -365,10 +385,12 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       let cau = await thuLanLuot(NGHE, ["groq", "cloudflare", "azure"], "nghe", (n) => n.chay(wav, b64));
       cau = cau.filter((c) => c.zh && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start);
       if (!cau.length) return [];
-      // Dịch từng nhóm tối đa 40 câu
-      const ra = [];
-      for (let i = 0; i < cau.length; i += 40) {
-        const nhom = cau.slice(i, i + 40);
+      // Dịch từng nhóm tối đa 40 câu, tối đa 3 nhóm cùng lúc (nhóm sau không phải chờ nhóm trước)
+      const cacNhom = [];
+      for (let i = 0; i < cau.length; i += 40) cacNhom.push(cau.slice(i, i + 40));
+      const ketQua = new Array(cacNhom.length);
+      let tiep = 0;
+      const dichNhom = async (nhom) => {
         const vi = await thuLanLuot(DICH, THU_TU_DICH, "dịch", (n) => n.chay(nhom));
         // Câu nào AI bỏ sót → dịch bù riêng những câu đó (không lặng lẽ bỏ qua)
         const sot = nhom.map((c, k) => k).filter((k) => chuaDich(vi[k]));
@@ -381,9 +403,12 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
             nhat("Dịch bù không được: " + loi.message.split("\n")[0]);
           }
         }
-        nhom.forEach((c, k) => ra.push({ ...c, vi: vi[k] || "" }));
-      }
-      return ra;
+        return nhom.map((c, k) => ({ ...c, vi: vi[k] || "" }));
+      };
+      await Promise.all(Array.from({ length: Math.min(3, cacNhom.length) }, async () => {
+        while (tiep < cacNhom.length) { const j = tiep++; ketQua[j] = await dichNhom(cacNhom[j]); }
+      }));
+      return ketQua.flat();
     },
   };
 }
