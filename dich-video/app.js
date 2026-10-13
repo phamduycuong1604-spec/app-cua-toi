@@ -89,6 +89,9 @@ let nhacNen = null; // { tep, loai, wav } nhạc nền đã tách, để làm l�
 let anhLogo = null; // ảnh logo đã nạp
 let dangTachNhac = null; // AI tách nhạc đang chạy (giọng máy phải chờ xong mới chạy, tránh tràn bộ nhớ)
 let dangVeHinh = null, xongVeHinh = () => {}; // chèn chữ/logo đang chạy (giọng máy cũng phải chờ)
+let veDangChay = false; // đang dựng hình thật (không chỉ "sẽ dựng")
+// Báo cho luồng chính biết lồng tiếng đã chốt giọng: "may" = Giọng máy, "khac" = giọng khác đã đọc được câu đầu
+let baoChonGiong = () => {};
 
 // ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
 let nhatKyChay = [];
@@ -1036,8 +1039,17 @@ async function chay(lamTuDau) {
     // Lồng tiếng chủ yếu chờ mạng → chạy song song với tách nhạc (AI chạy trên máy) cho nhanh
     buoc("long", "dang");
     dangVeHinh = canVe(caiDat.lop, cacCau, anhLogo) ? new Promise((x) => (xongVeHinh = x)) : null;
+    const daChonGiong = new Promise((x) => (baoChonGiong = x));
     const huaLong = Promise.resolve().then(longTieng).then((r) => { buoc("long", "xong"); return r; });
     huaLong.catch(() => {});
+    // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
+    // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
+    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 15000))]);
+    if (giongChon === "may") {
+      buocDang = "long";
+      await huaLong; // Giọng máy hỏng thì báo luôn, khỏi tách nhạc/chèn chữ vô ích
+      if (!ff) { await taiFfmpeg(); thongTin = await ganVideo(); }
+    }
 
     let wavNen = null, giamTheoLoi = false, hinh = null;
     const tachNhacBuoc = async () => {
@@ -1069,6 +1081,7 @@ async function chay(lamTuDau) {
       const batDau = Date.now();
       let mocVe = -1;
       try {
+        veDangChay = true;
         hinh = await xuatHinh(
           tepVideo,
           (ctx, W, H, t) => veLop(ctx, W, H, t, caiDat.lop, cacCau, anhLogo),
@@ -1107,6 +1120,7 @@ async function chay(lamTuDau) {
       buocDang = "ve";
       await veHinhBuoc();
     }
+    veDangChay = false;
     xongVeHinh();
     dangVeHinh = null;
 
@@ -1134,6 +1148,7 @@ async function chay(lamTuDau) {
     dangChay = false;
     ghiDangChay(null);
     dangTachNhac = null;
+    veDangChay = false;
     xongVeHinh();
     dangVeHinh = null;
     ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = false));
@@ -2072,7 +2087,8 @@ async function longTiengBang(dv) {
   const cacGiong = new Array(cau.length);
   const soLuong = DICH_VU[dv].cungLuc;
   if (dv === "may") {
-    if (dangTachNhac || dangVeHinh) {
+    baoChonGiong("may");
+    if (dangTachNhac || veDangChay) {
       ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
       await dangTachNhac?.catch(() => {});
       await dangVeHinh;
@@ -2091,6 +2107,7 @@ async function longTiengBang(dv) {
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
+        if (dv !== "may") baoChonGiong("khac");
       } catch (loi) {
         if (dv === "edge" && /đóng kết nối|không trả về âm thanh|quá lâu|Lỗi kết nối/.test(loi.message) && loiEdge.length < toiDaLoiEdge) {
           loiEdge.push(i);
