@@ -1,0 +1,42 @@
+{
+  "version": 27,
+  "commit_sha": "fb6ee076e7a7cbc1a291c5a5cbdde4b7866a281f",
+  "files": [
+    {
+      "file": "worker/index.js",
+      "sha256": "1ea5df42804fe7d4775c3e82e7c17d3417cc257aaa0f25b210df601d63094c9c"
+    },
+    {
+      "file": "web/video-download.js",
+      "sha256": "8b643b0268c5cb2f30f9875b1c486628a41a27228d5e0e78ba89660f9fcaafc7"
+    },
+    {
+      "file": "web/video-1080.js",
+      "sha256": "98287042bb71b4a30c6a4e0f15baeea99102b7652344e3fe08b7ca370fe54419"
+    },
+    {
+      "file": "web/run-journal.js",
+      "sha256": "f4ea2fca05ee934650314769ea0e639de1d40df4dd138d52cb3996f0eed00819"
+    },
+    {
+      "file": "web/dub-client.js",
+      "sha256": "377f78520a59850246c70080ca685459f6751a183373c7e09bc376e1ec3cb5b3"
+    },
+    {
+      "file": "web/site-bridge.js",
+      "sha256": "b36e0bbc170e88697951ca8bbdb3ce78eecaeb3fd00753082cdeebb7c0fc0e6f"
+    },
+    {
+      "file": "web/dub.html",
+      "sha256": "69c3c7d1581291c91c2c4b1a9db83b4510490f78c7bb63e2a07ad7b3cf8a3902"
+    },
+    {
+      "file": "scripts/video-download.test.mjs",
+      "sha256": "eb3bf510aeb93f21d087becba331173d211b73f41354391bfa9fb1a9589fdd77"
+    },
+    {
+      "file": "scripts/core.test.mjs",
+      "sha256": "db445f6367a37a3d3c53a9dc409f237472fd76c408f3166896f8d037fc7ca268"
+    }
+  ]
+}

@@ -1,0 +1,247 @@
+{
+  "sites_commit": "a7c0db3fecdea17c1ed8c43b312e2029bd024725",
+  "manual_app_release": 34,
+  "patch": 12,
+  "source_files": [
+    {
+      "path": ".gitignore",
+      "sha256": "4ed3da0f7d3d6d89f4c00d54a7942ce52026ad4df978eef948d0c2b9f5d14398"
+    },
+    {
+      "path": ".openai/hosting.json",
+      "sha256": "820c586f45aace9dfddd5a3eb4e23af8e1d6301574a8979337a231e2c0a69b8a"
+    },
+    {
+      "path": "README.md",
+      "sha256": "ae05d3d590b1dc9b72294e939d41456d5e8feae4f72b4bf618e5a8aa20d843f3"
+    },
+    {
+      "path": "docs/device-test.md",
+      "sha256": "31e1948fbc7cdc7c1f3fed70a0f4829e10c0f0f2d078747888a218bef3319a74"
+    },
+    {
+      "path": "docs/download-qa-2026-10-10.md",
+      "sha256": "964a98e7cd385665823d58c11a0ef1b842d83bce7454b01ea093753f5b370023"
+    },
+    {
+      "path": "docs/pha-caption-profiles.md",
+      "sha256": "d2b1311e2e578d123c966f2c1b19739c05bdabbd29865360751da2d866ac09a9"
+    },
+    {
+      "path": "docs/qa-2026-10-10.md",
+      "sha256": "f84e61a7a378bce7ea5d1dfb03201e0ac4cda3086b79a4b25258a9c6d527793e"
+    },
+    {
+      "path": "docs/run-journal.md",
+      "sha256": "bfd24724f00b505b44b05d65c218e2d2f1e71148c3b8a464fcfae491fd7e01b0"
+    },
+    {
+      "path": "docs/third-party-notices.md",
+      "sha256": "69e0744d69930e9820b65eb21d9f35df6229605ea36c3828963cd7845d5a681e"
+    },
+    {
+      "path": "docs/video-source-integration.md",
+      "sha256": "8989e94699941b034293bbf6f59be3950dfcc310b74c3839a746cf548ac878c0"
+    },
+    {
+      "path": "docs/video-source-manifest.json",
+      "sha256": "b2b0c53b3f14e516d361912d5385a35a744af35c497a714fb5e99792145a785d"
+    },
+    {
+      "path": "docs/video-studio.md",
+      "sha256": "26f221c8bc85361ba0bd3557e4b5d93457a2028537b6971fe94b609ea5dd3bf9"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "f98aade2c5dc9c17048061d8448a788ebfd93378f571d1ee35e1e63f3d62e93a"
+    },
+    {
+      "path": "package.json",
+      "sha256": "cc56005276f959e7dd6971e66cea0d79741c80d0028d09821feaa97c2e54e463"
+    },
+    {
+      "path": "scripts/audio-wasm-check.mjs",
+      "sha256": "74c916c9374f3a82ca9453110b705b4a5dd1c31804df4da07cfc6a853845b622"
+    },
+    {
+      "path": "scripts/build.mjs",
+      "sha256": "9df2ea9b228d373a0805e050b9ee1ff2bff5463790cacdeca49c501b13ad2aec"
+    },
+    {
+      "path": "scripts/build.sh",
+      "sha256": "dd4a95e10fd19421dd83bf7e703183dccc142b1eb0bb10935b28a3ba757f8c47"
+    },
+    {
+      "path": "scripts/core.test.mjs",
+      "sha256": "76a79d544809ee2ad4bb90896476702600ce70b123c28b56642e9a732705a041"
+    },
+    {
+      "path": "scripts/device-test.test.mjs",
+      "sha256": "3ebb5135c5d0f90d7b99c6120acc142632e75e2290dede7ba86245780d1447f1"
+    },
+    {
+      "path": "scripts/dub-client.test.mjs",
+      "sha256": "020ff9d2565bee3ebc899655549ad9db1b584fcc63eee91e5b9bac82543cf759"
+    },
+    {
+      "path": "scripts/dub-wasm-check.mjs",
+      "sha256": "1cc4e2bf847197da0646a9bfdc65958b8f83ed180fe105a19514cbeb11887b71"
+    },
+    {
+      "path": "scripts/dub.test.mjs",
+      "sha256": "176b4005208349bebdb6fb4c948fd717a77ff73d492ae4e406a72c8ef844da1b"
+    },
+    {
+      "path": "scripts/run-journal.test.mjs",
+      "sha256": "70c9d8f1b236de0351ed8b3dbb621f1687069f1d0391d25389d7278bdb0d6594"
+    },
+    {
+      "path": "scripts/source-harness.mjs",
+      "sha256": "f5be8ae8c1470e4a8ab8eebdb91d47fa198e322174d1fe65585bc20d0bf83ffa"
+    },
+    {
+      "path": "scripts/source-wasm-check.mjs",
+      "sha256": "6c73d364cc0ff078c20c9ce43e790c8bdc0d036324f0b0de363b6da3b9ee9ca7"
+    },
+    {
+      "path": "scripts/source.test.mjs",
+      "sha256": "13c8deb6a106390dbe3b6b619e98dabac352acaa18f42ddbfc9c308343f2b01c"
+    },
+    {
+      "path": "scripts/validate-artifact.mjs",
+      "sha256": "eb03500907739964299751f7fb0b15a7458d168dfed861607807d23d8857fd57"
+    },
+    {
+      "path": "scripts/video-1080.test.mjs",
+      "sha256": "300093d3d75a94b2f254abb04b53cd8ba5073c87ba401c8d9bfdae992208aa48"
+    },
+    {
+      "path": "scripts/video-download.test.mjs",
+      "sha256": "037db7f817dfaab708fd42728dc27738dc38441763d19e35208e5f9bca7e2f41"
+    },
+    {
+      "path": "scripts/video-server.test.mjs",
+      "sha256": "d407516df3fe4f0ad8e797242c4fe48b5c82c6420ad1dc0796dabd60236ff4e6"
+    },
+    {
+      "path": "web/device-test-core.js",
+      "sha256": "e790fb434736eae9a0342b41dcc15eaa0f52ef1a5d42965fbd17346a73a8e34e"
+    },
+    {
+      "path": "web/device-test.html",
+      "sha256": "ec370672a064b717a73f36df82b324529083ca9a9b4fb8dc996fb13af211cb04"
+    },
+    {
+      "path": "web/device-test.js",
+      "sha256": "cdb44e52f551f8d36ebd19237e97474d4c894706acd294f6c8c8db0730d4b132"
+    },
+    {
+      "path": "web/doc-may.js",
+      "sha256": "6b0a044933c158d0ca64553370d703bf4b955d581283570e722da85b37ddc2c0"
+    },
+    {
+      "path": "web/dong-bo.js",
+      "sha256": "b17a0bc9e404c8278b941853b9399001d6eddf9bad8c63b2c8af523ca772a91c"
+    },
+    {
+      "path": "web/du-phong.js",
+      "sha256": "0487b1f2762be35b625cf72a59e158af32a43a788bdbbc1d59696b6f3a9e0f49"
+    },
+    {
+      "path": "web/dub-client.js",
+      "sha256": "8593a424dc1e359f0d406ec402f098adf3a68ffd578212c55ded47bf1376562f"
+    },
+    {
+      "path": "web/dub-core.js",
+      "sha256": "e2f448df5aa9960728f3adbe67bd9bf0c0b05e9f0ebf410c85f4c7370aba071e"
+    },
+    {
+      "path": "web/dub.css",
+      "sha256": "69f47239ee14acfc9de0634eeff48cec9bed76c240a12a5a4f62058c69214f0a"
+    },
+    {
+      "path": "web/dub.html",
+      "sha256": "89c46b90d174933f6bd577d91268fd625ac0e24f4d38481e818795b9ee94c80e"
+    },
+    {
+      "path": "web/local-voice.js",
+      "sha256": "857b4d3d311f381b0775e72efe3d116d5f31d52c2d2830038a58d329c65b4247"
+    },
+    {
+      "path": "web/lop-phu.js",
+      "sha256": "230525056698ef38ea30ce911135222a5db672baf0f03e1e7865f347a2ac86c7"
+    },
+    {
+      "path": "web/release-info.js",
+      "sha256": "8f1442e31d003757e0f393f89b235d4a252ee4e5b0374bbb3cd0c854607d7223"
+    },
+    {
+      "path": "web/run-journal.js",
+      "sha256": "f4ea2fca05ee934650314769ea0e639de1d40df4dd138d52cb3996f0eed00819"
+    },
+    {
+      "path": "web/separation.js",
+      "sha256": "23e2a6c0d25f1974736cf1f81e72097f94b69d81783a02ca08f649fcd95fbe28"
+    },
+    {
+      "path": "web/site-bridge.js",
+      "sha256": "b36e0bbc170e88697951ca8bbdb3ce78eecaeb3fd00753082cdeebb7c0fc0e6f"
+    },
+    {
+      "path": "web/tach-nhac.js",
+      "sha256": "acd90a973376db0bef7d299defe525c8dd92ceb223bc112f0a1aedfcdb7f7d72"
+    },
+    {
+      "path": "web/vad.js",
+      "sha256": "68a096cd932c9ef67ff7112cb52d1a315bdb64bc1398c70a3e3089a3a2c476eb"
+    },
+    {
+      "path": "web/video-1080.js",
+      "sha256": "fccae6b298613e38aaaae5863a32df412e7e5aafc446e24e553da20608ef93ec"
+    },
+    {
+      "path": "web/video-download.js",
+      "sha256": "4046d7fe583319fca2da7a1c76e7cc7a7304ba77506c3a6cf8e2ad4362d0405a"
+    },
+    {
+      "path": "worker/assets.generated.js",
+      "sha256": "ce4df76ab8daa4af20aec4d3bc5848041f18b2ce5aa72820177b7a4b568416c7"
+    },
+    {
+      "path": "worker/dub.js",
+      "sha256": "85d6afb87e256018dfdaa11fd1b9e357b478d4a5fcd0f832b6cb0ec3de4fa844"
+    },
+    {
+      "path": "worker/edge-tts.js",
+      "sha256": "0d1181b069ca30ccd50ed19bb9e285443116282ad1611605cd3519bbc2fee4c6"
+    },
+    {
+      "path": "worker/index.js",
+      "sha256": "f6f8a87f32983f2b23f870113a51870e655d776476e54a2e03ddf08412aa1b95"
+    },
+    {
+      "path": "worker/source-manifest.json",
+      "sha256": "9be8b020450eeb2ee44d3c1916848d6e6b63534324e83faa8289eaff07cbb294"
+    },
+    {
+      "path": "worker/source.generated.js",
+      "sha256": "e189550846de0ccd71e8f3c4b4c93ddcf2a434d0e2d0ffb82ceacf026f003556"
+    },
+    {
+      "path": "worker/source.js",
+      "sha256": "2e9e07be1f8c310a2849dea2a547707800434bb2769d0bdaf3d6d7f1cb9aa59d"
+    },
+    {
+      "path": "worker/vendor/NotoSans-Regular.ttf",
+      "sha256": "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5"
+    },
+    {
+      "path": "worker/vendor/OFL-NotoSans.txt",
+      "sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb"
+    },
+    {
+      "path": "worker/video-server.js",
+      "sha256": "43d5d891472b7bce27ec8b1afddb50cbd0bcaa3171c4747c4b38c9c5aa7e6caa"
+    }
+  ]
+}

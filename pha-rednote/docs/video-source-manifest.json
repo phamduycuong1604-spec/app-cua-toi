@@ -1,0 +1,67 @@
+[
+  {
+    "path": "dich-video/index.html",
+    "bytes": 31884,
+    "sha256": "81a22949ea04d41360d8b4ec620552950a5fac8e7b0b286b0491bd99a0fa9592"
+  },
+  {
+    "path": "dich-video/style.css",
+    "bytes": 7745,
+    "sha256": "722addfa950a356d770fcdf8ae79d6498206956ed0c41f6b3ec4b3b37eab22c4"
+  },
+  {
+    "path": "dich-video/lop-phu.js",
+    "bytes": 6351,
+    "sha256": "db022e2d18ce5a3e7dab7e3a24e77598151cdeb629b97edbe61cb9cfd14bb95c"
+  },
+  {
+    "path": "dich-video/app.js",
+    "bytes": 128738,
+    "sha256": "ce50708bee0dfa1c3c904172465b8c77af30eca20026b8c34be57af8e8adb97b"
+  },
+  {
+    "path": "dich-video/du-phong.js",
+    "bytes": 19804,
+    "sha256": "b3c1373ff4bb063fa9d35402378761281eec3a16ab228f5fa5ec79e12863d114"
+  },
+  {
+    "path": "dich-video/tach-nhac.js",
+    "bytes": 10982,
+    "sha256": "acd90a973376db0bef7d299defe525c8dd92ceb223bc112f0a1aedfcdb7f7d72"
+  },
+  {
+    "path": "dich-video/doc-may.js",
+    "bytes": 4140,
+    "sha256": "6b0a044933c158d0ca64553370d703bf4b955d581283570e722da85b37ddc2c0"
+  },
+  {
+    "path": "dich-video/dong-bo.js",
+    "bytes": 3613,
+    "sha256": "f149bc3f0ac27f7b332da534fa3f048baa4603153fc6b8f5d2ebf9d36e719880"
+  },
+  {
+    "path": "may-chu/src/index.js",
+    "bytes": 13586,
+    "sha256": "03171db9d995daf44a0f5a776f33a17c617aec3e6ed72b068e58224de51a836f"
+  },
+  {
+    "path": "may-chu/src/ai.js",
+    "bytes": 6225,
+    "sha256": "1162c97018302902fabdc7d0ed40385dcc9164accce91729c5e8ad7cf43d7196"
+  },
+  {
+    "path": "may-chu/src/edge-tts.js",
+    "bytes": 5433,
+    "sha256": "1e3a7fba6af6c6ea4ab5efd44f6d7263b8aa06bb16bf94d1993b804e414454c6"
+  },
+  {
+    "path": "may-chu/src/tai-khoan.js",
+    "bytes": 16950,
+    "sha256": "2beedd17ac13a21b95c79bf0af4db602ab30376d71e13473989f1b738ef6764b"
+  },
+  {
+    "path": "may-chu/src/rednote.js",
+    "bytes": 9468,
+    "sha256": "66c66e02e1f4347b8bd95a840b02483a3763821e2c5ce3897328d1ed061ef3c0"
+  }
+]

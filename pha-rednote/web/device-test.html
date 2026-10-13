@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PHA · Kiểm tra trên iPhone</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#183c33;background:#edf7f3}*{box-sizing:border-box}body{margin:0;padding:calc(18px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}main{max-width:680px;margin:auto}section{background:white;border:1px solid #d9e8e1;border-radius:20px;padding:20px;margin:18px 0}h1{font-size:26px;margin:16px 0}h2{font-size:20px}p{line-height:1.6}small,.hint{color:#64766f}button,.choose{font:inherit;font-weight:600;padding:14px 18px;border-radius:12px;border:1px solid #c7ddd1;background:#d0f0e3;color:#183c33;display:inline-block}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}.primary{background:#15835f;color:white;border:0;width:100%;margin:12px 0}.row{display:flex;gap:10px;flex-wrap:wrap}input[type=file]{max-width:100%;font:inherit;margin:10px 0}label{display:block}video,audio{width:100%;margin:12px 0}video{max-height:360px;background:#142e25;border-radius:12px}textarea{width:100%;min-height:280px;background:#f5faf7;border:1px solid #d6e4db;border-radius:10px;font:12px/1.6 ui-monospace,monospace;padding:12px;resize:vertical}li{line-height:1.6;margin:8px 0;overflow-wrap:anywhere}a{color:#166149}[hidden]{display:none!important}#status{font-weight:600;line-height:1.6}output{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+</style></head><body><main>
+<a href="/#videoStudio">‹ Về dịch video PHAHA</a><h1>Kiểm tra trên iPhone</h1>
+<p>Chạy trực tiếp trong Safari của Ông Chủ. Trang kiểm tra tách tiếng, xuất MP4, chèn phụ đề/logo và giọng Edge.</p>
+<section><h2>Thiết bị & video</h2><output id="device"></output>
+<label for="source">Chọn video bị lỗi để thử tách tiếng (không bắt buộc)</label><input id="source" type="file" accept="video/*">
+<p class="hint" id="fileInfo">Chưa chọn: dùng video mẫu hai giây do điện thoại tạo.</p>
+<p class="hint">Video chọn giữ trên máy. Lần đầu tải bộ xử lý khoảng 31 MB. Bài thử tách tối đa 30 giây âm thanh; phụ đề/logo chạy trên mẫu nhỏ. Giữ Safari mở và màn hình sáng khi chạy.</p>
+<label><input id="edgeEnabled" type="checkbox" checked> Thử giọng Edge qua máy chủ PHAHA với câu “Xin chào PhaHa.”</label>
+<button class="primary" id="start">▶ Chạy kiểm tra trên điện thoại</button><button id="stop" disabled>Dừng kiểm tra</button>
+<p id="status" role="status" aria-live="polite">Chưa chạy trên thiết bị này.</p><ol id="results"></ol></section>
+<section id="previews" hidden><h2>Kết quả mẫu</h2><p>Phát video để kiểm tra hình, âm thanh và dấu tiếng Việt.</p><video id="video" controls playsinline preload="metadata"></video><audio id="audio" controls preload="metadata" hidden></audio><a id="saveVideo" download="PHA-kiem-tra.mp4" hidden>Lưu video mẫu MP4</a></section>
+<section><h2>Nhật ký trên điện thoại</h2><p class="hint">Nhật ký không ghi API key. Có tên file và thông tin trình duyệt để tìm lỗi. Sao chép rồi gửi vào cuộc trò chuyện này.</p><div class="row"><button id="copy">Sao chép nhật ký</button><button id="saveLog">Tải nhật ký .txt</button><button id="clearLog">Xóa toàn bộ nhật ký</button></div><p id="copyStatus" role="status"></p><textarea id="log" readonly aria-label="Nhật ký kiểm tra" spellcheck="false"></textarea></section>
+<p class="hint">Bài thử này kiểm tra các khối xử lý. Chưa kiểm tra nghe/dịch bằng API riêng, tách nhạc AI, Piper hoặc toàn bộ video dài. Trình duyệt không cho biết chính xác đời máy iPhone.</p>
+</main><script src="/dub/run-journal.js"></script><script type="module" src="/dub/device-test.js"></script></body></html>

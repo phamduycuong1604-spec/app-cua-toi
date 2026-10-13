@@ -1,0 +1,467 @@
+<section id="videoStudio" aria-label="Dịch và lồng tiếng video">
+
+  <header class="dau-trang">
+    <div>
+      <a class="ve-phaha" href="#top">‹ Về PHAHA</a>
+      <p class="phu-de">Lồng tiếng Trung → Việt</p>
+      <!-- PHA_APP_RELEASE -->
+      <h2>PhaHa · Dịch video</h2><p id="chuyen-mon-video" class="goi-y"></p><a class="ve-phaha" href="/dub/device-test.html">Kiểm tra trên iPhone ↗</a>
+    </div>
+    <button id="nut-cai-dat" class="nut-tron" aria-label="Cài đặt">⚙️</button>
+  </header>
+
+  <div class="noi-dung-video">
+    <!-- BƯỚC 1: chọn video -->
+    <section class="the">
+      <label class="nut-chon-video" id="nut-chon-video">
+        <input type="file" id="o-video" accept="video/*" hidden>
+        <span class="bieu-tuong">🎬</span>
+        <span id="chu-chon-video">Chọn video tiếng Trung</span>
+      </label>
+      <div class="o-link">
+        <input id="o-link" type="text" inputmode="url" autocomplete="off" placeholder="…hoặc dán link RedNote (小红书) vào đây">
+        <button id="nut-tai-link" type="button">⬇️ Tải</button>
+      </div>
+      <p id="tt-tai-link" class="tt-tai-link an"></p>
+      <video id="xem-goc" class="khung-video an" controls playsinline></video>
+      <button id="nut-bat-dau" class="nut-chinh an">▶ Bắt đầu dịch & lồng tiếng</button><button id="nut-dung" type="button" class="nut-phu an">Dừng xử lý</button>
+    </section>
+
+    <!-- TUỲ CHỈNH: âm thanh, phụ đề, lớp che, logo (có ô xem thử) -->
+    <section class="the an" id="the-tuy-chon">
+      <h2>🎛️ Tuỳ chỉnh video</h2>
+      <canvas id="xem-truoc" class="khung-video"></canvas>
+      <p class="goi-y" id="goi-y-xem">Bấm ▶ video ở trên rồi dừng ở đoạn có chữ Trung để căn chỉnh.</p>
+
+      <details class="muc" open>
+        <summary>🎵 Âm thanh</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="tachNhac"> Tách nhạc nền, bỏ giọng Trung gốc (AI)</label>
+        <div data-hien="tachNhac">
+          <label class="nhan">Kiểu tách</label>
+          <select data-o="mhTach">
+            <option value="nhanh">Nhanh (tải 28MB lần đầu)</option>
+            <option value="ky">Kỹ – sạch hơn, chậm gấp đôi (tải 56MB lần đầu)</option>
+            <option value="giam">Không dùng AI – chỉ giảm tiếng gốc lúc có lời (nhanh nhất)</option>
+          </select>
+          <div class="truot" data-o="amNen" data-min="0" data-max="150" data-buoc="5" data-don-vi="%">Âm lượng nhạc nền</div>
+        </div>
+        <div data-hien="!tachNhac">
+          <div class="truot" data-o="amGoc" data-min="0" data-max="100" data-buoc="5" data-don-vi="%">Giữ lại tiếng gốc (cả giọng Trung)</div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>📝 Phụ đề tiếng Việt</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="lop.phuDe.bat"> Hiện phụ đề trên video</label>
+        <div data-hien="lop.phuDe.bat">
+          <div class="truot" data-o="lop.phuDe.co" data-min="2" data-max="12" data-buoc="0.5">Cỡ chữ</div>
+          <div class="truot" data-o="lop.phuDe.y" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          <div class="hang-chon">
+            <label>Màu chữ <input type="color" data-o="lop.phuDe.mau"></label>
+            <select data-o="lop.phuDe.kieu">
+              <option value="vien">Viền đen</option>
+              <option value="nen">Nền đen mờ</option>
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>⬛ Lớp che chữ Trung</summary>
+        <label class="cong-tac"><input type="checkbox" data-o="lop.che.bat"> Che dòng chữ Trung có sẵn</label>
+        <div data-hien="lop.che.bat">
+          <div class="hang-chon">
+            <select data-o="lop.che.kieu">
+              <option value="mo">Làm mờ</option>
+              <option value="mau">Tô màu</option>
+            </select>
+            <label data-hien="lop.che.kieu=mau">Màu <input type="color" data-o="lop.che.mau"></label>
+          </div>
+          <div class="truot" data-o="lop.che.y" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          <div class="truot" data-o="lop.che.x" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trái ↔ phải)</div>
+          <div class="truot" data-o="lop.che.h" data-min="2" data-max="60" data-buoc="0.5" data-don-vi="%">Chiều cao</div>
+          <div class="truot" data-o="lop.che.w" data-min="5" data-max="100" data-buoc="1" data-don-vi="%">Chiều rộng</div>
+        </div>
+      </details>
+
+      <details class="muc">
+        <summary>🖼️ Logo</summary>
+        <label class="nut-phu nut-nho">
+          <input type="file" id="o-logo" accept="image/*" hidden> <span id="chu-logo">Chọn ảnh logo</span>
+        </label>
+        <div id="phan-logo" class="an">
+          <label class="cong-tac"><input type="checkbox" data-o="lop.logo.bat"> Hiện logo</label>
+          <div data-hien="lop.logo.bat">
+            <div class="truot" data-o="lop.logo.co" data-min="3" data-max="60" data-buoc="1" data-don-vi="%">Cỡ</div>
+            <div class="truot" data-o="lop.logo.mo" data-min="5" data-max="100" data-buoc="5" data-don-vi="%">Độ rõ (thấp = mờ)</div>
+            <div class="truot" data-o="lop.logo.x" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trái ↔ phải)</div>
+            <div class="truot" data-o="lop.logo.y" data-min="0" data-max="100" data-buoc="1" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          </div>
+          <button type="button" id="nut-xoa-logo" class="nut-phu nut-nho">🗑️ Bỏ logo</button>
+        </div>
+      </details>
+      <p class="goi-y">Bật phụ đề, lớp che hoặc logo thì app phải dựng lại hình nên xuất lâu hơn (khoảng bằng độ dài video).</p>
+    </section>
+
+    <!-- Tiến độ các bước -->
+    <section class="the an" id="the-tien-do">
+      <ol class="cac-buoc" id="cac-buoc">
+        <li data-buoc="tai"><span class="dau">○</span> Tải bộ xử lý video <small>(~30MB, chỉ lần đầu)</small><em></em></li>
+        <li data-buoc="tach"><span class="dau">○</span> Tách tiếng khỏi video<em></em></li>
+        <li data-buoc="dich"><span class="dau">○</span> Nghe tiếng Trung & dịch sang tiếng Việt<em></em></li>
+        <li data-buoc="nhac"><span class="dau">○</span> Tách nhạc nền khỏi giọng gốc<em></em></li>
+        <li data-buoc="long"><span class="dau">○</span> Lồng tiếng Việt<em></em></li>
+        <li data-buoc="ve"><span class="dau">○</span> Chèn phụ đề, lớp che, logo<em></em></li>
+        <li data-buoc="xuat"><span class="dau">○</span> Xuất video<em></em></li>
+      </ol>
+      <p class="loi an" id="loi"></p>
+      <p class="goi-y">Giữ màn hình mở, đừng chuyển sang app khác khi đang chạy.</p>
+    </section>
+
+    <!-- Kết quả -->
+    <section class="the an" id="the-ket-qua">
+      <h2>🎉 Video đã lồng tiếng</h2>
+      <video id="xem-ket-qua" class="khung-video" controls playsinline></video>
+      <button id="nut-luu" class="nut-chinh">💾 Lưu video</button>
+      <button id="nut-phu-de" class="nut-phu">📝 Tải phụ đề tiếng Việt (.srt)</button>
+    </section>
+
+    <!-- NHẬT KÝ: ghi lại quá trình chạy gần nhất -->
+    <section class="the">
+      <details class="nhat-ky">
+        <summary>📋 Nhật ký xử lý</summary>
+        <p class="goi-y">Gặp lỗi hoặc chạy chậm: bấm Sao chép rồi dán gửi người hỗ trợ.</p>
+        <pre id="o-nhat-ky"></pre>
+        <button type="button" id="nut-chep-nhat-ky" class="nut-phu nut-nho">📋 Sao chép nhật ký</button>
+        <button type="button" id="nut-xoa-nhat-ky" class="nut-phu nut-nho">🗑 Xóa toàn bộ nhật ký</button>
+        <p id="tt-nhat-ky" class="goi-y" role="status"></p>
+      </details>
+    </section>
+
+    <!-- Bảng lời thoại: sửa được -->
+    <section class="the an" id="the-loi-thoai">
+      <div class="hang-tieu-de">
+        <h2>Lời thoại</h2>
+        <span class="dem" id="dem-cau"></span>
+      </div>
+      <p class="goi-y">Bấm vào giờ để xem đoạn đó. Sửa câu tiếng Việt nếu chưa hay rồi bấm “Làm lại”.</p>
+      <div id="ds-cau"></div>
+      <button id="nut-lam-lai" class="nut-chinh">🔁 Làm lại lồng tiếng & xuất video</button>
+    </section>
+  </div>
+
+  <!-- CÀI ĐẶT -->
+  <dialog id="hop-cai-dat" class="hop">
+    <form method="dialog">
+      <h2>⚙️ Cài đặt dịch video</h2>
+      <details class="muc-dp"><summary>🔊 Thứ tự giọng đọc</summary><div id="thu-tu-giong"></div></details>
+
+      <details class="muc-dp" id="muc-dong-bo">
+        <summary>🔄 Đồng bộ cài đặt giữa các máy</summary>
+        <p class="goi-y" id="tt-dong-bo"></p>
+        <label class="nhan">Mật khẩu đồng bộ</label>
+        <input id="o-mk-dong-bo" type="password" autocomplete="new-password" placeholder="Tự đặt (≥ 10 ký tự), nhập giống nhau ở mọi máy">
+        <label class="cong-tac"><input type="checkbox" id="o-tu-dong-bo"> Tự đồng bộ (mở app thì lấy bản mới, lưu thì gửi lên)</label>
+        <button type="button" id="nut-dong-bo" class="nut-phu">🔄 Đồng bộ ngay</button>
+        <button type="button" id="nut-khoi-phuc-cd" class="nut-phu">♻️ Khôi phục cài đặt cũ</button>
+        <div id="ds-khoi-phuc" class="goi-y an"></div>
+        <p class="goi-y">Gồm: các mã API, giọng đã chọn, thứ tự & bật/tắt giọng, DeepSeek, dịch vụ dự phòng, phụ đề, lớp che, logo. Cài đặt được <b>khoá bằng mật khẩu đồng bộ ngay trên máy</b> rồi mới gửi lên tài khoản PHAHA – máy chủ không đọc được. Quên mật khẩu này thì đặt mật khẩu mới và bấm Đồng bộ ở máy có cài đặt đầy đủ.</p>
+      </details>
+
+      <label class="nhan">Mã Gemini (API key)</label>
+      <input id="o-khoa" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng AIza...">
+      <p class="goi-y">Lấy miễn phí tại
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        → <b>Create API key</b> → sao chép rồi dán vào đây. Mã chỉ lưu trên máy này.</p>
+
+      <label class="cong-tac"><input type="checkbox" id="bat-deepseek"> Dịch bằng DeepSeek (Groq/Cloudflare nghe, DeepSeek dịch)</label>
+      <p class="goi-y">Tắt = Gemini nghe & dịch như cũ (DeepSeek không được dùng, kể cả khi dự phòng).</p>
+      <div id="phan-deepseek">
+        <label class="nhan">Mã DeepSeek (API key) – chỉ dùng khi bật công tắc ở trên</label>
+        <input id="o-khoa-ds" type="password" autocomplete="off" placeholder="sk-...">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (trả trước, rất rẻ)</summary>
+          <ol>
+            <li>Vào <a href="https://platform.deepseek.com" target="_blank" rel="noopener">platform.deepseek.com</a> → đăng nhập (Google hoặc email).</li>
+            <li><b>Top up</b> → nạp ít nhất ~2 đô (thẻ Visa). Dịch 1 video 2 phút chỉ tốn vài chục đồng.</li>
+            <li><b>API keys</b> → <b>Create new API key</b> → sao chép (mã chỉ hiện 1 lần) → dán vào đây.</li>
+          </ol>
+        </details>
+        <p class="goi-y">DeepSeek hết tiền hoặc lỗi thì app tự dịch bằng Groq/Cloudflare/OpenRouter, rồi tới Gemini.</p>
+      </div>
+
+      <h3 class="tieu-de-giong">🔊 Giọng lồng tiếng</h3>
+      <p class="goi-y">App dùng lần lượt theo thứ tự dưới đây: dịch vụ trên hết lượt/lỗi thì tự đọc lại cả video bằng dịch vụ kế tiếp. Mỗi dịch vụ chọn sẵn 1 giọng mặc định, bấm 🔊 để nghe thử.</p>
+
+      <details class="dv-doc" data-dv="el">
+        <summary>1. ElevenLabs <span class="tt" id="tt-el"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-el"> Dùng ElevenLabs</label>
+        <label class="nhan">Mã ElevenLabs (API key)</label>
+        <input id="o-khoa-el" type="password" autocomplete="off" placeholder="Dán mã bắt đầu bằng sk_...">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">elevenlabs.io</a> (gói trả phí: <a href="https://elevenlabs.io/app/subscription" target="_blank" rel="noopener">Subscription</a>).</li>
+            <li>Vào <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">API Keys</a> → <b>Create API Key</b> → bật quyền <b>Text to Speech</b>, <b>Voices</b> → sao chép dán vào đây.</li>
+          </ol>
+        </details>
+        <label class="nhan">Chất lượng</label>
+        <select id="o-mh-el">
+          <option value="eleven_v3">Thật nhất (v3) – 1 ký tự = 1 lượt</option>
+          <option value="eleven_flash_v2_5">Nhanh (Flash) – 1 ký tự = 0,5 lượt</option>
+        </select>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-el"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-el" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="el">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Danh sách gồm giọng trong tài khoản và <b>giọng Việt được dùng nhiều nhất</b> trong thư viện ElevenLabs (🇻🇳). Chọn giọng thư viện thì app tự thêm vào tài khoản.</p>
+        <p class="goi-y" id="chu-ky-tu-el"></p>
+      </details>
+
+      <details class="dv-doc" data-dv="vt">
+        <summary>2. Viettel AI (giọng Việt) <span class="tt" id="tt-vt"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-vt"> Dùng Viettel AI</label>
+        <label class="nhan">Mã Viettel AI (API key / token)</label>
+        <input id="o-khoa-vt" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://viettelai.vn" target="_blank" rel="noopener">viettelai.vn</a> bằng số điện thoại (xác nhận mã OTP). Tài khoản mới được tặng 50.000 ký tự.</li>
+            <li>Đăng nhập → <b>Kho dịch vụ</b> (hoặc tên tài khoản → <b>API Key / Token</b>) → sao chép mã → dán vào đây.</li>
+            <li>Hết ký tự thì mua gói trong viettelai.vn (gói 1 triệu ký tự khoảng 320.000đ ≈ 550đ/video 2 phút).</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-vt">
+          <option value="hn-quynhanh">Nữ miền Bắc – Quỳnh Anh</option>
+          <option value="hn-thaochi">Nữ miền Bắc – Thảo Chi</option>
+          <option value="hn-phuongtrang">Nữ miền Bắc – Phương Trang</option>
+          <option value="hn-thanhha">Nữ miền Bắc – Thanh Hà</option>
+          <option value="hn-thanhphuong">Nữ miền Bắc – Thanh Phương</option>
+          <option value="hn-thanhtung">Nam miền Bắc – Thanh Tùng</option>
+          <option value="hn-namkhanh">Nam miền Bắc – Nam Khánh</option>
+          <option value="hn-tienquan">Nam miền Bắc – Tiến Quân</option>
+          <option value="hue-maingoc">Nữ miền Trung – Mai Ngọc</option>
+          <option value="hue-baoquoc">Nam miền Trung – Bảo Quốc</option>
+          <option value="hcm-diemmy">Nữ miền Nam – Diễm My</option>
+          <option value="hcm-thuydung">Nữ miền Nam – Thùy Dung</option>
+          <option value="hcm-phuongly">Nữ miền Nam – Phương Ly</option>
+          <option value="hcm-thuyduyen">Nữ miền Nam – Thùy Duyên</option>
+          <option value="hn-leyen">Nữ miền Nam – Lê Yến</option>
+          <option value="hcm-minhquan">Nam miền Nam – Minh Quân</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="vt">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng do Viettel làm riêng cho tiếng Việt: đúng dấu, 3 miền, giá rẻ.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="gemini">
+        <summary>3. Gemini <span class="tt" id="tt-gemini"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-gemini"> Dùng Gemini</label>
+        <label class="nhan">Mã Gemini riêng cho giọng đọc (không bắt buộc)</label>
+        <input id="o-khoa-doc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
+        <p class="goi-y">Dán <b>mã miễn phí</b> riêng vào đây. Mã này <b>chỉ dùng để đọc</b> tiếng Việt; nghe & dịch vẫn dùng mã miễn phí ở trên.<br>Lưu ý: tạo mã này trong <b>dự án mới</b> (aistudio.google.com → Create API key → <i>Create in new project</i>) thì mới có lượt miễn phí riêng, không dùng chung lượt với mã ở trên.</p>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong">
+          <option value="Kore">Nữ – rõ ràng, chắc chắn (Kore)</option>
+          <option value="Aoede">Nữ – nhẹ nhàng, thoáng (Aoede)</option>
+          <option value="Leda">Nữ – trẻ trung (Leda)</option>
+          <option value="Zephyr">Nữ – tươi sáng (Zephyr)</option>
+          <option value="Despina">Nữ – mượt mà (Despina)</option>
+          <option value="Sulafat">Nữ – ấm áp (Sulafat)</option>
+          <option value="Vindemiatrix">Nữ – dịu dàng (Vindemiatrix)</option>
+          <option value="Achernar">Nữ – mềm mại (Achernar)</option>
+          <option value="Callirrhoe">Nữ – thoải mái (Callirrhoe)</option>
+          <option value="Autonoe">Nữ – sáng giọng (Autonoe)</option>
+          <option value="Erinome">Nữ – rõ ràng (Erinome)</option>
+          <option value="Laomedeia">Nữ – vui tươi (Laomedeia)</option>
+          <option value="Gacrux">Nữ – chín chắn (Gacrux)</option>
+          <option value="Pulcherrima">Nữ – dứt khoát (Pulcherrima)</option>
+          <option value="Charon">Nam – trầm, truyền cảm (Charon)</option>
+          <option value="Puck">Nam – vui vẻ (Puck)</option>
+          <option value="Orus">Nam – chắc giọng (Orus)</option>
+          <option value="Iapetus">Nam – rõ ràng (Iapetus)</option>
+          <option value="Algieba">Nam – mượt mà (Algieba)</option>
+          <option value="Achird">Nam – thân thiện (Achird)</option>
+          <option value="Sadaltager">Nam – hiểu biết (Sadaltager)</option>
+          <option value="Rasalgethi">Nam – thuyết minh (Rasalgethi)</option>
+          <option value="Umbriel">Nam – thoải mái (Umbriel)</option>
+          <option value="Schedar">Nam – đều giọng (Schedar)</option>
+          <option value="Alnilam">Nam – dứt khoát (Alnilam)</option>
+          <option value="Fenrir">Nam – hào hứng (Fenrir)</option>
+          <option value="Enceladus">Nam – hơi thở nhẹ (Enceladus)</option>
+          <option value="Algenib">Nam – khàn (Algenib)</option>
+          <option value="Sadachbia">Nam – sôi nổi (Sadachbia)</option>
+          <option value="Zubenelgenubi">Nam – bình dân (Zubenelgenubi)</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="gemini">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Miễn phí ít lượt/ngày. Các câu sát nhau được gộp lại đọc 1 lần để đỡ tốn lượt.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="fpt">
+        <summary>4. FPT.AI (giọng Việt) <span class="tt" id="tt-fpt"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-fpt"> Dùng FPT.AI</label>
+        <label class="nhan">Mã FPT.AI (API key)</label>
+        <input id="o-khoa-fpt" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://console.fpt.ai" target="_blank" rel="noopener">console.fpt.ai</a> (email hoặc Google), xác nhận email.</li>
+            <li>Vào mục <b>API Keys</b> (hoặc <b>Text to Speech</b> → <b>API key</b>) → sao chép mã → dán vào đây.</li>
+            <li>Tài khoản mới có lượt dùng thử miễn phí; hết thì mua gói trong console.fpt.ai.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-fpt">
+          <option value="banmai">Nữ miền Bắc – Ban Mai</option>
+          <option value="thuminh">Nữ miền Bắc – Thu Minh</option>
+          <option value="leminh">Nam miền Bắc – Lê Minh</option>
+          <option value="myan">Nữ miền Trung – Mỹ An</option>
+          <option value="ngoclam">Nữ miền Trung – Ngọc Lam</option>
+          <option value="giahuy">Nam miền Trung – Gia Huy</option>
+          <option value="lannhi">Nữ miền Nam – Lan Nhi</option>
+          <option value="linhsan">Nữ miền Nam – Linh San</option>
+          <option value="minhquang">Nam miền Nam – Minh Quang</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="fpt">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng do FPT làm riêng cho tiếng Việt: đọc đúng dấu, có giọng 3 miền. Mỗi câu FPT cần vài giây để tạo nên chậm hơn các giọng khác một chút.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="fish">
+        <summary>5. Fish Audio <span class="tt" id="tt-fish"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-fish"> Dùng Fish Audio</label>
+        <label class="nhan">Mã Fish Audio (API key)</label>
+        <input id="o-khoa-fish" type="password" autocomplete="off" placeholder="Dán mã API">
+        <details class="huong-dan">
+          <summary>Cách lấy mã (miễn phí, không cần thẻ)</summary>
+          <ol>
+            <li>Đăng ký tại <a href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a> (đăng nhập bằng Google).</li>
+            <li>Vào <a href="https://fish.audio/app/api-keys" target="_blank" rel="noopener">API Keys</a> → tạo mã → sao chép dán vào đây.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-fish"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-fish" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="fish">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Dùng bản Fish Audio (hạn mức theo tài khoản). Danh sách là các giọng Việt được dùng nhiều nhất. Cần đăng nhập app PHAHA (đi qua máy chủ PHAHA).</p>
+      </details>
+
+      <details class="dv-doc" data-dv="az">
+        <summary>6. Microsoft Azure <span class="tt" id="tt-az"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-az"> Dùng Azure</label>
+        <label class="nhan">Mã Azure (Key 1)</label>
+        <input id="o-khoa-az" type="password" autocomplete="off" placeholder="Dán Key 1">
+        <label class="nhan">Vùng (Location/Region)</label>
+        <input id="o-vung-az" autocomplete="off" placeholder="southeastasia">
+        <details class="huong-dan">
+          <summary>Cách lấy mã</summary>
+          <ol>
+            <li>Tạo tài khoản tại <a href="https://azure.microsoft.com/free" target="_blank" rel="noopener">azure.microsoft.com/free</a> (cần thẻ để xác minh).</li>
+            <li><a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices" target="_blank" rel="noopener">Tạo dịch vụ Speech</a> → Region <b>Southeast Asia</b> → Pricing tier <b>Free F0</b> → <b>Create</b>.</li>
+            <li>Mở dịch vụ → <b>Keys and Endpoint</b> → sao chép <b>KEY 1</b> và <b>Location/Region</b>.</li>
+          </ol>
+        </details>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-az"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-az" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="az">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Gồm giọng Việt (Hoài My, Nam Minh) và các giọng "đa ngôn ngữ" đọc được tiếng Việt.</p>
+        <p class="goi-y" id="chu-ky-tu-az"></p>
+      </details>
+
+      <details class="dv-doc" data-dv="edge">
+        <summary>7. Microsoft Edge (miễn phí) <span class="tt" id="tt-edge"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-edge"> Dùng giọng Edge</label>
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-edge">
+          <option value="vi-VN-HoaiMyNeural">Nữ – Hoài My (giọng Việt)</option>
+          <option value="vi-VN-NamMinhNeural">Nam – Nam Minh (giọng Việt)</option>
+          <option value="en-US-AvaMultilingualNeural">Nữ – Ava (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-AndrewMultilingualNeural">Nam – Andrew (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-EmmaMultilingualNeural">Nữ – Emma (đa ngôn ngữ, thử nghiệm)</option>
+          <option value="en-US-BrianMultilingualNeural">Nam – Brian (đa ngôn ngữ, thử nghiệm)</option>
+        </select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="edge">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y">Giọng "Đọc to" của trình duyệt Edge: không cần mã, hạn mức do Microsoft quyết định. Không chính thức – Microsoft có thể chặn bất cứ lúc nào. Cần đăng nhập app PHAHA.</p>
+      </details>
+
+      <details class="dv-doc" data-dv="gc">
+        <summary>Thêm: Google Cloud (không bắt buộc) <span class="tt" id="tt-gc"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-gc"> Dùng Google Cloud (đứng sau Azure)</label>
+        <label class="nhan">Mã Google Cloud</label>
+        <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
+        <label class="nhan">Giọng mặc định</label>
+        <select id="o-giong-gc"><option value="">(bấm Tải danh sách giọng)</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" id="nut-tai-giong-gc" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="gc">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y" id="chu-ky-tu-gc"></p>
+      </details>
+
+      <details class="dv-doc" data-dv="may">
+        <summary>Cuối cùng: Giọng máy (luôn có)</summary>
+        <p class="goi-y">Giọng nữ đọc tiếng Việt chạy ngay trên điện thoại – dùng khi mọi giọng trên đều không được. Lần đầu tải khoảng 90MB.</p>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="may">🔊 Nghe thử</button>
+        </div>
+      </details>
+
+      <details class="muc-dp">
+        <summary>🔁 Dự phòng khi Gemini hết lượt (miễn phí)</summary>
+        <p class="goi-y">Gemini quá tải hoặc hết lượt thì app tự chuyển lần lượt: <b>Groq → Cloudflare → Azure → OpenRouter</b>. Dịch vụ nào chưa cài thì bỏ qua.</p>
+
+        <label class="nhan">1. Mã Groq (nghe + dịch, ~8 giờ âm thanh/ngày)</label>
+        <input id="o-dp-groq" type="password" autocomplete="off" placeholder="gsk_...">
+        <p class="goi-y">Vào <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → đăng nhập Google → <b>Create API Key</b> → sao chép. Không cần thẻ.</p>
+
+        <label class="nhan">2. Cloudflare</label><label class="nhan">Cloudflare API token</label><input id="o-dp-cf-key" type="password" autocomplete="off"><label class="nhan">Cloudflare Account ID</label><input id="o-dp-cf-account" autocomplete="off"><p class="goi-y"><a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Lấy token Workers AI và Account ID</a></p>
+        <label class="cong-tac"><input type="checkbox" id="o-dp-cf"> Dùng AI của máy chủ PHAHA</label>
+        <p class="goi-y" id="chu-dp-cf"></p>
+
+        <label class="nhan">3. Azure (dùng mã Azure ở phần giọng đọc)</label>
+        <label class="cong-tac"><input type="checkbox" id="o-dp-az-nghe"> Dùng Azure nghe tiếng Trung (5 giờ/tháng)</label>
+        <input id="o-dp-az-dich" type="password" autocomplete="off" placeholder="Mã Azure Translator để dịch (không bắt buộc)">
+        <input id="o-dp-az-dich-vung" autocomplete="off" placeholder="Vùng của Translator, vd southeastasia">
+        <p class="goi-y">Muốn Azure dịch: tạo thêm dịch vụ <a href="https://portal.azure.com/#create/Microsoft.CognitiveServicesTextTranslation" target="_blank" rel="noopener">Translator</a> (gói Free F0, 2 triệu ký tự/tháng) → Keys and Endpoint → dán KEY 1 và Location.</p>
+
+        <label class="nhan">4. Mã OpenRouter (chỉ dịch, 50 lượt/ngày)</label>
+        <input id="o-dp-or" type="password" autocomplete="off" placeholder="sk-or-...">
+        <p class="goi-y">Vào <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai/settings/keys</a> → <b>Create Key</b> → sao chép.</p>
+      </details>
+
+      <button type="button" id="nut-kiem-tra-ma" class="nut-phu">🔎 Kiểm tra các mã</button>
+      <p class="goi-y an" id="kq-kiem-tra"></p>
+
+      <details>
+        <summary>Nâng cao</summary>
+        <label class="nhan">Mô hình DeepSeek</label><input id="o-mh-ds" placeholder="deepseek-flash">
+        <label class="nhan">Mô hình nghe & dịch</label>
+        <input id="o-mh-nghe" placeholder="gemini-flash-latest">
+        <label class="nhan">Mô hình đọc (Gemini)</label>
+        <input id="o-mh-doc" placeholder="gemini-2.5-flash-preview-tts">
+        <p class="goi-y">Để trống là app tự chọn.</p>
+      </details>
+
+      <div class="hang-nut">
+        <button class="nut-chinh" value="luu">Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+
+
+</section>
