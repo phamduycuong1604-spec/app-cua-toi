@@ -7,7 +7,7 @@ const PAGE_HOSTS = ['xiaohongshu.com','xhslink.com','rednote.com'];
 const MEDIA_HOSTS = ['xhscdn.com','xhsimg.com','xiaohongshu.com'];
 const DESKTOP_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36';
 const MAX_FILE_BYTES=256*1024*1024;
-const ORIGINAL_LIGHT_BYTES=700*1024*1024;// Bản gốc nhẹ hơn mức này thì lấy bản gốc; nặng hơn thì lấy bản 1080p Rednote có sẵn, để video 1–15 phút đều vào app được.
+const ORIGINAL_LIGHT_BYTES=700*1024*1024;// (không còn dùng: nay luôn ưu tiên bản 1080p khi nhẹ hơn bản gốc)// Bản gốc nhẹ hơn mức này thì lấy bản gốc; nặng hơn thì lấy bản 1080p Rednote có sẵn, để video 1–15 phút đều vào app được.
 const SOURCE_BUDGET_MS=60000;// Đọc bài Rednote tối đa 60 giây: app chỉ chờ 90 giây, chừa thời gian cho bước kiểm tra video.
 const UA='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1';
 const headers={'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
@@ -178,11 +178,11 @@ async function fetchVideoFile(body){
  const probe=await verifiedVideo(note.originalVideoUrl,{probeOnly:true});await probe.stream.cancel();
  // Điện thoại báo ghi được xuống bộ nhớ app → mọi video (kể cả dưới 256 MB) đều tải từng phần xuống đó, không giữ trong RAM.
  let media=note.originalVideoUrl,size=probe.size,extra={};mode='original';
- if(!(size>0&&size<=ORIGINAL_LIGHT_BYTES)){
-  const lite=await pick1080(note);
-  if(lite){extra={originalSize:size||null,width:lite.width,height:lite.height,codec:lite.codec,reason:size?'Bản gốc '+Math.round(size/1e6)+' MB quá nặng':'Không đọc được dung lượng bản gốc'};media=lite.url;size=lite.size;mode='p1080';}
-  else extra={reason:'Không có bản 1080p của Rednote cho bài này, dùng bản gốc'};
- }
+ // Luôn ưu tiên bản ≤1080p Rednote phát trên web (không phải bản "lưu video" có logo) khi nó nhẹ hơn bản gốc:
+ // video vốn được xuất tối đa 1080p, nên điện thoại khỏi tải và thu nhỏ bản 2K/4K (nhanh hơn nhiều).
+ const lite=await pick1080(note);
+ if(lite&&(!(size>0)||lite.size<size)){extra={originalSize:size||null,width:lite.width,height:lite.height,codec:lite.codec,reason:size?'Bản gốc '+Math.round(size/1e6)+' MB, bản Rednote '+Math.round(lite.size/1e6)+' MB nhẹ hơn':'Không đọc được dung lượng bản gốc'};media=lite.url;size=lite.size;mode='p1080';}
+ else if(!lite)extra={reason:'Không có bản 1080p của Rednote cho bài này, dùng bản gốc'};
  if(size>MAX_FILE_BYTES||body.delivery==='attachment'&&size>0)return videoAttachment(note,media,size,mode,extra);
  file=await verifiedVideo(media);
  const extension=file.type==='video/webm'?'webm':'mp4';

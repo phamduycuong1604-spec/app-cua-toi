@@ -392,7 +392,7 @@ test('When saving into the app fails, an original still gets a button to downloa
  }
 });
 
-// ---- Phần 10: bản gốc nếu nhẹ, bản 1080p Rednote nếu nặng ----
+// ---- Phần 10: ưu tiên bản ≤1080p Rednote khi nhẹ hơn bản gốc (xử lý trên điện thoại nhanh hơn) ----
 const P10_MP4=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
 function p10Page({originKey='spectrum/goc15phut',stream={}}={}){return '<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Video 15 phút',desc:'Caption gốc',user:{nickname:'作者'},video:{consumer:{originVideoKey:originKey},media:{stream}}}}}}})+'</script>';}
 const P10_ORIGIN='https://sns-video-bd.xhscdn.com/spectrum/goc15phut',P10_1080='https://sns-video-bd.xhscdn.com/stream/1080.mp4',P10_4K='https://sns-video-bd.xhscdn.com/stream/4k.mp4',P10_H265='https://sns-video-bd.xhscdn.com/stream/1080-h265.mp4',P10_BACKUP='https://sns-video-hw.xhscdn.com/stream/1080-backup.mp4';
@@ -418,23 +418,22 @@ test('A 15-minute original of 3.5 GB is swapped for Rednote\'s own 1080p H.264 c
  try{
   const r=await p10Post({delivery:'attachment'});assert.equal(r.status,200);const d=await r.json();
   assert.equal(d.delivery,'attachment');assert.equal(d.mode,'p1080');assert.equal(d.size,420000000);assert.equal(d.originalSize,3500000000);
-  assert.equal(d.width,1080);assert.equal(d.height,1920);assert.equal(d.codec,'h264');assert.match(d.reason,/3500 MB quá nặng/);
+  assert.equal(d.width,1080);assert.equal(d.height,1920);assert.equal(d.codec,'h264');assert.match(d.reason,/Bản gốc 3500 MB/);
   const dl=new URL(d.downloadUrl,'https://site.test');assert.equal(dl.searchParams.get('url'),P10_1080);assert.equal(dl.searchParams.get('kind'),'p1080');
   assert.equal(d.caption,'Video 15 phút\n\nCaption gốc');
   const media=globalThis.fetch.requests.filter(([u])=>u.includes('xhscdn'));assert.deepEqual(media.map(([u,r])=>[u,r]),[[P10_ORIGIN,'bytes=0-65535'],[P10_1080,'bytes=0-65535']]);
  }finally{globalThis.fetch=old}
 });
-test('A 1-minute original of 80 MB stays the original, and no 1080p copy is even checked',async()=>{
+test('A 1-minute 4K original of 80 MB also switches to the lighter 20 MB 1080p copy',async()=>{
  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:80000000,[P10_1080]:20000000});
  try{
   const d=await(await p10Post({delivery:'attachment'})).json();
-  assert.equal(d.mode,'original');assert.equal(d.size,80000000);assert.equal(d.reason,undefined);
-  assert.equal(globalThis.fetch.requests.some(([u])=>u.includes('/stream/')),false);
+  assert.equal(d.mode,'p1080');assert.equal(d.size,20000000);assert.equal(d.originalSize,80000000);assert.match(d.reason,/Bản gốc 80 MB/);
  }finally{globalThis.fetch=old}
 });
-test('Exactly at the 700 MB line the original is kept; one byte over switches to 1080p',async()=>{
- for(const [size,mode] of [[700*1024*1024,'original'],[700*1024*1024+1,'p1080']]){
-  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:size,[P10_1080]:200000000});
+test('The original is kept when it is not heavier than the 1080p copy (equal or lighter)',async()=>{
+ for(const [size,mode] of [[20000000,'original'],[15000000,'original'],[20000001,'p1080']]){
+  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:size,[P10_1080]:20000000});
   try{assert.equal((await(await p10Post({delivery:'attachment'})).json()).mode,mode,String(size))}finally{globalThis.fetch=old}
  }
 });

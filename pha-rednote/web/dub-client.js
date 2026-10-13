@@ -1081,7 +1081,7 @@ async function chay(lamTuDau) {
     huaLong.catch(() => {});
     // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
     // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
-    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 15000))]);
+    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 90000))]);
     if (giongChon === "may") {
       if (ff) { tatFfmpeg(); nhat("Tạm tắt bộ xử lý video để Giọng máy đọc trước (đỡ tràn bộ nhớ)"); }
       buocDang = "long";
@@ -2126,6 +2126,7 @@ async function longTiengBang(dv) {
   // thay vì đổi giọng cả video; lỗi quá nhiều câu thì mới chuyển dịch vụ khác
   const loiEdge = [], toiDaLoiEdge = Math.floor(cau.length * 0.1);
   if (dv === "edge") edgeLoi = edgeXong = 0;
+  let edgeHongLienTiep = 0;
   await settleWork(Array.from({ length: soLuong }, async () => {
     while (hang.length && !hong) {
       assertRunning();
@@ -2133,8 +2134,12 @@ async function longTiengBang(dv) {
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
         if (dv !== "may") baoChonGiong("khac");
+        edgeHongLienTiep = 0;
       } catch (loi) {
-        if (dv === "edge" && /đóng kết nối|không trả về âm thanh|quá lâu|Lỗi kết nối/.test(loi.message) && loiEdge.length < toiDaLoiEdge) {
+        // Edge hỏng 3 câu liền (hoặc ngay câu đầu tiên chưa đọc được câu nào) → Microsoft đang chặn, bỏ Edge luôn
+        if (dv === "edge" && !loi.edgeYeu && (++edgeHongLienTiep >= 3 || (xong === 0 && edgeHongLienTiep >= 2)))
+          loi = Object.assign(new Error(`Edge hỏng ${edgeHongLienTiep} câu liền`), { status: loi.status, dv, edgeYeu: true });
+        if (dv === "edge" && !loi.edgeYeu && /đóng kết nối|không trả về âm thanh|quá lâu|Lỗi kết nối/.test(loi.message) && loiEdge.length < toiDaLoiEdge) {
           loiEdge.push(i);
           cacGiong[i] = new Float32Array(0);
           nhat(`⚠️ Edge không đọc được câu ${dongHo(cau[i].start)} «${cau[i].vi.slice(0, 60)}» → bỏ trống câu này (${loiEdge.length}/${toiDaLoiEdge} câu được phép bỏ)`);
