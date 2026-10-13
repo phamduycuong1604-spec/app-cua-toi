@@ -2311,9 +2311,9 @@ function luuMoHinhNghi(m, giay) {
 }
 
 // Mã Gemini dùng cho từng việc: đọc giọng có thể dùng mã riêng (dự án khác → lượt miễn phí riêng)
-// Ô "Gemini riêng cho giọng đọc" nhận tối đa 5 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng):
+// Ô "Gemini riêng cho giọng đọc" nhận tối đa 10 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng):
 // mã đang dùng hết lượt hôm nay thì tự chuyển sang mã kế tiếp
-const TOI_DA_MA_DOC = 5;
+const TOI_DA_MA_DOC = 10;
 const dsKhoaDoc = () => [...new Set(String(caiDat.khoaDoc || "").split(/[\s,;]+/).filter(Boolean))].slice(0, TOI_DA_MA_DOC);
 let soMaDoc = 0; // vị trí mã đọc đang dùng trong danh sách
 const khoaGemini = (loai) => (loai === "doc" && dsKhoaDoc()[soMaDoc]) || (loai === "doc" && dsKhoaDoc()[0]) || caiDat.khoa;
