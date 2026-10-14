@@ -2273,19 +2273,44 @@ async function tachNhacNen() {
     "nhac"
   );
   if (ma !== 0) throw new Error("Không lấy được tiếng gốc để tách nhạc.");
-  const du = await ff.readFile(ra);
+  let du = await ff.readFile(ra);
   await ff.deleteFile(ra);
-  const i16 = new Int16Array(du.buffer, du.byteOffset, du.byteLength >> 1);
-  const n = i16.length >> 1;
-  const L = new Float32Array(n), R = new Float32Array(n);
-  for (let i = 0; i < n; i++) { L[i] = i16[2 * i] / 32768; R[i] = i16[2 * i + 1] / 32768; }
+  // Chép một lần vào file WAV (44 byte đầu để trống); AI đọc 16 bit và ghi nhạc nền đè lên chính chỗ đó
+  // → cả quá trình chỉ giữ một bản âm thanh (video 14 phút ≈ 145MB thay vì gần 1GB; iPhone hay tắt trang khi hết bộ nhớ)
+  const n = du.byteLength >> 2;
+  let wav = new ArrayBuffer(44 + n * 4);
+  new Uint8Array(wav, 44).set(du.subarray(0, n * 4));
+  du = null;
   // iPhone ít bộ nhớ: tạm tắt bộ xử lý video trong lúc AI chạy, xuất video sẽ bật lại
   tatFfmpeg();
   nhat("Tạm tắt bộ xử lý video để nhường bộ nhớ cho AI tách nhạc");
-  thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
   nhat(`Tách nhạc: ${dongHo(n / 44100)} âm thanh, kiểu ${caiDat.mhTach}`);
+  // iPhone hay báo "Out of memory" khi AI khởi động ngay sau Giọng máy (bộ nhớ của bước trước chưa kịp trả lại)
+  // → tắt AI, chờ cho máy dọn bộ nhớ rồi thử lại (tối đa 2 lần), làm tiếp từ khúc đang dở
+  let viec = { wav, tu: 0, duoi: null };
+  wav = null;
+  for (let lan = 0; ; lan++) {
+    try {
+      const kq = await tachMotLan(viec);
+      // Tách xong thì tắt AI để trả bộ nhớ cho bước dựng hình/xuất video
+      thoTach?.terminate();
+      thoTach = null;
+      return new Uint8Array(kq.wav);
+    } catch (loi) {
+      if (!loi.traLai || lan >= 2 || !/out of memory|memory|OOM|allocation|RangeError|no available backend/i.test(loi.message)) throw loi;
+      viec = loi.traLai;
+      const giay = 5 * (lan + 1);
+      nhat(`Tách nhạc thiếu bộ nhớ → chờ ${giay} giây cho điện thoại dọn bộ nhớ rồi thử lại (lần ${lan + 2})${viec.tu ? ", làm tiếp từ chỗ đang dở" : ""}`);
+      ghiChu("nhac", "Tách nhạc đang chờ điện thoại dọn bộ nhớ…");
+      await cho(giay, "nhac");
+      assertRunning();
+    }
+  }
+}
+function tachMotLan(viec) {
+  thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
   let mocPhanTram = -1;
-  const kq = await new Promise((resolve,reject) => {
+  return new Promise((resolve,reject) => {
     const remove=onRunAbort(()=>reject(runSignal().reason));
     const timer=setTimeout(()=>{thoTach?.terminate();thoTach=null;remove();reject(Error("Tách nhạc quá lâu. Chọn kiểu Không AI rồi thử lại."));},600000);
     const xong=v=>{clearTimeout(timer);remove();resolve(v);},hong=e=>{clearTimeout(timer);remove();reject(e);};
@@ -2303,15 +2328,17 @@ async function tachNhacNen() {
         nhat(`Tách nhạc chạy bằng: ${d.may === "webgpu" ? "chip đồ hoạ (WebGPU)" : "CPU (WASM, chậm)"}`);
       }
       else if (d.loai === "xong") xong(d);
-      else if (d.loai === "loi") { thoTach?.terminate(); thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + d.chu)); }
+      else if (d.loai === "loi") {
+        thoTach?.terminate(); thoTach = null;
+        // AI trả lại âm thanh kèm chỗ đang làm → thử lại được mà không phải trích tiếng lại
+        hong(Object.assign(new Error("Tách nhạc bị lỗi: " + d.chu), d.wav ? { traLai: { wav: d.wav, tu: d.tu, duoi: d.duoi } } : {}));
+      }
     };
     thoTach.onerror = (e) => { thoTach = null; hong(new Error("Tách nhạc bị lỗi: " + (e.message || "không tải được AI"))); };
-    thoTach.postMessage({ L, R, loai: caiDat.mhTach }, [L.buffer, R.buffer]);
+    const gui = [viec.wav];
+    if (viec.duoi) gui.push(viec.duoi[0].buffer, viec.duoi[1].buffer);
+    thoTach.postMessage({ wav: viec.wav, tu: viec.tu, duoi: viec.duoi, loai: caiDat.mhTach }, gui);
   });
-  // Tách xong thì tắt AI để trả bộ nhớ cho bước dựng hình/xuất video
-  thoTach?.terminate();
-  thoTach = null;
-  return taoWav2(kq.L, kq.R, 44100);
 }
 
 // Âm lượng tiếng gốc theo thời gian: gần như tắt trong các câu thoại, bình thường ở chỗ khác
@@ -2327,23 +2354,6 @@ function bieuThucGiam() {
   if (!doan.length) return cao;
   const trong = doan.map(([a, b]) => `between(t,${a.toFixed(2)},${b.toFixed(2)})`).join("+");
   return `if(gt(${trong},0),0.03,${cao})`;
-}
-
-function taoWav2(L, R, tanSo) {
-  const n = L.length;
-  const buf = new ArrayBuffer(44 + n * 4);
-  const v = new DataView(buf);
-  const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
-  chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE");
-  chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
-  v.setUint32(24, tanSo, true); v.setUint32(28, tanSo * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true);
-  chu(36, "data"); v.setUint32(40, n * 4, true);
-  const ra = new Int16Array(buf, 44, n * 2);
-  for (let i = 0; i < n; i++) {
-    ra[2 * i] = Math.max(-1, Math.min(1, L[i])) * 32767;
-    ra[2 * i + 1] = Math.max(-1, Math.min(1, R[i])) * 32767;
-  }
-  return new Uint8Array(buf);
 }
 
 // =====================================================

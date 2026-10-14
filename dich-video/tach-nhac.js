@@ -1,9 +1,10 @@
 // =====================================================
 // TÁCH NHẠC NỀN khỏi giọng nói (chạy ngầm, ngay trên điện thoại)
 // Dùng mô hình AI MDX-Net của dự án Ultimate Vocal Remover (giấy phép MIT).
-// Nhận: âm thanh 2 kênh 44.100 mẫu/giây (số nguyên 16 bit, xen kẽ trái/phải) → Trả: file WAV nhạc nền (đã bỏ giọng).
-// Tiết kiệm bộ nhớ (iPhone hay tắt trang khi hết bộ nhớ): không chép âm thanh ra nhiều bản,
-// đọc thẳng từ dữ liệu vào và ghi thẳng vào file WAV kết quả.
+// Nhận: file WAV (44 byte đầu để trống + âm thanh 2 kênh 44.100 mẫu/giây, số nguyên 16 bit, xen kẽ trái/phải)
+// → Trả: chính file đó, nay là nhạc nền (đã bỏ giọng).
+// Tiết kiệm bộ nhớ (iPhone hay tắt trang khi hết bộ nhớ): chỉ giữ MỘT bản âm thanh, ghi đè kết quả lên chỗ đã đọc xong.
+// Hỏng giữa chừng (vd. hết bộ nhớ) thì trả lại âm thanh kèm chỗ đang làm, để lần sau làm tiếp từ đó.
 // =====================================================
 const CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
 
@@ -20,7 +21,9 @@ const ghi = (chu) => bao({ loai: "nhat", chu });
 let ort = null, phien = null, phienTen = "", may = "";
 
 self.onmessage = async (e) => {
-  const { pcm, loai } = e.data;
+  const { wav, loai } = e.data;
+  // tu = khúc làm tiếp; duoi = phần tiếng gốc của khúc trước mà khúc sau còn cần (đã bị ghi đè trong wav)
+  const viec = { tu: e.data.tu || 0, duoi: e.data.duoi || null };
   try {
     const mh = MO_HINH[loai] || MO_HINH.nhanh;
     if (phienTen !== loai) {
@@ -29,19 +32,21 @@ self.onmessage = async (e) => {
       ({ ort, phien, may } = await taoPhien(du, false));
       phienTen = loai;
     }
-    let kq;
     try {
-      kq = await tach(pcm, mh);
+      await tach(wav, mh, viec);
     } catch (loi) {
-      // Chip đồ hoạ khởi động được nhưng chạy lỗi → chuyển sang CPU, làm lại
+      // Chip đồ hoạ khởi động được nhưng chạy lỗi → chuyển sang CPU, làm tiếp từ khúc đang dở
       if (may !== "webgpu") throw loi;
       ghi(`chip đồ hoạ chạy lỗi (${String(loi?.message || loi).slice(0, 150)}), chuyển sang CPU`);
+      await phien?.release?.().catch(() => {});
       ({ ort, phien, may } = await taoPhien(await taiMoHinh(mh), true));
-      kq = await tach(pcm, mh);
+      await tach(wav, mh, viec);
     }
-    self.postMessage({ loai: "xong", wav: kq }, [kq.buffer]);
+    self.postMessage({ loai: "xong", wav }, [wav]);
   } catch (loi) {
-    bao({ loai: "loi", chu: String(loi?.message || loi) });
+    const gui = [wav];
+    if (viec.duoi) gui.push(viec.duoi[0].buffer, viec.duoi[1].buffer);
+    self.postMessage({ loai: "loi", chu: String(loi?.message || loi), wav, tu: viec.tu, duoi: viec.duoi }, gui);
   }
 };
 
@@ -105,49 +110,51 @@ async function taiMoHinh(mh) {
   return du;
 }
 
-// Chia âm thanh thành từng khúc ~6 giây, mỗi khúc chạy qua AI rồi ghi thẳng vào file WAV kết quả
-async function tach(pcm, mh) {
+// Chia âm thanh thành từng khúc ~6 giây, mỗi khúc chạy qua AI rồi ghi đè kết quả lên chỗ vừa đọc
+async function tach(wav, mh, viec) {
+  const pcm = new Int16Array(wav, 44);
   const N = pcm.length >> 1;
   const { nfft, dimF } = mh;
   const trim = nfft / 2;
   const gen = CHUNK - 2 * trim;
-  const pad = gen - (N % gen);
-  // file WAV kết quả: 44 byte đầu + N mẫu × 2 kênh × 2 byte
-  const wav = new Uint8Array(44 + N * 4);
-  ghiDauWav(wav, N, 44100);
-  const ra = new Int16Array(wav.buffer, 44, N * 2);
-  // mẫu thứ j của kênh c (ngoài khoảng thì là im lặng), đổi sang số thực −1…1
-  const mau = (c, j) => (j >= 0 && j < N ? pcm[2 * j + c] / 32768 : 0);
+  const soKhuc = Math.floor(N / gen) + 1;
+  // Khúc sau đọc lùi trim mẫu vào chỗ khúc trước đã ghi đè → giữ riêng trim mẫu gốc đó
+  viec.duoi ||= [new Float32Array(trim), new Float32Array(trim)];
   const khuc = new Float32Array(CHUNK);
   const bien = taoBienDoi(nfft);
-  const soKhuc = (N + pad) / gen;
   const dauVao = new Float32Array(4 * dimF * DIM_T);
-  const batDau = Date.now();
-  for (let k = 0; k < soKhuc; k++) {
+  const batDau = Date.now(), tu = viec.tu;
+  for (let k = tu; k < soKhuc; k++) {
     const o = k * gen;
+    // mẫu gốc thứ j của kênh c (ngoài khoảng thì là im lặng), số thực −1…1
+    const mau = (c, j) => (j < 0 || j >= N ? 0 : j < o ? viec.duoi[c][j - o + trim] : pcm[2 * j + c] / 32768);
     for (let c = 0; c < 2; c++) {
       for (let i = 0; i < CHUNK; i++) khuc[i] = mau(c, o + i - trim);
       bien.stft(khuc, dauVao, c, dimF);
     }
     const kq = await phien.run({ [phien.inputNames[0]]: new ort.Tensor("float32", dauVao, [1, 4, dimF, DIM_T]) });
     const pho = kq[phien.outputNames[0]].data;
+    const song = [bien.istft(pho, 0, dimF), bien.istft(pho, 1, dimF)];
+    // AI chạy xong khúc này mới ghi (hỏng giữa chừng thì âm thanh vẫn nguyên, làm lại được)
+    const het = Math.min(gen, N - o);
     for (let c = 0; c < 2; c++) {
-      const song = bien.istft(pho, c, dimF);
-      const het = Math.min(gen, N - o);
+      for (let i = 0; i < trim; i++) viec.duoi[c][i] = mau(c, o + gen - trim + i);
       for (let i = 0; i < het; i++) {
-        const v = song[trim + i] * mh.bu;
-        const x = mh.giong ? mau(c, o + i) - v : v;
-        ra[2 * (o + i) + c] = Math.max(-1, Math.min(1, x)) * 32767;
+        const v = song[c][trim + i] * mh.bu;
+        const idx = 2 * (o + i) + c;
+        const x = mh.giong ? pcm[idx] / 32768 - v : v;
+        pcm[idx] = Math.max(-1, Math.min(1, x)) * 32767;
       }
     }
-    const conLai = ((Date.now() - batDau) / (k + 1)) * (soKhuc - k - 1) / 1000;
+    viec.tu = k + 1;
+    const conLai = ((Date.now() - batDau) / (k + 1 - tu)) * (soKhuc - k - 1) / 1000;
     bao({ loai: "tien-do", chu: `${Math.round(((k + 1) / soKhuc) * 100)}% · còn ~${Math.ceil(conLai)} giây` });
   }
-  return wav;
+  ghiDauWav(wav, N, 44100);
 }
 
 function ghiDauWav(wav, n, tanSo) {
-  const v = new DataView(wav.buffer);
+  const v = new DataView(wav);
   const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
   chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE");
   chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
