@@ -10,43 +10,21 @@ export function macDinhLop() {
   return {
     phuDe: { bat: true, co: 5, y: 88, mau: "#ffffff", kieu: "vien" },
     che: { bat: false, kieu: "mo", mau: "#000000", x: 50, y: 88, w: 90, h: 10 },
+    che2: { bat: false, kieu: "mo", mau: "#000000", x: 50, y: 12, w: 90, h: 10 }, // thanh che thứ 2 (vd tiêu đề ở trên)
     logo: { bat: false, co: 18, mo: 80, x: 88, y: 10 },
   };
 }
 
 // Có cần vẽ gì lên hình không (không thì giữ nguyên hình gốc, xuất rất nhanh)
 export function canVe(lop, cacCau, anhLogo) {
-  return (lop.phuDe.bat && cacCau.length > 0) || lop.che.bat || (lop.logo.bat && !!anhLogo);
+  return (lop.phuDe.bat && cacCau.length > 0) || lop.che.bat || !!lop.che2?.bat || (lop.logo.bat && !!anhLogo);
 }
 
 let tam = null; // khung phụ để làm mờ
 export function veLop(ctx, W, H, t, lop, cacCau, anhLogo, chuMau) {
-  // 1. Lớp che chữ Trung
-  const c = lop.che;
-  if (c.bat) {
-    const w = Math.max(2, (c.w / 100) * W), h = Math.max(2, (c.h / 100) * H);
-    const x = Math.round(Math.min(W - w, Math.max(0, (c.x / 100) * W - w / 2)));
-    const y = Math.round(Math.min(H - h, Math.max(0, (c.y / 100) * H - h / 2)));
-    if (c.kieu === "mau") {
-      ctx.fillStyle = c.mau;
-      ctx.fillRect(x, y, w, h);
-    } else {
-      // làm mờ: thu nhỏ vùng đó thật bé rồi phóng to lại
-      const nho = Math.max(4, Math.round(Math.min(W, H) / 40));
-      const sw = Math.max(1, Math.round(w / nho)), sh = Math.max(1, Math.round(h / nho));
-      tam ||= new OffscreenCanvas(1, 1);
-      if (tam.width !== sw || tam.height !== sh) { tam.width = sw; tam.height = sh; }
-      const tc = tam.getContext("2d");
-      tc.imageSmoothingEnabled = true;
-      tc.imageSmoothingQuality = "high";
-      tc.drawImage(ctx.canvas, x, y, w, h, 0, 0, sw, sh);
-      ctx.save();
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(tam, 0, 0, sw, sh, x, y, w, h);
-      ctx.restore();
-    }
-  }
+  // 1. Lớp che chữ Trung (2 thanh)
+  veChe(ctx, W, H, lop.che);
+  if (lop.che2) veChe(ctx, W, H, lop.che2);
 
   // 2. Phụ đề tiếng Việt
   const p = lop.phuDe;
@@ -70,6 +48,33 @@ export function veLop(ctx, W, H, t, lop, cacCau, anhLogo, chuMau) {
     ctx.save();
     ctx.globalAlpha = l.mo / 100;
     ctx.drawImage(anhLogo, x, y, w, h);
+    ctx.restore();
+  }
+}
+
+// Vẽ 1 thanh che (làm mờ hoặc tô màu) lên vùng chữ Trung
+function veChe(ctx, W, H, c) {
+  if (!c?.bat) return;
+  const w = Math.max(2, (c.w / 100) * W), h = Math.max(2, (c.h / 100) * H);
+  const x = Math.round(Math.min(W - w, Math.max(0, (c.x / 100) * W - w / 2)));
+  const y = Math.round(Math.min(H - h, Math.max(0, (c.y / 100) * H - h / 2)));
+  if (c.kieu === "mau") {
+    ctx.fillStyle = c.mau;
+    ctx.fillRect(x, y, w, h);
+  } else {
+    // làm mờ: thu nhỏ vùng đó thật bé rồi phóng to lại
+    const nho = Math.max(4, Math.round(Math.min(W, H) / 40));
+    const sw = Math.max(1, Math.round(w / nho)), sh = Math.max(1, Math.round(h / nho));
+    tam ||= new OffscreenCanvas(1, 1);
+    if (tam.width !== sw || tam.height !== sh) { tam.width = sw; tam.height = sh; }
+    const tc = tam.getContext("2d");
+    tc.imageSmoothingEnabled = true;
+    tc.imageSmoothingQuality = "high";
+    tc.drawImage(ctx.canvas, x, y, w, h, 0, 0, sw, sh);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(tam, 0, 0, sw, sh, x, y, w, h);
     ctx.restore();
   }
 }

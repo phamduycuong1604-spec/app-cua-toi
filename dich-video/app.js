@@ -37,7 +37,7 @@ delete caiDat.dichVu;
 // Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
 {
   const md = macDinhLop(), cu = caiDat.lop || {};
-  caiDat.lop = { phuDe: { ...md.phuDe, ...cu.phuDe }, che: { ...md.che, ...cu.che }, logo: { ...md.logo, ...cu.logo } };
+  caiDat.lop = { phuDe: { ...md.phuDe, ...cu.phuDe }, che: { ...md.che, ...cu.che }, che2: { ...md.che2, ...cu.che2 }, logo: { ...md.logo, ...cu.logo } };
 }
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
 // Dịch vụ dự phòng khi Gemini hết lượt
@@ -1009,7 +1009,7 @@ async function chay(lamTuDau) {
   nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
   nhat(`Máy: ${moTaMay()}`);
   nhat(`Video: ${tepVideo.name} · ${(tepVideo.size / 1048576).toFixed(1)}MB`);
-  nhat(`Cài đặt: dịch bằng ${dungDeepSeek() ? "DeepSeek (nghe bằng Groq/Cloudflare)" : "Gemini"} · thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${l.che.bat ? "bật" : "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
+  nhat(`Cài đặt: dịch bằng ${dungDeepSeek() ? "DeepSeek (nghe bằng Groq/Cloudflare)" : "Gemini"} · thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${[l.che.bat && "thanh 1", l.che2?.bat && "thanh 2"].filter(Boolean).join(" + ") || "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
   ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = true));
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");
