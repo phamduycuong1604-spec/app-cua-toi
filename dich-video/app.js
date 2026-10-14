@@ -254,8 +254,8 @@ $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
 // Thứ tự dùng giọng: trên hết lượt/lỗi thì đọc lại cả video bằng cái kế tiếp
-// Google Cloud (dịch vụ chính thức, nhanh, mức miễn phí lớn) đứng TRƯỚC Gemini miễn phí (chỉ ~3 lượt/phút, chờ rất lâu)
-const THU_TU = ["el", "vt", "gc", "gemini", "fpt", "fish", "az", "edge", "may"];
+// Theo yêu cầu người dùng: Gemini (có xoay vòng nhiều mã) đọc trước tiên, rồi mới tới các giọng khác
+const THU_TU = ["gemini", "el", "vt", "gc", "fpt", "fish", "az", "edge", "may"];
 const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
 const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
 const daDangNhap = () => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } };
