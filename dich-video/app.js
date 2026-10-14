@@ -2478,7 +2478,8 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       : noiDung;
     // Chờ quá lâu thì huỷ, gửi lại (tránh treo mãi khi mạng chập chờn)
     const huy = new AbortController();
-    const hen = setTimeout(() => huy.abort(), (loai === "nghe" ? 180 : 60) * 1000);
+    // Bình thường Gemini nghe 1 đoạn ~1,5 phút chỉ mất 5–10 giây; quá 60 giây là máy chủ Google đang nghẽn → huỷ, gửi lại cho đỡ chờ 3 phút
+    const hen = setTimeout(() => huy.abort(), (loai === "nghe" ? 60 : 45) * 1000);
     let r;
     const bd = Date.now();
     const thoiGian = () => ((Date.now() - bd) / 1000).toFixed(1) + " giây";
