@@ -119,6 +119,9 @@ let dangVeHinh = null, xongVeHinh = () => {}; // chèn chữ/logo đang chạy (
 let veDangChay = false; // đang dựng hình thật (không chỉ "sẽ dựng")
 // Báo cho luồng chính biết lồng tiếng đã chốt giọng: "may" = Giọng máy, "khac" = giọng khác đã đọc được câu đầu
 let baoChonGiong = () => {};
+// Máy không có chip đồ hoạ cho web (thường là máy cũ, ít bộ nhớ): chờ đọc giọng xong hết rồi mới tách nhạc/chèn chữ,
+// để lỡ giữa chừng phải lùi về Giọng máy thì Giọng máy vẫn được đọc lúc điện thoại còn rảnh bộ nhớ
+const mayYeu = () => !navigator.gpu;
 
 // ----- NHẬT KÝ: ghi lại từng việc kèm thời gian để dễ tìm chỗ chậm/lỗi -----
 let nhatKyChay = [];
@@ -504,7 +507,7 @@ async function guiDongBo(d) {
 //  - Máy chưa đồng bộ lần nào + tài khoản đã có bản → LUÔN hỏi, không tự làm gì
 //  - Tự động (mở app / lưu) chỉ chạy khi không làm giảm số mã; còn lại để người dùng bấm và chọn
 //  - Trước khi thay cài đặt máy này luôn cất bản sao lưu (khôi phục được)
-let dangDongBo = false;
+let dangDongBo = false, loiDongBoCuoi = "";
 async function dongBo(cheDo) {
   const d = trangDongBo();
   if (dangDongBo || dangChay || !d.mk || !coMayChu() || !daDangNhap()) return;
@@ -551,7 +554,8 @@ async function dongBo(cheDo) {
     await guiDongBo(d);
     hienTrangDongBo("✅ Đã gửi thay đổi của máy này lên.");
   } catch (loi) {
-    nhat("🔄 Đồng bộ lỗi: " + loi.message);
+    if (loi.message !== loiDongBoCuoi || cheDo === "bam") nhat("🔄 Đồng bộ lỗi: " + loi.message); // cùng một lỗi thì chỉ ghi 1 lần
+    loiDongBoCuoi = loi.message;
     hienTrangDongBo("❌ " + loi.message);
     if (cheDo === "bam") alert(loi.message);
   } finally {
@@ -1083,7 +1087,7 @@ async function chay(lamTuDau) {
     huaLong.catch(() => {});
     // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
     // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
-    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 90000))]);
+    const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), mayYeu() ? 300000 : 90000))]);
     if (giongChon === "may") {
       if (ff) { tatFfmpeg(); nhat("Tạm tắt bộ xử lý video để Giọng máy đọc trước (đỡ tràn bộ nhớ)"); }
       buocDang = "long";
@@ -1660,7 +1664,8 @@ async function docCau(chu, dv) {
 
 async function docGemini(chu, lan = 0) {
   const tl = await goiGemini("doc", {
-    contents: [{ parts: [{ text: `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu}` }] }],
+    // Lần đầu kèm lời dặn; Gemini trả lời không kèm tiếng (OTHER) thì lần sau chỉ gửi đúng câu cần đọc
+    contents: [{ parts: [{ text: lan ? chu : `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu}` }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
@@ -1669,7 +1674,7 @@ async function docGemini(chu, lan = 0) {
   const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!phan) {
     // Gemini thỉnh thoảng trả lời mà không kèm tiếng (lỗi ngẫu nhiên) → gửi lại câu đó
-    if (lan < 2) { nhat(`Gemini đọc thiếu tiếng (${tl.candidates?.[0]?.finishReason || "?"}) → gửi lại câu này`); return docGemini(chu, lan + 1); }
+    if (lan < 3) { nhat(`Gemini đọc thiếu tiếng (${tl.candidates?.[0]?.finishReason || "?"}) → gửi lại câu này`); return docGemini(chu, lan + 1); }
     throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
   }
   const byte = tuBase64(phan.inlineData.data);
@@ -2135,7 +2140,7 @@ async function longTiengBang(dv) {
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
-        if (dv !== "may") baoChonGiong("khac");
+        if (dv !== "may" && !mayYeu()) baoChonGiong("khac");
         edgeHongLienTiep = 0;
       } catch (loi) {
         // Edge hỏng 3 câu liền (hoặc ngay câu đầu tiên chưa đọc được câu nào) → Microsoft đang chặn, bỏ Edge luôn
@@ -2153,6 +2158,7 @@ async function longTiengBang(dv) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  if (dv !== "may") baoChonGiong("khac");
   if (dv === "may") { thoDocMay?.terminate(); thoDocMay = null; } // đọc xong tắt bộ đọc, trả bộ nhớ cho các bước sau
   if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
