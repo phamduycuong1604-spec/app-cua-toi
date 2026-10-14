@@ -2142,7 +2142,8 @@ async function longTiengBang(dv) {
     if (dangTachNhac || veDangChay) {
       ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
       await dangTachNhac?.catch(() => {});
-      await dangVeHinh;
+      // chỉ chờ chèn chữ khi nó ĐANG chạy (chưa chạy thì nó sẽ đợi giọng máy đọc xong → chờ nhau mãi)
+      if (veDangChay) await dangVeHinh;
     }
     // Giọng máy cần nhiều bộ nhớ → tạm tắt bộ xử lý video trong lúc đọc, xuất video sẽ bật lại
     await dangBatFf?.catch(() => {});
