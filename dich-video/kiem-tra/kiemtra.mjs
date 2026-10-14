@@ -53,7 +53,7 @@ async function chay(ten, o) {
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
-    if (u.includes("tts")) { dem("gemTTS"); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
+    if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
     if (o.gemini === "het") return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) });
     if (o.gemCham) await new Promise((r) => setTimeout(r, o.gemCham));
