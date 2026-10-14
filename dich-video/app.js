@@ -1028,6 +1028,7 @@ async function chay(lamTuDau) {
     return;
   }
   dangChay = true;
+  huaNhacSom = null;
   geminiNghi = false;
   deepSeekNghi = false;
   daBaoNghi = new Set();
@@ -1060,6 +1061,14 @@ async function chay(lamTuDau) {
       if (!thongTin.coTieng) throw new Error("Video này không có tiếng.");
       const pcm = await tachTieng();
       buoc("tach", "xong", `${dongHo(thoiLuong)} âm thanh`);
+      // Tách nhạc chạy trên máy, nghe & dịch chủ yếu chờ mạng → bắt đầu tách nhạc NGAY, chạy song song cho nhanh
+      if (caiDat.tachNhac && caiDat.mhTach !== "giam" && (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach)) {
+        buoc("nhac", "dang");
+        nhat("Tách nhạc nền chạy song song với nghe & dịch");
+        dangTachNhac = tachNhacNen();
+        huaNhacSom = dangTachNhac.then((wav) => { nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav }; return wav; });
+        huaNhacSom.catch(() => {});
+      }
 
       buocDang = "dich";
       buoc("dich", "dang");
@@ -1090,9 +1099,10 @@ async function chay(lamTuDau) {
         giamTheoLoi = true;
         buoc("nhac", "bo", "Giảm tiếng gốc lúc có lời (không dùng AI)");
       } else if (caiDat.tachNhac && thongTin.coTieng) {
-        buoc("nhac", "dang");
+        if (!huaNhacSom) buoc("nhac", "dang");
         try {
-          if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
+          if (huaNhacSom) await huaNhacSom; // đã bắt đầu từ lúc nghe & dịch
+          else if (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach) {
             dangTachNhac = tachNhacNen();
             nhacNen = { tep: tepVideo, loai: caiDat.mhTach, wav: await dangTachNhac };
           }
@@ -1178,6 +1188,9 @@ async function chay(lamTuDau) {
     buoc(buocDang, "loi");
     baoLoi(loiDeHieu(loi));
   } finally {
+    // Lỗi giữa chừng mà tách nhạc (chạy song song) vẫn đang làm → dừng hẳn để lần sau chạy lại sạch sẽ
+    if (huaNhacSom && dangTachNhac) { thoTach?.terminate(); thoTach = null; }
+    huaNhacSom = null;
     dangChay = false;
     ghiDangChay(null);
     dangTachNhac = null;
@@ -1218,6 +1231,7 @@ function tatFfmpeg() {
 }
 
 let dangTaiFf = null;
+let huaNhacSom = null; // tách nhạc bắt đầu sớm (song song với nghe & dịch) trong lần chạy này
 let dangBatFf = null; // đang bật lại bộ xử lý video (sau tách nhạc) – giọng máy chờ xong rồi mới tạm tắt
 function taiFfmpeg() {
   if (ff) return Promise.resolve();
@@ -2128,7 +2142,8 @@ async function longTiengBang(dv) {
     if (dangTachNhac || veDangChay) {
       ghiChu("long", "Chờ tách nhạc / chèn chữ xong rồi đọc bằng giọng máy (đỡ tràn bộ nhớ)…");
       await dangTachNhac?.catch(() => {});
-      await dangVeHinh;
+      // chỉ chờ chèn chữ khi nó ĐANG chạy (chưa chạy thì nó sẽ đợi giọng máy đọc xong → chờ nhau mãi)
+      if (veDangChay) await dangVeHinh;
     }
     // Giọng máy cần nhiều bộ nhớ → tạm tắt bộ xử lý video trong lúc đọc, xuất video sẽ bật lại
     await dangBatFf?.catch(() => {});
