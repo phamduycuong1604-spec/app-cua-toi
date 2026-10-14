@@ -48,6 +48,12 @@ async function chay(ten, o) {
     else if (u.includes("piper-wasm")) f = `${S}/piper/pw/package/build/${u.split("/").pop()}`;
     if (!f) return rt.abort();
     rt.fulfill({ path: f, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": f.endsWith("wasm") ? "application/wasm" : "text/javascript" } }); });
+  if (o.hinhAvcPc) await p.route("**/avc-pc.mp4", (rt) => rt.fulfill({ contentType: "video/mp4", body: fs.readFileSync(`${S}/avc-pc.mp4`) }));
+  if (o.hinhAvcPc) await p.route("**/dich-video/lop-phu.js", async (rt) => {
+    // Giả lập iPhone: bộ mã hoá trình duyệt trả hình H.264 bị ghi nhầm "dải màu đầy đủ"
+    const goc = fs.readFileSync(path.join(ROOT, "dich-video/lop-phu.js"), "utf8").replace("export async function xuatHinh(", "async function xuatHinhCu(");
+    rt.fulfill({ contentType: "text/javascript", body: goc + `\nexport async function xuatHinh() { const b = await (await fetch("/avc-pc.mp4")).blob(); return { blob: b, codec: "avc", W: 320, H: 240 }; }` });
+  });
   await p.route("https://fonts.googleapis.com/**", (rt) => rt.fulfill({ status: 200, contentType: "text/css", body: "" }));
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
@@ -192,6 +198,7 @@ async function chay(ten, o) {
   if (!kq.loi) {
     const b64 = await p.evaluate(async () => { const r = await fetch(document.getElementById("xem-ket-qua").src); const a = new Uint8Array(await r.arrayBuffer()); let s = ""; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode(...a.subarray(i, i + 8192)); return btoa(s); });
     fs.writeFileSync(`${S}/kt-${ten}.mp4`, Buffer.from(b64, "base64"));
+    if (o.hinhAvcPc) kq.daiMau = execSync(`ffprobe -v error -select_streams v -show_entries stream=color_range -of csv=p=0 ${S}/kt-${ten}.mp4`).toString().trim();
     kq.probe = execSync(`ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,duration -of csv=p=0 ${S}/kt-${ten}.mp4`).toString().trim().replace(/\n/g, " | ");
   }
   if (o.sau) await o.sau(p, kq, goi);
@@ -310,6 +317,7 @@ const KICH_BAN = {
   "41-12-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 500, dsDang: "du", han: 1800000 },
   "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
   "43-12-phut-300-cau-gemini-it-luot": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, tachNhac: false, lop: LOP, __dung: { "max:gm:3t2o:doc": { n: 15 } } }, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
+  "13b-sua-nhan-mau-h264": { caiDat: { ...CD, lop: LOP }, video: "thu.mp4", hinhAvcPc: true },
   "11-ai-tach-hong": { caiDat: { ...CD, tachNhac: true }, ort: "404" },
   "12-giam-tieng": { caiDat: { ...CD, tachNhac: true, mhTach: "giam" } },
   "13-h264-khong-ve-duoc": { caiDat: { ...CD, lop: LOP }, video: "thu.mp4" },
