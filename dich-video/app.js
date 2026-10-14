@@ -2204,9 +2204,16 @@ async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
   }
   thamSo.push("-map", chonHinh, "-map", chonAm, "-t", String(thoiLuong), "-c:v", "copy");
   if (hevc) thamSo.push("-tag:v", "hvc1"); // để iPhone phát được video HEVC
-  thamSo.push("-c:a", "aac", "-b:a", "160k", ra);
+  // Hình chèn chữ do bộ mã hoá của trình duyệt làm ra bị ghi nhầm là "dải màu đầy đủ" trong khi dữ liệu là dải màu
+  // thường → máy phát hiển thị bạc màu (trắng thành xám). Sửa lại nhãn màu cho đúng (không mã hoá lại, rất nhanh).
+  const suaMau = hinh?.codec === "avc" ? ["-bsf:v", "h264_metadata=video_full_range_flag=0:transfer_characteristics=1"] : [];
+  const cuoi = ["-c:a", "aac", "-b:a", "160k", ra];
   try {
-    const { ma, log } = await lenh(thamSo, "xuat");
+    let { ma, log } = await lenh([...thamSo, ...suaMau, ...cuoi], "xuat");
+    if (ma !== 0 && suaMau.length) {
+      nhat("Sửa nhãn màu không được → xuất lại không sửa");
+      ({ ma, log } = await lenh([...thamSo, ...cuoi], "xuat"));
+    }
     if (ma !== 0) throw new Error("Ghép video bị lỗi.\n" + log.split("\n").slice(-3).join("\n"));
     const du = await ff.readFile(ra);
     return new Blob([du], { type: "video/mp4" });
