@@ -254,7 +254,8 @@ $("nut-lam-lai").addEventListener("click", () => chay(false));
 
 $("nut-cai-dat").addEventListener("click", moCaiDat);
 // Thứ tự dùng giọng: trên hết lượt/lỗi thì đọc lại cả video bằng cái kế tiếp
-const THU_TU = ["el", "vt", "gemini", "fpt", "fish", "az", "gc", "edge", "may"];
+// Google Cloud (dịch vụ chính thức, nhanh, mức miễn phí lớn) đứng TRƯỚC Gemini miễn phí (chỉ ~3 lượt/phút, chờ rất lâu)
+const THU_TU = ["el", "vt", "gc", "gemini", "fpt", "fish", "az", "edge", "may"];
 const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
 const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
 const daDangNhap = () => { try { return !!localStorage.getItem("ve-dang-nhap"); } catch { return false; } };
@@ -1670,8 +1671,10 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
     let j = {};
     try { j = JSON.parse(chu); } catch {}
     const thongBao = j.error?.message || j.detail?.message || (typeof j.detail === "string" ? j.detail : "") || chu.slice(0, 200) || r.statusText;
-    const hetLuot = j.detail?.status === "quota_exceeded" || j.detail?.code === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el"
-      || r.status === 402 || (dv === "fish" && /credit|balance|quota|limit exceeded/i.test(thongBao));
+    // ElevenLabs miễn phí không được dùng giọng trong thư viện cộng đồng qua app → không phải hết lượt, chỉ cần đổi giọng
+    const canGoiTraPhi = dv === "el" && (j.detail?.code === "paid_plan_required" || /library voices/i.test(thongBao));
+    const hetLuot = !canGoiTraPhi && (j.detail?.status === "quota_exceeded" || j.detail?.code === "quota_exceeded" || /quota/i.test(thongBao) && dv === "el"
+      || r.status === 402 || (dv === "fish" && /credit|balance|quota|limit exceeded/i.test(thongBao)));
     // Gửi quá nhiều câu cùng lúc → chờ chút rồi gửi lại (không tính là lỗi)
     if (r.status === 429 && /concurrent/i.test(chu) && lanDongThoi++ < 40) {
       await new Promise((x) => setTimeout(x, 1000 + Math.random() * 2000));
@@ -1680,7 +1683,7 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
     }
     if (!hetLuot && (r.status === 429 || r.status >= 500) && lan < (dv === "edge" && r.status !== 429 ? 1 : 5)) { await cho(5 * (lan + 1), "long"); continue; }
     const e = new Error(thongBao);
-    Object.assign(e, { status: r.status, dv, hetLuot });
+    Object.assign(e, { status: r.status, dv, hetLuot, canGoiTraPhi });
     throw e;
   }
 }
@@ -2543,6 +2546,7 @@ function loiDeHieu(loi) {
     return "Azure báo lỗi: " + m;
   }
   if (loi?.dv === "el") {
+    if (loi.canGoiTraPhi) return `Giọng ElevenLabs đang chọn (${tenGiong("el") || "giọng thư viện"}) là giọng trong thư viện cộng đồng – tài khoản miễn phí không được dùng loại giọng này qua app. Cách xử lý: trong ⚙️ → ElevenLabs chọn một giọng MẶC ĐỊNH của ElevenLabs (không có chữ "thư viện"), hoặc mua gói trả phí.`;
     if (loi.hetLuot) return "ElevenLabs đã hết lượt tháng này. App tự chuyển sang giọng kế tiếp; muốn dùng tiếp thì mua thêm gói ElevenLabs.";
     if (loi.status === 401) return "Mã ElevenLabs không đúng hoặc thiếu quyền. Tạo lại mã, bật quyền Text to Speech và Voices (Read).\n" + m;
     if (/model/i.test(m)) return "Giọng/chất lượng này chưa đọc được tiếng Việt. Trong ⚙️ đổi Chất lượng sang “Nhanh (Flash)” rồi thử lại.\n" + m;

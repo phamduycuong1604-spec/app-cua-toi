@@ -235,6 +235,24 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     }
     throw loiCuoi;
   }
+  // Groq hay ngừng mô hình cũ → hỏi Groq danh sách mô hình mã này dùng được, chọn mô hình hợp để dịch
+  let dsGroq = null;
+  async function moHinhGroq() {
+    if (dsGroq) return dsGroq;
+    const macDinh = ["qwen/qwen3-32b", "llama-3.3-70b-versatile"];
+    try {
+      const r = await goi(`${GROQ}/models`, { headers: { Authorization: "Bearer " + caiDat.dp.groq } }, "Groq");
+      const co = ((await r.json()).data || []).filter((m) => m.active !== false).map((m) => m.id)
+        .filter((id) => !/whisper|guard|tts|orpheus|playai|compound|distil|vision|embed/i.test(id));
+      const diem = (id) => (/qwen3/.test(id) ? 0 : /gpt-oss-120b/.test(id) ? 1 : /llama-3\.3-70b|llama-4-maverick/.test(id) ? 2 : /kimi|gpt-oss/.test(id) ? 3 : /llama/.test(id) ? 4 : 5);
+      const chon = [...macDinh.filter((m) => co.includes(m)), ...co.filter((m) => !macDinh.includes(m)).sort((a, b) => diem(a) - diem(b))].slice(0, 4);
+      dsGroq = chon.length ? chon : macDinh;
+      if (chon.join() !== macDinh.join()) nhat(`Groq dịch: dùng ${dsGroq.join(", ")}`);
+    } catch {
+      dsGroq = macDinh;
+    }
+    return dsGroq;
+  }
   let dsOpenRouter = null;
   async function moHinhOpenRouter() {
     if (dsOpenRouter) return dsOpenRouter;
@@ -262,7 +280,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     groq: {
       ten: "Groq",
       co: () => !!caiDat.dp.groq,
-      chay: (cau) => chatOpenAI(`${GROQ}/chat/completions`, caiDat.dp.groq, ["qwen/qwen3-32b", "llama-3.3-70b-versatile"], cau, "Groq dịch", {
+      chay: async (cau) => chatOpenAI(`${GROQ}/chat/completions`, caiDat.dp.groq, await moHinhGroq(), cau, "Groq dịch", {
         body: (mh) => (/qwen3/.test(mh) ? { reasoning_effort: "none" } : {}),
       }),
     },
@@ -320,7 +338,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
       } catch (loi) {
         loiCuoi = loi;
         hong.set(viec + k, loi);
-        nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}`);
+        nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}${/\b401\b|invalid|Authentication/i.test(loi.message) ? ` → MÃ ${n.ten.toUpperCase()} SAI HOẶC ĐÃ BỊ XOÁ: tạo mã mới rồi dán lại trong ⚙️ Cài đặt` : ""}`);
       }
     }
     if (!loiCuoi) throw new Error(`Chưa cài dịch vụ dự phòng nào để ${viec}. Mở ⚙️ Cài đặt → 🔁 Dự phòng khi Gemini hết lượt, thêm mã Groq (miễn phí).`);
