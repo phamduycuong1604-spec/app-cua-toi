@@ -180,6 +180,7 @@ async function chay(ten, o) {
     if (o.link === "anh") { await p.close(); return { ten, goi, loiTrang, nhatKy: "" }; }
   } else
   await p.setInputFiles("#o-video", `${S}/${o.video || "thu-vp9.mp4"}`);
+  if (o.truoc) await o.truoc(p);
   const t0 = Date.now();
   await p.click("#nut-bat-dau");
   await p.waitForSelector("#the-ket-qua:not(.an), #loi:not(.an)", { timeout: o.han || 300000 });
@@ -318,6 +319,10 @@ const KICH_BAN = {
   "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
   "43-12-phut-300-cau-gemini-it-luot": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, tachNhac: false, lop: LOP, __dung: { "max:gm:3t2o:doc": { n: 15 } } }, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
+  "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
+    // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật
+    for (const ten of ["ElevenLabs", "Gemini"]) await p.locator("#ds-giong-nhanh label", { hasText: ten }).first().locator("input").uncheck();
+  }, sau: async (p, kq, goi) => { kq.batSau = await p.evaluate(() => JSON.parse(localStorage.getItem("phaha-dv-cai-dat")).bat); kq.dongGiong = (await p.textContent("#o-nhat-ky")).match(/thứ tự giọng ([^·]+)/)?.[1]; } },
   "13b-sua-nhan-mau-h264": { caiDat: { ...CD, lop: LOP }, video: "thu.mp4", hinhAvcPc: true },
   "11-ai-tach-hong": { caiDat: { ...CD, tachNhac: true }, ort: "404" },
   "12-giam-tieng": { caiDat: { ...CD, tachNhac: true, mhTach: "giam" } },
