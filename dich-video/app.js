@@ -2367,7 +2367,7 @@ function bieuThucGiam() {
 // Mỗi loại Gemini có lượt miễn phí riêng → loại này quá tải/hết lượt thì chuyển loại khác
 const MO_HINH = {
   nghe: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
-  doc: ["gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts", "gemini-2.5-pro-preview-tts"],
+  doc: ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"],
 };
 const moHinhDung = {}; // mô hình đã chạy được
 const moHinhNghi = new Set(); // mô hình đang quá tải hoặc hết lượt hôm nay → bỏ qua
