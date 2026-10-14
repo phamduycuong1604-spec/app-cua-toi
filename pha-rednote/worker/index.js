@@ -157,16 +157,22 @@ async function verifiedVideo(media,{probeOnly=false}={}){
   return {stream,size,type};
  }catch(error){try{await reader.cancel()}catch{}throw error}
 }
-// Bản nhẹ cho video nặng: bản ≤1080p Rednote có sẵn, ưu tiên H.264 (iPhone và bộ xử lý video đọc tốt nhất), rồi H.265.
+// Bản nhẹ cho video nặng: bản Rednote ≤1080p phát trên web (không phải bản "lưu video" có logo); cho lệch tới 1088 (vd. 1428×1088).
+// H.264 trước (iPhone đọc tốt nhất), rồi H.265. Trả kèm ghi chú từng bản để nhật ký cho biết vì sao không dùng được.
 async function pick1080(note){
- const rank={h264:0,h265:1},fits=s=>s.width>0&&s.height>0&&Math.min(s.width,s.height)<=1080;
- const list=(note.variants||[]).filter(s=>Object.hasOwn(rank,s.codec)&&fits(s)).sort((a,b)=>rank[a.codec]-rank[b.codec]||b.width*b.height-a.width*a.height||b.bitrate-a.bitrate);
+ const rank={h264:0,h265:1},sized=s=>s.width>0&&s.height>0,fits=s=>sized(s)&&Math.min(s.width,s.height)<=1088;
+ const name=s=>s.codec+' '+(sized(s)?s.width+'×'+s.height:'chưa rõ cỡ');
+ const notes=[],all=note.variants||[];
+ for(const s of all)if(!Object.hasOwn(rank,s.codec))notes.push(name(s)+': iPhone khó đọc');else if(!fits(s))notes.push(name(s)+(sized(s)?': lớn hơn 1080p':''));
+ const list=all.filter(s=>Object.hasOwn(rank,s.codec)&&fits(s)).sort((a,b)=>rank[a.codec]-rank[b.codec]||b.width*b.height-a.width*a.height||b.bitrate-a.bitrate);
  let tries=0;
  for(const s of list)for(const url of s.urls){
-  if(++tries>4)return null;
-  try{const probe=await verifiedVideo(url,{probeOnly:true});await probe.stream.cancel();if(probe.size>0)return {url,size:probe.size,width:s.width,height:s.height,codec:s.codec};}catch{}
+  if(++tries>4){notes.push('đã thử 4 link, dừng');return {notes}}
+  try{const probe=await verifiedVideo(url,{probeOnly:true});await probe.stream.cancel();if(probe.size>0)return {url,size:probe.size,width:s.width,height:s.height,codec:s.codec,notes};notes.push(name(s)+': không đọc được dung lượng')}
+  catch(error){notes.push(name(s)+': '+String(error?.message||error).replace(/\.$/,''))}
  }
- return null;
+ if(!all.length)notes.push('Rednote không gửi kèm bản phát trên web');
+ return {notes};
 }
 function videoAttachment(note,media,size,mode,extra={}){
  const downloadUrl='/api/download?url='+encodeURIComponent(media)+'&id='+encodeURIComponent(note.id)+'&kind='+mode+'&source='+encodeURIComponent(note.sourceUrl);
@@ -180,9 +186,10 @@ async function fetchVideoFile(body){
  let media=note.originalVideoUrl,size=probe.size,extra={};mode='original';
  // Luôn ưu tiên bản ≤1080p Rednote phát trên web (không phải bản "lưu video" có logo) khi nó nhẹ hơn bản gốc:
  // video vốn được xuất tối đa 1080p, nên điện thoại khỏi tải và thu nhỏ bản 2K/4K (nhanh hơn nhiều).
- const lite=await pick1080(note);
- if(lite&&(!(size>0)||lite.size<size)){extra={originalSize:size||null,width:lite.width,height:lite.height,codec:lite.codec,reason:size?'Bản gốc '+Math.round(size/1e6)+' MB, bản Rednote '+Math.round(lite.size/1e6)+' MB nhẹ hơn':'Không đọc được dung lượng bản gốc'};media=lite.url;size=lite.size;mode='p1080';}
- else if(!lite)extra={reason:'Không có bản 1080p của Rednote cho bài này, dùng bản gốc'};
+ const lite=await pick1080(note),MB=n=>Math.round(n/1e6),seen=lite.notes.length?' ('+lite.notes.join('; ')+')':'';
+ if(lite.url&&(!(size>0)||lite.size<size)){extra={originalSize:size||null,width:lite.width,height:lite.height,codec:lite.codec,reason:size?'Bản gốc '+MB(size)+' MB, bản Rednote '+MB(lite.size)+' MB nhẹ hơn':'Không đọc được dung lượng bản gốc'};media=lite.url;size=lite.size;mode='p1080';}
+ else if(lite.url)extra={reason:'Bản Rednote '+lite.codec+' '+lite.width+'×'+lite.height+' nặng '+MB(lite.size)+' MB, không nhẹ hơn bản gốc '+MB(size)+' MB, dùng bản gốc'};
+ else extra={reason:'Không có bản 1080p của Rednote dùng được, dùng bản gốc'+seen};
  if(size>MAX_FILE_BYTES||body.delivery==='attachment'&&size>0)return videoAttachment(note,media,size,mode,extra);
  file=await verifiedVideo(media);
  const extension=file.type==='video/webm'?'webm':'mp4';
@@ -225,7 +232,7 @@ export default {async fetch(request,env){
      if(attempt&&url.searchParams.get('source')){
       const refreshed=await readSourceNote(url.searchParams.get('source'));
       const kind=url.searchParams.get('kind');
-      const fresh=kind==='original'?refreshed.originalVideoUrl:kind==='p1080'?(await pick1080(refreshed))?.url:refreshed.videoUrl;
+      const fresh=kind==='original'?refreshed.originalVideoUrl:kind==='p1080'?(await pick1080(refreshed)).url:refreshed.videoUrl;
       if(fresh)media=validUrl(fresh,MEDIA_HOSTS);
      }
      ({response}=await fetchAllowed(media.href,MEDIA_HOSTS,{headers:{'user-agent':UA,'referer':'https://www.xiaohongshu.com/','range':range||'bytes=0-'}},25000));

@@ -441,6 +441,12 @@ test('A heavy original with no copy at 1080p or below keeps the original and say
  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_4K,width:2160,height:3840}]}}),{[P10_ORIGIN]:900000000,[P10_4K]:850000000});
  try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'original');assert.equal(d.size,900000000);assert.match(d.reason,/Không có bản 1080p/);}finally{globalThis.fetch=old}
 });
+test('A 1428×1088 Rednote copy counts as 1080p, and a refused copy is named in the log reason',async()=>{
+ let old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,width:1428,height:1088}]}}),{[P10_ORIGIN]:77000000,[P10_1080]:30000000});
+ try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'p1080');assert.equal(d.width,1428);}finally{globalThis.fetch=old}
+ old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,width:1080,height:1920}],av1:[{masterUrl:P10_H265,width:1080,height:1920}]}}),{[P10_ORIGIN]:900000000,[P10_1080]:300000000},{blocked:[P10_1080]});
+ try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'original');assert.match(d.reason,/h264 1080×1920: Nguồn không cho tải/);assert.match(d.reason,/av1 1080×1920: iPhone khó đọc/);}finally{globalThis.fetch=old}
+});
 test('If the main 1080p link is refused, its backup link from Rednote is used',async()=>{
  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,backupUrls:[P10_BACKUP],width:1080,height:1920}]}}),{[P10_ORIGIN]:2000000000,[P10_1080]:400000000,[P10_BACKUP]:400000000},{blocked:[P10_1080]});
  try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'p1080');assert.equal(new URL(d.downloadUrl,'https://site.test').searchParams.get('url'),P10_BACKUP);}finally{globalThis.fetch=old}
