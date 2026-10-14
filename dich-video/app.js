@@ -1622,7 +1622,9 @@ async function docCau(chu, dv) {
 
 async function docGemini(chu, lan = 0) {
   const tl = await goiGemini("doc", {
-    contents: [{ parts: [{ text: `Đọc bằng tiếng Việt, giọng tự nhiên, tốc độ hơi nhanh: ${chu}` }] }],
+    // Chỉ gửi đúng câu cần đọc. Không kèm lời dặn kiểu "Đọc bằng tiếng Việt…" vì các mẫu Gemini đọc giọng
+    // mới (3.x) đọc to luôn cả lời dặn vào video. Tốc độ đã có app tự chỉnh khi xếp giọng vào video.
+    contents: [{ parts: [{ text: chu }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
