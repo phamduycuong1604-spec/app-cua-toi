@@ -2387,7 +2387,7 @@ async function goiGeminiMotMa(loai, noiDung) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   if (tuChon) return goiMoHinh(tuChon, noiDung, loai);
   let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
-  let daHoi = false, loiCuoi = null;
+  let daHoi = false, loiCuoi = null, hetNgay = null;
   for (let i = 0; i < ds.length; i++) {
     if (moHinhNghi.has(tenNghi(ds[i], loai))) {
       if (!daBaoNghi.has(tenNghi(ds[i], loai))) {
@@ -2409,6 +2409,7 @@ async function goiGeminiMotMa(loai, noiDung) {
         ds.splice(i + 1, 0, loi.goiY);
         nhat(`↪️ ${ds[i]} đã ngừng, Google gợi ý dùng ${loi.goiY} → thử ngay`);
       }
+      if (loi.message === "HET_NGAY") hetNgay = loi;
       if (loi.doiMoHinh) {
         moHinhNghi.add(tenNghi(ds[i], loai));
         if (loi.message === "HET_NGAY") luuMoHinhNghi(tenNghi(ds[i], loai), Math.min(loi.choGiay || 3600, 86400));
@@ -2422,9 +2423,13 @@ async function goiGeminiMotMa(loai, noiDung) {
       ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t)));
     }
   }
-  if (loiCuoi?.message === "HET_NGAY") { ghiHetGemini(loai); throw loiCuoi; }
-  // Mọi mô hình đều đang được nhớ là hết lượt/ngừng → coi như hết lượt hôm nay
-  if (!loiCuoi && ds.every((m) => moHinhNghi.has(tenNghi(m, loai)))) throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
+  // Có loại Gemini báo hết lượt hôm nay (các loại khác ngừng/không có) → coi là mã này hết lượt, để xoay sang mã kế tiếp.
+  // Trước đây chỉ xét lỗi CUỐI: loại cuối báo "không tìm thấy" là app tưởng không có mô hình, không đổi mã.
+  if (hetNgay) { ghiHetGemini(loai); throw hetNgay; }
+  // Mọi mô hình đều đang được nhớ là ngừng/hết lượt, trong đó có loại hết lượt (ghi nhớ ngắn, ≤ 1 ngày) → hết lượt hôm nay
+  const nho = docLuu("phaha-dv-gemini-nghi"), hetLuotNho = (m) => (nho[tenNghi(m, loai)] || 0) - Date.now() <= 2 * 86400000;
+  if (ds.every((m) => moHinhNghi.has(tenNghi(m, loai))) && (!loiCuoi || loiCuoi.status === 404) && ds.some((m) => hetLuotNho(m) && moHinhNghi.has(tenNghi(m, loai))))
+    throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }

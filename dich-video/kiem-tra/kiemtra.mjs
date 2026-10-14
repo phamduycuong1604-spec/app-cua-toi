@@ -58,6 +58,7 @@ async function chay(ten, o) {
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
+    if (u.includes("tts") && o.tts404 && o.tts404.test(u) && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ error: { code: 404, message: "models/x is not found for API version v1beta, or is not supported for generateContent." } }) }); }
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
@@ -253,6 +254,9 @@ const KICH_BAN = {
       sau: async (p, kq) => { kq.goi.khoaDoc = [...kq.goi.khoaDoc]; kq.goi.khoaNghe = [...kq.goi.khoaNghe]; } },
   // Dán 3 mã đọc: mã 1, 2 hết lượt → tự chuyển sang mã 3 và đọc bằng Gemini
   "27c-gemini-xoay-nhieu-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222\nMA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", maDocTot: ["MA-DOC-333333"],
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
+  // Mã 1, 2: loại đầu hết lượt (429), các loại sau "không tìm thấy" (404) → vẫn phải xoay sang mã kế tiếp
+  "27d-gemini-xoay-loi-lan": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222, MA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", tts404: /flash-tts|pro-preview-tts/, maDocTot: ["MA-DOC-333333"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
