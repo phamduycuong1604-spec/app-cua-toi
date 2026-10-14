@@ -170,3 +170,5 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
 #kq-kiem-tra { white-space: pre-line; line-height: 1.6; }
 .dong-khoi-phuc { display: flex; gap: 8px; align-items: center; justify-content: space-between; border-top: 1px solid var(--vien); padding: 6px 0; }
 .dong-khoi-phuc .nut-nho { width: auto; margin: 0; padding: 6px 10px; flex: none; }
+.ds-giong-nhanh .cong-tac { margin: 6px 0; }
+.ds-giong-nhanh .tt-nho { font-size: 13px; opacity: .75; margin-left: auto; text-align: right; }

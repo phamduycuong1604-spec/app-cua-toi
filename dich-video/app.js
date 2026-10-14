@@ -233,6 +233,7 @@ $("o-link").addEventListener("paste", () => setTimeout(() => LINK_REDNOTE.test($
 
 function nhanVideo(tep) {
   tepVideo = tep;
+  veGiongNhanh();
   cacCau = [];
   videoKetQua = null;
   $("chu-chon-video").textContent = `${tep.name} · ${(tep.size / 1048576).toFixed(1)}MB (bấm để đổi)`;
@@ -306,6 +307,7 @@ function moCaiDat() {
 }
 $("hop-cai-dat").addEventListener("close", () => {
   layTuForm();
+  veGiongNhanh();
   // Bấm Lưu = có thể vừa nâng mã Gemini lên trả phí → quên giới hạn Gemini đã ghi nhớ, lần chạy sau thử lại thật
   if ($("hop-cai-dat").returnValue !== "luu") return;
   moHinhNghi.clear();
@@ -373,6 +375,34 @@ function trangThai(dv) {
 }
 function hienTrangThai() {
   for (const dv of THU_TU) if ($("tt-" + dv)) $("tt-" + dv).textContent = trangThai(dv);
+  veGiongNhanh();
+}
+// Công tắc giọng đọc ngay ở màn hình chính (mục 🎙️ Giọng đọc cho video này) – chọn nhanh cho từng video
+function veGiongNhanh() {
+  const o = $("ds-giong-nhanh");
+  if (!o) return;
+  o.textContent = "";
+  for (const dv of THU_TU) {
+    const nhan = document.createElement("label");
+    nhan.className = "cong-tac";
+    const hop = document.createElement("input");
+    hop.type = "checkbox";
+    hop.checked = dv === "may" || !!caiDat.bat[dv];
+    hop.disabled = dv === "may";
+    hop.addEventListener("change", () => {
+      caiDat.bat[dv] = hop.checked;
+      if ($("bat-" + dv)) $("bat-" + dv).checked = hop.checked;
+      luuCaiDat();
+      hienTrangThai();
+    });
+    const ten = document.createElement("span");
+    ten.textContent = DICH_VU[dv].ten + (dv === "may" ? " (luôn có, dự phòng cuối)" : tenGiong(dv) ? " · " + tenGiong(dv) : "");
+    const tt = document.createElement("span");
+    tt.className = "tt-nho";
+    tt.textContent = dv === "may" ? "" : trangThai(dv);
+    nhan.append(hop, ten, tt);
+    o.append(nhan);
+  }
 }
 document.querySelectorAll(".dv-doc input").forEach((o) => o.addEventListener("change", () => { layTuForm(); hienTrangThai(); }));
 
