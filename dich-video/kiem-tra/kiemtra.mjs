@@ -97,7 +97,7 @@ async function chay(ten, o) {
       const seg = Array.from({ length: n }, (_, k) => ({ start: +(k * buoc + 0.05).toFixed(2), end: +(k * buoc + buoc * 0.85).toFixed(2), text: "这是测试句子" + "一二三四五六七八九十"[k % 10] + "号内容", no_speech_prob: 0.01, avg_logprob: -0.2 }));
       return rt.fulfill({ headers: J, body: JSON.stringify({ segments: seg }) });
     }
-    if (u.includes("transcriptions")) return rt.fulfill({ headers: J, body: JSON.stringify({ segments: SEG }) });
+    if (u.includes("transcriptions")) { const gy = /name="prompt"\r\n\r\n([^\r]*)/.exec(rt.request().postDataBuffer()?.toString() || ""); if (gy) goi.groqGoiY = gy[1]; return rt.fulfill({ headers: J, body: JSON.stringify({ segments: SEG }) }); }
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: o.groqMang ? '["Chào bạn","Cảm ơn"]' : "<think>x</think>" + DICH } }] }) }); });
   await p.route("https://viec-hom-nay-nhac.phamduycuong1604.workers.dev/**", async (rt) => { const u = rt.request().url(); const h = rt.request().headers();
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
@@ -146,6 +146,7 @@ async function chay(ten, o) {
     if (o.dsHet) return rt.fulfill({ status: 402, headers: J, body: JSON.stringify({ error: { message: "Insufficient Balance" } }) });
     const b = JSON.parse(rt.request().postData()); goi.dsModel = b.model; goi.dsJson = b.response_format?.type;
     goi.dsLoiDan = b.messages?.[0]?.content?.slice(0, 400);
+    if (/BẮT BUỘC|Chủ đề/.test(b.messages?.[0]?.content || "")) goi.dsThem = b.messages[0].content.split("\n\n").slice(1).join(" | ");
     const dongDs = (b.messages?.[1]?.content || "").split("\n").map((l) => /^(\d+)\. \([\d.]+s\) (.*)$/.exec(l)).filter(Boolean);
     if (o.dsChep) { dem("dsChep"); return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], m[2]]))) } }] }) }); }
     if (o.dsDang === "du") { dem("dsCau", dongDs.length); return rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(Object.fromEntries(dongDs.map((m) => [m[1], "Đây là câu thử nghiệm số " + m[1] + " đã dịch xong"]))) } }] }) }); }
@@ -282,6 +283,11 @@ const KICH_BAN = {
   "4g-giong-may-cho-chen-chu": { caiDat: { ...CD, bat: DU, tachNhac: true, lop: LOP, dv: { el: CD.dv.el } }, logo: true, elHet: 0, gemTTS: "het", edge: "hong", han: 600000 },
   "34-tai-link-rednote": { caiDat: CD, link: true },
   "34b-link-rednote-la-anh": { caiDat: CD, link: "anh" },
+  "29m-thuat-ngu": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, chuDe: "mỹ phẩm", tuDien: "朋友 = bằng hữu\n面膜 = mặt nạ" },
+      sau: async (p, kq) => { const t = kq.goi.dsThem || "";
+        if (!/mỹ phẩm/.test(t) || !/朋友 → bằng hữu/.test(t) || /面膜/.test(t)) kq.loi = "Lời dặn thuật ngữ sai: " + t;
+        if (kq.goi.groqGoiY !== "朋友，面膜") kq.loi = "Gợi ý nghe sai: " + kq.goi.groqGoiY;
+        if ((await p.inputValue("#o-chu-de")) !== "mỹ phẩm") kq.loi = "Ô chủ đề không hiện cài đặt đã lưu"; } },
   "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
   "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
   "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },

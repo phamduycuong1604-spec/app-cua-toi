@@ -23,6 +23,27 @@ export function boChuTrung(x) {
   return s;
 }
 
+// Từ điển thuật ngữ người dùng tự ghi (mỗi dòng: 中文 = tiếng Việt) → danh sách cặp
+export function docTuDien(chu) {
+  const ra = [];
+  for (const dong of String(chu || "").split(/\n/)) {
+    const m = dong.match(/^\s*(.+?)\s*(?:=>|->|→|=|:|：|\t)\s*(.+?)\s*$/);
+    if (m && m[1] && m[2]) ra.push([m[1], m[2]]);
+  }
+  return ra;
+}
+// Lời dặn thêm cho AI dịch: chủ đề video + thuật ngữ bắt buộc.
+// Có chữ gốc thì chỉ gửi thuật ngữ xuất hiện trong đó (đỡ dài lời nhắc); không có thì gửi tối đa 80 từ.
+export function loiDanThem(caiDat, chuGoc) {
+  const phan = [];
+  const chuDe = String(caiDat.chuDe || "").trim();
+  if (chuDe) phan.push(`Chủ đề / lĩnh vực của video: ${chuDe}. Dùng đúng thuật ngữ chuyên ngành tiếng Việt của lĩnh vực này, đúng cách người trong nghề hay nói; không dịch từng chữ.`);
+  let tu = docTuDien(caiDat.tuDien);
+  if (chuGoc != null) tu = tu.filter(([zh]) => chuGoc.includes(zh));
+  if (tu.length) phan.push("BẮT BUỘC dịch các từ sau đúng như bảng (không dùng từ khác):\n" + tu.slice(0, 80).map(([zh, vi]) => `${zh} → ${vi}`).join("\n"));
+  return phan.join("\n");
+}
+
 export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
   const ve = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
@@ -111,6 +132,9 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
               f.append("language", "zh");
               f.append("response_format", "verbose_json");
               f.append("temperature", "0");
+              // Gợi ý các thuật ngữ trong từ điển để nghe đúng chữ chuyên môn
+              const goiY = docTuDien(caiDat.tuDien).map(([zh]) => zh).filter((zh) => /[\u3400-\u9fff]/.test(zh)).join("，").slice(0, 200);
+              if (goiY) f.append("prompt", goiY);
               return { method: "POST", headers: { Authorization: "Bearer " + caiDat.dp.groq }, body: f };
             }, "Groq Whisper");
             const j = await r.json();
@@ -161,10 +185,11 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   let lanTraLoiCuoi = ""; // câu trả lời thô gần nhất của AI dịch – ghi vào nhật ký khi dịch hỏng để biết vì sao
   function loiNhac(cau) {
     const ds = cau.map((c, i) => `${i + 1}. (${(c.end - c.start).toFixed(1)}s) ${c.zh}`).join("\n");
+    const them = loiDanThem(caiDat, cau.map((c) => c.zh).join("\n"));
     return [
       {
         role: "system",
-        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý từng câu: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Mỗi câu gốc phải có đúng 1 câu dịch, không gộp, không bỏ câu nào. Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm).",
+        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý từng câu: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Mỗi câu gốc phải có đúng 1 câu dịch, không gộp, không bỏ câu nào. Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm)." + (them ? "\n\n" + them : ""),
       },
       {
         role: "user",
