@@ -298,7 +298,7 @@ const KICH_BAN = {
         await p.fill("#pd-viet", "câu một\ncâu hai");
         await p.click("#nut-dung-viet");
         kq.baoSai = await p.textContent("#pd-bao");
-        await p.fill("#pd-viet", "1\n00:00:01,000 --> 00:00:03,000\nXin chào anh bạn\n\n2\n00:00:04,000 --> 00:00:05,500\nNhớ bấm thích và đăng ký nhé\n\n3\n00:00:05,800 --> 00:00:07,000\nCảm ơn\n");
+        await p.fill("#pd-viet", "1\n00:00:01,000 –> 00:00:03,000\nXin chào anh bạn\n\n2\n00:00:04,000 -> 00:00:05,500\nNhớ bấm thích\nvà đăng ký nhé\n\n3\n00:00:05,800 → 00:00:07,000\nCảm ơn\n");
         await p.click("#nut-dung-viet");
       },
       sau: async (p, kq) => {
@@ -312,7 +312,7 @@ const KICH_BAN = {
   "29p-srt-lech-so-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
       trong: async (p) => {
         await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 });
-        await p.fill("#pd-viet", "1\n00:00:01,100 --> 00:00:02,000\nXin chào\n\n2\n00:00:02,000 --> 00:00:02,900\nanh bạn\n\n3\n00:00:05,900 --> 00:00:06,900\nCảm ơn nhé\n");
+        await p.fill("#pd-viet", "1\n00:00:01,100 --> 00:00:02,000\nXin chào\n2\n00:00:02,000 --> 00:00:02,900\nanh bạn\n3\n00:00:05,900 --> 00:00:06,900\nCảm ơn nhé\n");
         await p.click("#nut-dung-viet");
       },
       sau: async (p, kq) => { if (kq.cau?.[0] !== "Xin chào anh bạn" || kq.cau?.[2] !== "Cảm ơn nhé") kq.loi = "Ghép theo giờ sai: " + kq.cau; } },
