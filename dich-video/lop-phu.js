@@ -128,7 +128,7 @@ function vePhuDe(ctx, W, H, chu, p) {
 }
 
 // Xuất phần HÌNH (không tiếng) có phụ đề/lớp che/logo
-export async function xuatHinh(tep, ve, baoTienDo) {
+export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60) {
   if (typeof VideoEncoder === "undefined" || typeof OffscreenCanvas === "undefined") {
     throw Object.assign(new Error("Điện thoại chưa hỗ trợ chèn chữ/logo (cần iOS 17 trở lên)."), { khongHoTro: true });
   }
@@ -156,6 +156,7 @@ export async function xuatHinh(tep, ve, baoTienDo) {
       processedWidth: W,
       processedHeight: H,
       process: (mau) => {
+        if (globalThis.__phahaTreoVe > 0 && mau.timestamp > 1) { globalThis.__phahaTreoVe--; return new Promise(() => {}); } // chỉ dùng khi kiểm tra
         mau.drawWithFit(ctx, { fit: "fill" });
         ve(ctx, W, H, mau.timestamp);
         return khung;
@@ -165,7 +166,30 @@ export async function xuatHinh(tep, ve, baoTienDo) {
   if (!conv.isValid) {
     throw Object.assign(new Error("Điện thoại không đọc được hình của video này."), { khongHoTro: true });
   }
-  conv.onProgress = baoTienDo;
-  await conv.execute();
+  // Canh treo: bộ giải mã/mã hoá của máy thỉnh thoảng đứng im không báo lỗi (vd đang bận việc khác, máy hết bộ nhớ)
+  // → quá choToiDa giây không nhích (lúc trang đang mở) thì huỷ và báo treo để làm lại
+  let lanCuoi = Date.now(), canh = 0;
+  conv.onProgress = (p) => { lanCuoi = Date.now(); baoTienDo(p); };
+  const hienLai = () => { if (!document.hidden) lanCuoi = Date.now(); };
+  document.addEventListener("visibilitychange", hienLai);
+  // Không chờ conv.cancel() xong: bộ mã hoá đã kẹt thì cancel cũng có thể kẹt theo
+  const biTreo = new Promise((_, loi) => {
+    canh = setInterval(() => {
+      if (document.hidden) { lanCuoi = Date.now(); return; }
+      if (Date.now() - lanCuoi > choToiDa * 1000) {
+        clearInterval(canh);
+        conv.cancel().catch(() => {});
+        loi(Object.assign(new Error(`Chèn chữ/logo đứng im quá ${choToiDa} giây`), { treo: true }));
+      }
+    }, 2000);
+  });
+  const chay = conv.execute();
+  chay.catch(() => {});
+  try {
+    await Promise.race([chay, biTreo]);
+  } finally {
+    clearInterval(canh);
+    document.removeEventListener("visibilitychange", hienLai);
+  }
   return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec, W, H };
 }
