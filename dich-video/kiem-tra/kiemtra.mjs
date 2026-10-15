@@ -1,4 +1,5 @@
 // Bộ kiểm tra đầy đủ app PhaHa lồng tiếng (mọi dịch vụ giả lập)
+const CONG = Number(process.env.CONG) || 8780; // chạy 2 lượt kiểm tra cùng lúc thì đổi cổng
 import http from "node:http"; import fs from "node:fs"; import path from "node:path"; import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 const THU_MUC = path.dirname(fileURLToPath(import.meta.url));
@@ -7,7 +8,7 @@ const ROOT = path.resolve(THU_MUC, "../..");
 const S = process.env.S || path.join(THU_MUC, "du-lieu"), NM = `${S}/mdx/node_modules`;
 const types = {".html":"text/html",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".json":"application/json",".png":"image/png",".svg":"image/svg+xml",".wasm":"application/wasm"};
 const srv = http.createServer((q, r) => { const f = path.join(ROOT, decodeURIComponent(q.url.split("?")[0]).replace(/\/$/, "/index.html"));
-  if (!fs.existsSync(f)) { r.writeHead(404); return r.end(); } r.writeHead(200, {"Content-Type": types[path.extname(f)]||"application/octet-stream","Content-Length":fs.statSync(f).size}); fs.createReadStream(f).pipe(r); }).listen(8780);
+  if (!fs.existsSync(f)) { r.writeHead(404); return r.end(); } r.writeHead(200, {"Content-Type": types[path.extname(f)]||"application/octet-stream","Content-Length":fs.statSync(f).size}); fs.createReadStream(f).pipe(r); }).listen(CONG);
 const b = await chromium.launch();
 const J = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
 const pcm = (giay) => { const n = Math.round(24000*giay); const x = Buffer.alloc(n*2); for (let i=0;i<n;i++) x.writeInt16LE(Math.round(Math.sin(i/24000*2*Math.PI*440)*9000), i*2); return x; };
@@ -164,7 +165,7 @@ async function chay(ten, o) {
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ "1": "Chào bạn (DS)", "2": "Cảm ơn (DS)", "3": "Ok (DS)" }) } }] }) }); });
   await p.route("https://openrouter.ai/**", (rt) => { dem("or"); rt.fulfill({ headers: J, body: JSON.stringify(rt.request().url().endsWith("/models") ? { data: [{ id: "deepseek/x:free" }] } : { choices: [{ message: { content: "Kết quả: " + DICH } }] }) }); });
 
-  await p.goto("http://localhost:8780/dich-video/");
+  await p.goto(`http://localhost:${CONG}/dich-video/`);
   await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
     [{ ...o.caiDat, __khongVe: o.khongVe }, o.logo ? "data:image/png;base64," + fs.readFileSync(`${S}/logo.png`).toString("base64") : null]);
   await p.reload();
@@ -380,11 +381,11 @@ const KICH_BAN = {
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
         if (!/tải thư viện từ cdn.jsdelivr.net không được/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không chuyển sang thư viện dự phòng"; } },
   "1i-safari-ket-hoi-bo-ma-hoa": { caiDat: { ...CD, lop: { phuDe: { bat: true }, logo: { bat: false } } },
-      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); globalThis.__phahaMaThang = "vp9"; }),
+      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = VideoDecoder.isConfigSupported = () => new Promise(() => {}); globalThis.__phahaDoanMa = "vp09"; }),
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
-        if (!/dùng thẳng bộ mã hoá H.264/.test(nk) || !/Dựng hình xong: .*vp9/.test(nk) || !/vp9,video/.test(kq.probe || "")) kq.loi = "Không đi vòng được khi Safari kẹt: " + (kq.probe || "") + " :: " + kq.loi + " :: " + nk.split("\n").filter((x) => /Chèn|Dựng|❌|⚠️/.test(x)).join(" / "); } },
+        if (!/không trả lời câu hỏi giải mã .*→ tự đoán là được/.test(nk) || !/không trả lời câu hỏi mã hoá avc.*→ tự đoán là không/.test(nk) || !/Dựng hình xong: .*vp9/.test(nk) || !/vp9,video/.test(kq.probe || "")) kq.loi = "Không đi vòng được khi Safari kẹt: " + (kq.probe || "") + " :: " + kq.loi + " :: " + nk.split("\n").filter((x) => /Chèn|Dựng|❌|⚠️/.test(x)).join(" / "); } },
   "1j-ma-thang-cung-hong": { caiDat: { ...CD, lop: { phuDe: { bat: true }, logo: { bat: false } } },
-      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); }),
+      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = VideoDecoder.isConfigSupported = () => new Promise(() => {}); }),
       sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
         if (!/bị lỗi/.test(ve) || !kq.probe) kq.loi = "Mã thẳng hỏng mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
   "1k-chen-chu-loi-giai-ma-lam-lai": { caiDat: { ...CD, tachNhac: true, lop: LOP }, logo: true,
