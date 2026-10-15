@@ -20,7 +20,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "" },
+  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "", kiemPd: false },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -380,11 +380,14 @@ for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
   o.value = caiDat[khoa] || "";
   o.addEventListener("input", () => { caiDat[khoa] = o.value.trim(); luuCaiDat(); });
 }
+$("o-kiem-pd").checked = !!caiDat.kiemPd;
+$("o-kiem-pd").addEventListener("change", (e) => { caiDat.kiemPd = e.target.checked; luuCaiDat(); });
 function hienODich() {
   for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
     const o = $(id);
     if (o && document.activeElement !== o && o.value.trim() !== (caiDat[khoa] || "")) o.value = caiDat[khoa] || "";
   }
+  $("o-kiem-pd").checked = !!caiDat.kiemPd;
 }
 
 function hienTrangThai() {
@@ -1091,6 +1094,7 @@ async function chay(lamTuDau) {
       if (!cacCau.length) throw new Error("Không nghe thấy lời nói tiếng Trung nào trong video.");
       buoc("dich", "xong", `${cacCau.length} câu`);
       veLoiThoai();
+      if (caiDat.kiemPd) await choKiemPhuDe();
     }
 
     // Lồng tiếng chủ yếu chờ mạng → chạy song song với tách nhạc (AI chạy trên máy) cho nhanh
@@ -2773,11 +2777,94 @@ function dongHo(s) {
   const p = Math.floor(s / 60), g = s - p * 60;
   return `${String(p).padStart(2, "0")}:${g.toFixed(1).padStart(4, "0")}`;
 }
-function taoSrt() {
+function taoSrt(truong = "vi") {
   const gio = (s) => {
     const ms = Math.round(s * 1000);
     const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), g = Math.floor((ms % 60000) / 1000);
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(g).padStart(2, "0")},${String(ms % 1000).padStart(3, "0")}`;
   };
-  return cacCau.filter((c) => c.vi.trim()).map((c, i) => `${i + 1}\n${gio(c.start)} --> ${gio(c.end)}\n${c.vi}\n`).join("\n");
+  return cacCau.filter((c) => (c[truong] || "").trim()).map((c, i) => `${i + 1}\n${gio(c.start)} --> ${gio(c.end)}\n${c[truong].trim()}\n`).join("\n");
 }
+
+// Đọc file SRT (hoặc chỉ là các dòng chữ, mỗi dòng 1 câu) → [{start, end, chu}]
+function docSrt(chu) {
+  const giay = (t) => { const m = /(\d+):(\d+):(\d+)[,.](\d+)/.exec(t); return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4].padEnd(3, "0").slice(0, 3) / 1000 : NaN; };
+  const khoi = String(chu || "").replace(/\r/g, "").trim().split(/\n\s*\n/);
+  const ra = [];
+  for (const k of khoi) {
+    const dong = k.split("\n").map((d) => d.trim()).filter(Boolean);
+    const iGio = dong.findIndex((d) => d.includes("-->"));
+    if (iGio < 0) continue;
+    const [a, b] = dong[iGio].split("-->");
+    ra.push({ start: giay(a), end: giay(b), chu: dong.slice(iGio + 1).join(" ") });
+  }
+  if (ra.length) return ra;
+  // Không có mốc giờ: mỗi dòng là 1 câu, theo đúng thứ tự
+  return String(chu || "").split("\n").map((d) => d.trim()).filter(Boolean).map((d) => ({ start: NaN, end: NaN, chu: d }));
+}
+
+// Ghép bản dịch tiếng Việt người dùng dán vào các câu: cùng số câu → theo thứ tự; khác → theo thời gian trùng nhau nhiều nhất
+function ganBanDich(ds) {
+  const cau = cacCau.filter((c) => (c.zh || "").trim());
+  if (ds.length === cau.length) { cau.forEach((c, i) => (c.vi = ds[i].chu)); return cau.length; }
+  if (ds.some((d) => !Number.isFinite(d.start))) throw new Error(`Bản dán có ${ds.length} câu nhưng video có ${cau.length} câu, lại không có mốc giờ → không ghép được. Dán đủ ${cau.length} câu, hoặc dán dạng SRT có mốc giờ.`);
+  const moi = cau.map(() => []);
+  for (const d of ds) {
+    let tot = -1, iTot = -1;
+    cau.forEach((c, i) => {
+      const trung = Math.min(c.end, d.end) - Math.max(c.start, d.start);
+      const diem = trung > 0 ? trung : -Math.abs((c.start + c.end) / 2 - (d.start + d.end) / 2) - 1000;
+      if (diem > tot || iTot < 0) { tot = diem; iTot = i; }
+    });
+    if (iTot >= 0 && tot > -1000 - 2) moi[iTot].push(d.chu); // lệch quá 2 giây thì bỏ
+  }
+  let n = 0;
+  cau.forEach((c, i) => { if (moi[i].length) { c.vi = moi[i].join(" "); n++; } });
+  return n;
+}
+
+// Dừng sau bước nghe & dịch: đưa SRT tiếng Trung, chờ người dùng dán SRT tiếng Việt (hoặc bấm giữ bản dịch của app)
+function choKiemPhuDe() {
+  const the = $("the-kiem-pd");
+  $("pd-trung").value = taoSrt("zh");
+  $("pd-viet").value = "";
+  $("pd-bao").classList.add("an");
+  the.classList.remove("an");
+  ghiChu("dich", "Chờ bạn kiểm tra phụ đề…");
+  nhat("✋ Dừng lại chờ bạn kiểm tra phụ đề");
+  the.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  return new Promise((xong) => {
+    const ket = (lyDo) => {
+      the.classList.add("an");
+      $("nut-dung-viet").onclick = $("nut-bo-qua-pd").onclick = null;
+      nhat(lyDo);
+      ghiChu("dich", `${cacCau.length} câu`);
+      veLoiThoai();
+      xong();
+    };
+    $("nut-dung-viet").onclick = () => {
+      const bao = $("pd-bao");
+      try {
+        const ds = docSrt($("pd-viet").value).filter((d) => d.chu);
+        if (!ds.length) throw new Error("Chưa dán SRT tiếng Việt vào ô số 2.");
+        const n = ganBanDich(ds);
+        if (!n) throw new Error("Không ghép được câu nào – kiểm tra lại mốc giờ trong SRT.");
+        ket(`✅ Dùng bản dịch bạn dán: ${n}/${cacCau.length} câu`);
+      } catch (loi) {
+        bao.textContent = "⚠️ " + loi.message;
+        bao.classList.remove("an");
+      }
+    };
+    $("nut-bo-qua-pd").onclick = () => ket("⏩ Giữ bản dịch của app");
+  });
+}
+$("nut-chep-trung").addEventListener("click", async () => {
+  const o = $("pd-trung");
+  try { await navigator.clipboard.writeText(o.value); $("nut-chep-trung").textContent = "✅ Đã chép"; }
+  catch { o.select(); document.execCommand?.("copy"); $("nut-chep-trung").textContent = "✅ Đã chép"; }
+  setTimeout(() => ($("nut-chep-trung").textContent = "📋 Chép SRT tiếng Trung"), 2000);
+});
+$("nut-tai-trung").addEventListener("click", () => {
+  const ten = (tepVideo?.name || "video").replace(/\.[^.]+$/, "") + "-tieng-trung.srt";
+  taiXuong(new Blob([$("pd-trung").value], { type: "text/plain" }), ten);
+});

@@ -185,8 +185,10 @@ async function chay(ten, o) {
   if (o.truoc) await o.truoc(p);
   const t0 = Date.now();
   await p.click("#nut-bat-dau");
+  const tam = {};
+  if (o.trong) await o.trong(p, tam);
   await p.waitForSelector("#the-ket-qua:not(.an), #loi:not(.an)", { timeout: o.han || 300000 });
-  let kq = { ten, giay: ((Date.now() - t0) / 1000).toFixed(1), loi: (await p.textContent("#loi")).trim(), goi, elMax, loiTrang };
+  let kq = { ...tam, ten, giay: ((Date.now() - t0) / 1000).toFixed(1), loi: (await p.textContent("#loi")).trim(), goi, elMax, loiTrang };
   kq.buoc = await p.$$eval(".cac-buoc li", (ls) => ls.map((l) => l.querySelector(".dau").textContent).join(""));
   kq.cau = await p.$$eval(".cau textarea", (t) => t.map((x) => x.value));
   if (o.soCau) {
@@ -288,6 +290,32 @@ const KICH_BAN = {
         if (!/mỹ phẩm/.test(t) || !/朋友 → bằng hữu/.test(t) || /面膜/.test(t)) kq.loi = "Lời dặn thuật ngữ sai: " + t;
         if (kq.goi.groqGoiY !== "朋友，面膜") kq.loi = "Gợi ý nghe sai: " + kq.goi.groqGoiY;
         if ((await p.inputValue("#o-chu-de")) !== "mỹ phẩm") kq.loi = "Ô chủ đề không hiện cài đặt đã lưu"; } },
+  "29n-tu-kiem-phu-de": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
+      trong: async (p, kq) => {
+        await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 });
+        const zh = await p.inputValue("#pd-trung");
+        if (!/00:00:01,000 --> 00:00:03,000\n你好朋友/.test(zh)) kq.loiKiem = "SRT Trung sai: " + zh.slice(0, 80);
+        await p.fill("#pd-viet", "câu một\ncâu hai");
+        await p.click("#nut-dung-viet");
+        kq.baoSai = await p.textContent("#pd-bao");
+        await p.fill("#pd-viet", "1\n00:00:01,000 --> 00:00:03,000\nXin chào anh bạn\n\n2\n00:00:04,000 --> 00:00:05,500\nNhớ bấm thích và đăng ký nhé\n\n3\n00:00:05,800 --> 00:00:07,000\nCảm ơn\n");
+        await p.click("#nut-dung-viet");
+      },
+      sau: async (p, kq) => {
+        if (kq.loiKiem) kq.loi = kq.loiKiem;
+        if (!/không có mốc giờ/.test(kq.baoSai || "")) kq.loi = "Không báo lỗi khi dán sai số câu: " + kq.baoSai;
+        if (kq.cau?.slice(0, 3).join("|") !== "Xin chào anh bạn|Nhớ bấm thích và đăng ký nhé|Cảm ơn") kq.loi = "Không dùng bản dịch đã dán: " + kq.cau;
+        if (!(await p.isHidden("#the-kiem-pd"))) kq.loi = "Ô kiểm tra phụ đề chưa ẩn"; } },
+  "29o-tu-kiem-giu-ban-app": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
+      trong: async (p) => { await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 }); await p.click("#nut-bo-qua-pd"); },
+      sau: async (p, kq) => { if (!kq.cau?.length || kq.cau.some((c) => !c)) kq.loi = "Mất bản dịch của app: " + kq.cau; } },
+  "29p-srt-lech-so-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
+      trong: async (p) => {
+        await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 });
+        await p.fill("#pd-viet", "1\n00:00:01,100 --> 00:00:02,000\nXin chào\n\n2\n00:00:02,000 --> 00:00:02,900\nanh bạn\n\n3\n00:00:05,900 --> 00:00:06,900\nCảm ơn nhé\n");
+        await p.click("#nut-dung-viet");
+      },
+      sau: async (p, kq) => { if (kq.cau?.[0] !== "Xin chào anh bạn" || kq.cau?.[2] !== "Cảm ơn nhé") kq.loi = "Ghép theo giờ sai: " + kq.cau; } },
   "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
   "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
   "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },

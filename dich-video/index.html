@@ -63,6 +63,7 @@
         <input id="o-chu-de" class="o-dich" autocomplete="off" placeholder="vd: chăm sóc da, mỹ phẩm Hàn Quốc">
         <label class="nhan" for="o-tu-dien">Từ điển thuật ngữ (mỗi dòng: chữ Trung = tiếng Việt)</label>
         <textarea id="o-tu-dien" class="o-dich" rows="5" placeholder="精华 = tinh chất&#10;面膜 = mặt nạ&#10;敏感肌 = da nhạy cảm"></textarea>
+        <label class="cong-tac"><input type="checkbox" id="o-kiem-pd"> ✋ Tự kiểm tra phụ đề (video quan trọng): nghe xong app dừng lại, đưa SRT tiếng Trung để bạn tự dịch rồi dán SRT tiếng Việt vào</label>
       </details>
 
       <details class="muc" open>
@@ -162,6 +163,23 @@
       </ol>
       <p class="loi an" id="loi"></p>
       <p class="goi-y">Giữ màn hình mở, đừng chuyển sang app khác khi đang chạy.</p>
+    </section>
+
+    <!-- Tự kiểm tra phụ đề: chép SRT tiếng Trung, dán SRT tiếng Việt -->
+    <section class="the an" id="the-kiem-pd">
+      <h2>✋ Kiểm tra phụ đề</h2>
+      <p class="goi-y">App đã nghe xong và đang chờ bạn. Tách nhạc nền vẫn chạy ngầm trong lúc chờ.</p>
+      <label class="nhan" for="pd-trung">1. SRT tiếng Trung (gốc)</label>
+      <textarea id="pd-trung" class="o-dich" rows="6" readonly></textarea>
+      <div class="hang-nut">
+        <button type="button" id="nut-chep-trung" class="nut-phu">📋 Chép SRT tiếng Trung</button>
+        <button type="button" id="nut-tai-trung" class="nut-phu">⬇️ Tải file .srt</button>
+      </div>
+      <label class="nhan" for="pd-viet">2. Dán SRT tiếng Việt bạn đã dịch</label>
+      <textarea id="pd-viet" class="o-dich" rows="6" placeholder="1&#10;00:00:01,000 --> 00:00:03,000&#10;Xin chào các bạn&#10;&#10;2&#10;..."></textarea>
+      <p class="goi-y an" id="pd-bao"></p>
+      <button type="button" id="nut-dung-viet" class="nut-chinh">✅ Dùng bản dịch này & lồng tiếng</button>
+      <button type="button" id="nut-bo-qua-pd" class="nut-phu">⏩ Giữ bản dịch của app & lồng tiếng</button>
     </section>
 
     <!-- Kết quả -->
