@@ -387,6 +387,14 @@ const KICH_BAN = {
       truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); }),
       sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
         if (!/bị lỗi/.test(ve) || !kq.probe) kq.loi = "Mã thẳng hỏng mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
+  "1k-chen-chu-loi-giai-ma-lam-lai": { caiDat: { ...CD, tachNhac: true, lop: LOP }, logo: true,
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaLoiVe = 1; }),
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/bị lỗi: Decoder failure → làm lại/.test(nk) || !/Dựng hình xong/.test(nk) || !kq.probe) kq.loi = "Không làm lại khi giải mã lỗi :: " + kq.loi; } },
+  "1l-chen-chu-loi-giai-ma-ca-hai-lan": { caiDat: { ...CD, lop: LOP }, logo: true,
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaLoiVe = 9; }),
+      sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
+        if (!/cả 2 lần/.test(ve) || !kq.probe) kq.loi = "Lỗi giải mã 2 lần mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
   "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
     // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật

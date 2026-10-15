@@ -1159,17 +1159,19 @@ async function chay(lamTuDau) {
         try {
           hinh = await lamVe();
         } catch (loi) {
-          if (!loi.treo) throw loi;
-          // Đứng im → chờ các việc đang chạy cùng (bật lại bộ xử lý video) xong cho máy rảnh rồi làm lại 1 lần
-          nhat(`⚠️ ${loi.message} → làm lại chèn chữ/logo (lần 2)`);
-          ghiChu("ve", "Bị đứng, đang làm lại…");
+          if (loi.khongHoTro || loi.khongHinh) throw loi;
+          // Đứng im, hoặc bộ giải mã/mã hoá của máy báo lỗi (vd "Decoder failure" – iPhone thiếu bộ nhớ hoặc vừa chuyển app)
+          // → tắt bộ xử lý video cho máy rảnh bộ nhớ (xuất video sẽ bật lại) rồi làm lại 1 lần
+          nhat(`⚠️ ${loi.treo ? loi.message : "Chèn chữ/logo bị lỗi: " + loi.message} → làm lại chèn chữ/logo (lần 2)`);
+          ghiChu("ve", "Bị lỗi, đang làm lại…");
           await dangBatFf?.catch(() => {});
+          if (ff && !dangTachNhac) { tatFfmpeg(); nhat("Tạm tắt bộ xử lý video để nhường bộ nhớ cho chèn chữ/logo"); }
           mocVe = -1;
           try {
             hinh = await lamVe();
           } catch (loi2) {
-            if (!loi2.treo) throw loi2;
-            throw Object.assign(new Error(`${loi2.message} cả 2 lần. Máy đang thiếu bộ nhớ hoặc bộ mã hoá video bị kẹt.`), { khongHoTro: true });
+            if (loi2.khongHoTro) throw loi2;
+            throw Object.assign(new Error(`${loi2.treo ? loi2.message : "Chèn chữ/logo bị lỗi (" + loi2.message + ")"} cả 2 lần. Máy đang thiếu bộ nhớ hoặc bộ mã hoá video bị kẹt.`), { khongHoTro: true });
           }
         }
         nhat(`Dựng hình xong: ${hinh.W}×${hinh.H}, mã hoá ${hinh.codec}, ${(hinh.blob.size / 1048576).toFixed(1)}MB`);
