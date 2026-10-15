@@ -2044,14 +2044,14 @@ function tuBase64(chu) {
   return Uint8Array.from(atob(chu), (k) => k.charCodeAt(0));
 }
 
-// Gemini: gộp các câu sát nhau (tối đa ~20 giây) vào 1 lần đọc để đỡ tốn lượt.
+// Gemini: gộp các câu sát nhau (tối đa ~40 giây) vào 1 lần đọc: ít lượt hơn → đỡ phải chờ giới hạn mỗi phút và đỡ tốn lượt ngày.
 // Các dịch vụ khác tính theo số chữ nên đọc từng câu cho khớp miệng.
 function chiaNhom(cau, dv) {
   if (dv !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
   const nhom = [];
   for (const c of cau) {
     const cuoi = nhom[nhom.length - 1];
-    if (cuoi && c.start - cuoi.end < 0.8 && c.end - cuoi.start <= 20) {
+    if (cuoi && c.start - cuoi.end < 0.8 && c.end - cuoi.start <= 40) {
       cuoi.end = Math.max(cuoi.end, c.end);
       cuoi.vi += " " + c.vi.trim();
     } else {
