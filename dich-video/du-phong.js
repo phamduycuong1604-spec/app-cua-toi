@@ -349,6 +349,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   };
 
   const hong = new Map(); // dịch vụ đã hỏng/hết lượt trong lần chạy này → lỗi của nó
+  let dichBoi = ""; // dịch vụ vừa dịch xong (để nhật ký ghi đúng tên)
   async function thuLanLuot(bang, thuTu, viec, lam) {
     let loiCuoi = null;
     for (const k of thuTu) {
@@ -358,6 +359,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
       const bd = Date.now();
       try {
         const kq = await lam(n);
+        if (viec === "dịch") dichBoi = n.ten;
         nhat(`${n.ten} (${viec}): xong sau ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
         return kq;
       } catch (loi) {
@@ -415,7 +417,8 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     goi, // gọi dịch vụ ngoài (tự đi vòng qua máy chủ PHAHA khi bị chặn) – dùng cho nút Kiểm tra mã
     // Có dịch vụ dự phòng nào dùng được không
     coDuPhong: () => Object.values(NGHE).some((n) => n.co()) && Object.values(DICH).some((n) => n.co()),
-    batDauLanMoi: () => hong.clear(),
+    batDauLanMoi: () => { hong.clear(); dichBoi = ""; },
+    dichBoi: () => dichBoi,
     // Dịch lại những câu chưa dịch được (vd Gemini trả về còn chữ Trung) → mảng lời Việt
     dichBu: dichBuKy,
     // Nghe 1 đoạn âm thanh + dịch → [{start, end, zh, vi}] (giây, tính từ đầu đoạn)

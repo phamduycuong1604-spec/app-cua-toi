@@ -1080,7 +1080,8 @@ async function chay(lamTuDau) {
       const pcm = await tachTieng();
       buoc("tach", "xong", `${dongHo(thoiLuong)} âm thanh`);
       // Tách nhạc chạy trên máy, nghe & dịch chủ yếu chờ mạng → bắt đầu tách nhạc NGAY, chạy song song cho nhanh
-      if (caiDat.tachNhac && caiDat.mhTach !== "giam" && (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach)) {
+      // Trừ khi đọc bằng Giọng máy: nó cần nhiều bộ nhớ lúc khởi động → phải đọc TRƯỚC khi tách nhạc (iPhone báo "Out of memory")
+      if (caiDat.tachNhac && caiDat.mhTach !== "giam" && dvDocDung(true)[0] !== "may" && (nhacNen?.tep !== tepVideo || nhacNen.loai !== caiDat.mhTach)) {
         buoc("nhac", "dang");
         nhat("Tách nhạc nền chạy song song với nghe & dịch");
         dangTachNhac = tachNhacNen();
@@ -1457,7 +1458,7 @@ async function ngheDuPhong(wav, duLieu, dai, batDau, mau) {
       const s = Math.max(0, Math.min(c.start, dai)), e = Math.min(Math.max(c.end, s + 0.5), dai);
       return { start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: c.zh, vi: c.vi };
     });
-  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (${dungDeepSeek() && !deepSeekNghi ? "DeepSeek" : "dự phòng"})`);
+  nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu (dịch bằng ${duPhong.dichBoi() || "dự phòng"})`);
   return ra;
 }
 
