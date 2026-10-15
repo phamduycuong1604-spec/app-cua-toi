@@ -2786,18 +2786,21 @@ function taoSrt(truong = "vi") {
   return cacCau.filter((c) => (c[truong] || "").trim()).map((c, i) => `${i + 1}\n${gio(c.start)} --> ${gio(c.end)}\n${c[truong].trim()}\n`).join("\n");
 }
 
+const MOC_GIO = /(\d{1,2}\s*:\s*\d{1,2}\s*:\s*\d{1,2}\s*[,.]\s*\d{1,3})\s*[-–—=>→\s]+\s*(\d{1,2}\s*:\s*\d{1,2}\s*:\s*\d{1,2}\s*[,.]\s*\d{1,3})/;
 // Đọc file SRT (hoặc chỉ là các dòng chữ, mỗi dòng 1 câu) → [{start, end, chu}]
 function docSrt(chu) {
-  const giay = (t) => { const m = /(\d+):(\d+):(\d+)[,.](\d+)/.exec(t); return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4].padEnd(3, "0").slice(0, 3) / 1000 : NaN; };
-  const khoi = String(chu || "").replace(/\r/g, "").trim().split(/\n\s*\n/);
+  const giay = (t) => { const m = /(\d+)\s*:\s*(\d+)\s*:\s*(\d+)\s*[,.]\s*(\d+)/.exec(t); return m ? +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4].padEnd(3, "0").slice(0, 3) / 1000 : NaN; };
+  // Đọc từng dòng: gặp dòng mốc giờ là bắt đầu câu mới; các dòng chữ sau đó là lời (bỏ số thứ tự đứng ngay trước mốc giờ)
+  const dong = String(chu || "").replace(/\r/g, "").split("\n").map((d) => d.trim());
   const ra = [];
-  for (const k of khoi) {
-    const dong = k.split("\n").map((d) => d.trim()).filter(Boolean);
-    const iGio = dong.findIndex((d) => d.includes("-->"));
-    if (iGio < 0) continue;
-    const [a, b] = dong[iGio].split("-->");
-    ra.push({ start: giay(a), end: giay(b), chu: dong.slice(iGio + 1).join(" ") });
-  }
+  dong.forEach((d, i) => {
+    const m = MOC_GIO.exec(d);
+    if (m) return ra.push({ start: giay(m[1]), end: giay(m[2]), chu: "" });
+    const cuoi = ra[ra.length - 1];
+    if (!cuoi || !d) return;
+    if (/^\d+$/.test(d) && MOC_GIO.test(dong[i + 1] || "")) return;
+    cuoi.chu = cuoi.chu ? cuoi.chu + " " + d : d;
+  });
   if (ra.length) return ra;
   // Không có mốc giờ: mỗi dòng là 1 câu, theo đúng thứ tự
   return String(chu || "").split("\n").map((d) => d.trim()).filter(Boolean).map((d) => ({ start: NaN, end: NaN, chu: d }));
