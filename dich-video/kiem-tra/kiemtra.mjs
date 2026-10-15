@@ -41,10 +41,14 @@ async function chay(ten, o) {
       return ok ? Promise.resolve() : Promise.reject(new DOMException("not allowed", "NotAllowedError"));
     };
   });
+  await p.route("https://unpkg.com/**", (rt) => { const u = rt.request().url();
+    if (!u.includes("mediabunny")) return rt.abort();
+    rt.fulfill({ path: `${NM}/mediabunny/dist/bundles/${u.split("/").pop()}`, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "text/javascript" } }); });
   await p.route("https://cdn.jsdelivr.net/**", (rt) => { const u = rt.request().url(); let f;
     if (u.includes("@ffmpeg/core")) f = `${S}/core/package/dist/esm/${u.split("/").pop()}`;
     else if (u.includes("onnxruntime-web")) { if (o.ort === "404") return rt.fulfill({ status: 404, body: "" }); f = `${NM}/onnxruntime-web/dist/${u.split("/dist/")[1]}`; }
-    else if (u.includes("mediabunny")) f = `${NM}/mediabunny/dist/bundles/${u.split("/").pop()}`;
+    else if (u.includes("mediabunny")) { if (o.mbKet) return; f = `${NM}/mediabunny/dist/bundles/${u.split("/").pop()}`; } // mbKet: jsDelivr không trả lời
+
     else if (u.includes("piper-wasm")) f = `${S}/piper/pw/package/build/${u.split("/").pop()}`;
     if (!f) return rt.abort();
     rt.fulfill({ path: f, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": f.endsWith("wasm") ? "application/wasm" : "text/javascript" } }); });
@@ -359,11 +363,14 @@ const KICH_BAN = {
   "1f-chen-chu-treo-lam-lai": { caiDat: { ...CD, lop: { phuDe: { bat: true } } },
       truoc: async (p) => p.evaluate(() => { globalThis.__phahaTreoVe = 1; globalThis.__phahaChoVe = 4; }),
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
-        if (!/đứng im quá 4 giây → làm lại/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không làm lại khi chèn chữ đứng im"; } },
+        if (!/đứng im quá 4 giây \(lúc dựng hình\) → làm lại/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không làm lại khi chèn chữ đứng im"; } },
   "1g-chen-chu-treo-ca-hai-lan": { caiDat: { ...CD, lop: { phuDe: { bat: true } } },
       truoc: async (p) => p.evaluate(() => { globalThis.__phahaTreoVe = 99; globalThis.__phahaChoVe = 4; }),
       sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
         if (!/cả 2 lần/.test(ve) || !kq.probe) kq.loi = "Treo cả 2 lần mà không xuất video không chữ: " + ve; } },
+  "1h-thu-vien-ket-dung-du-phong": { caiDat: { ...CD, lop: { phuDe: { bat: true } } }, mbKet: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/tải thư viện từ cdn.jsdelivr.net không được/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không chuyển sang thư viện dự phòng"; } },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
   "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
     // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật
