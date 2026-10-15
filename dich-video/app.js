@@ -6,7 +6,7 @@
 // =====================================================
 import { FFmpeg } from "./ffmpeg/index.js";
 import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
-import { taoDuPhong, chuaDich } from "./du-phong.js";
+import { taoDuPhong, chuaDich, loiDanThem } from "./du-phong.js";
 import { khoaLai, moKhoa, layTuMayChu, guiLenMayChu, layLichSuMayChu } from "./dong-bo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +20,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90 },
+  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "" },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -373,7 +373,22 @@ function trangThai(dv) {
   if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
   return dv === "gemini" && caiDat.khoaDoc ? "✅ sẵn sàng (mã riêng)" : "✅ sẵn sàng";
 }
+// Chủ đề & từ điển thuật ngữ (ô ở màn hình chính) – lưu ngay khi gõ
+for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
+  const o = $(id);
+  if (!o) continue;
+  o.value = caiDat[khoa] || "";
+  o.addEventListener("input", () => { caiDat[khoa] = o.value.trim(); luuCaiDat(); });
+}
+function hienODich() {
+  for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
+    const o = $(id);
+    if (o && document.activeElement !== o && o.value.trim() !== (caiDat[khoa] || "")) o.value = caiDat[khoa] || "";
+  }
+}
+
 function hienTrangThai() {
+  hienODich();
   for (const dv of THU_TU) if ($("tt-" + dv)) $("tt-" + dv).textContent = trangThai(dv);
   veGiongNhanh();
 }
@@ -1537,7 +1552,7 @@ Với mỗi câu trả về:
 - zh: lời gốc tiếng Trung (chữ Hán).
 - vi: bản dịch tiếng Việt tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng câu (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Không thêm chú thích.
   Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ (vd "hai trăm năm mươi gam"), không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd "DIY" → "tự làm").
-Nếu không có lời nói thì trả về mảng rỗng [].`;
+Nếu không có lời nói thì trả về mảng rỗng [].` + (loiDanThem(caiDat) ? "\n\n" + loiDanThem(caiDat) : "");
 }
 
 // ----- Sửa chữ trước khi đọc để máy đọc đúng (số, ký hiệu, chữ Trung sót lại) -----
