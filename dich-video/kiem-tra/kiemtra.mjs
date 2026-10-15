@@ -371,6 +371,14 @@ const KICH_BAN = {
   "1h-thu-vien-ket-dung-du-phong": { caiDat: { ...CD, lop: { phuDe: { bat: true } } }, mbKet: true,
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
         if (!/tải thư viện từ cdn.jsdelivr.net không được/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không chuyển sang thư viện dự phòng"; } },
+  "1i-safari-ket-hoi-bo-ma-hoa": { caiDat: { ...CD, lop: { phuDe: { bat: true }, logo: { bat: false } } },
+      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); globalThis.__phahaMaThang = "vp9"; }),
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/dùng thẳng bộ mã hoá H.264/.test(nk) || !/Dựng hình xong: .*vp9/.test(nk) || !/vp9,video/.test(kq.probe || "")) kq.loi = "Không đi vòng được khi Safari kẹt: " + (kq.probe || "") + " :: " + kq.loi + " :: " + nk.split("\n").filter((x) => /Chèn|Dựng|❌|⚠️/.test(x)).join(" / "); } },
+  "1j-ma-thang-cung-hong": { caiDat: { ...CD, lop: { phuDe: { bat: true }, logo: { bat: false } } },
+      truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); }),
+      sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
+        if (!/bị lỗi/.test(ve) || !kq.probe) kq.loi = "Mã thẳng hỏng mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
   "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
     // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật

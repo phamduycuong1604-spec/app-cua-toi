@@ -140,6 +140,35 @@ async function taiThuVien(ghi) {
   throw new Error("Không tải được thư viện dựng video (mạng chậm hoặc bị chặn). Thử lại sau, hoặc đổi mạng Wi-Fi/4G.");
 }
 
+// Safari thỉnh thoảng kẹt ở câu hỏi "mã hoá được cấu hình này không?" (VideoEncoder.isConfigSupported không bao giờ trả lời).
+// Khi đó dùng bộ mã hoá H.264 của máy TRỰC TIẾP, bỏ qua câu hỏi đó (thư viện chỉ hỏi khi không có bộ mã hoá riêng).
+let dungMaThang = false, daDangKy = false;
+const maThang = () => globalThis.__phahaMaThang || "avc"; // máy kiểm tra (Chromium không có H.264) đổi sang vp9
+function batMaThang(mb) {
+  dungMaThang = true;
+  if (daDangKy) return;
+  daDangKy = true;
+  class MaThang extends mb.CustomVideoEncoder {
+    static supports(codec) { return dungMaThang && codec === maThang(); }
+    init() {
+      this.enc = new VideoEncoder({
+        output: (chunk, meta) => this.onPacket(mb.EncodedPacket.fromEncodedChunk(chunk), meta),
+        error: (e) => this.onError?.(e),
+      });
+      this.enc.configure(this.config);
+    }
+    async encode(mau, tuyChon) {
+      const khung = mau.toVideoFrame();
+      try { this.enc.encode(khung, tuyChon); } finally { khung.close(); mau.close(); }
+      // đừng dồn quá nhiều khung chờ mã hoá (tốn bộ nhớ)
+      while (this.enc.encodeQueueSize > 6) await new Promise((x) => setTimeout(x, 5));
+    }
+    async flush() { await this.enc.flush(); }
+    close() { if (this.enc && this.enc.state !== "closed") this.enc.close(); }
+  }
+  mb.registerEncoder(MaThang);
+}
+
 // Xuất phần HÌNH (không tiếng) có phụ đề/lớp che/logo
 // Canh treo cả quá trình: quá choToiDa giây không nhích (lúc trang đang mở) thì huỷ và báo treo để làm lại
 export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}) {
@@ -172,7 +201,17 @@ export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}
     if (!vt) throw new Error("Video không có hình.");
     const W = vt.displayWidth - (vt.displayWidth % 2), H = vt.displayHeight - (vt.displayHeight % 2);
     nhich(`tìm bộ mã hoá cho ${W}×${H}`);
-    const codec = await mb.getFirstEncodableVideoCodec(["avc", "hevc", "vp9", "av1"], { width: W, height: H });
+    let codec;
+    if (dungMaThang) codec = maThang();
+    else {
+      try {
+        codec = await henGio(mb.getFirstEncodableVideoCodec(["avc", "hevc", "vp9", "av1"], { width: W, height: H }), 10, "hỏi bộ mã hoá");
+      } catch {
+        nhich("bộ mã hoá không trả lời câu hỏi → dùng thẳng bộ mã hoá H.264 của máy");
+        batMaThang(mb);
+        codec = maThang();
+      }
+    }
     if (!codec) throw Object.assign(new Error("Điện thoại không dựng lại được video cỡ này."), { khongHoTro: true });
     const khung = new OffscreenCanvas(W, H);
     const ctx = khung.getContext("2d");
@@ -203,7 +242,13 @@ export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}
     }
     conv.onProgress = (p) => { nhich(); baoTienDo(p); };
     nhich("dựng hình");
-    await conv.execute();
+    try {
+      await conv.execute();
+    } catch (loi) {
+      // Dùng thẳng bộ mã hoá mà vẫn hỏng → máy này không dựng lại được hình lúc này: xuất video không chữ/logo
+      if (dungMaThang) throw Object.assign(new Error("Bộ mã hoá video của máy bị lỗi (" + loi.message + ")."), { khongHoTro: true });
+      throw loi;
+    }
     return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec, W, H };
   };
   const chay = lam();
