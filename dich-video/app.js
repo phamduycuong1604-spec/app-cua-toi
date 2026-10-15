@@ -1144,15 +1144,32 @@ async function chay(lamTuDau) {
       let mocVe = -1;
       try {
         veDangChay = true;
-        hinh = await xuatHinh(
+        const lamVe = () => xuatHinh(
           tepVideo,
           (ctx, W, H, t) => veLop(ctx, W, H, t, caiDat.lop, cacCau, anhLogo),
           (p) => {
             ghiChu("ve", `${Math.round(p * 100)}%`);
             const nac = Math.floor(p * 4);
             if (nac !== mocVe) { mocVe = nac; nhat(`Chèn chữ/logo: ${Math.round(p * 100)}%`); }
-          }
+          },
+          globalThis.__phahaChoVe || 60
         );
+        try {
+          hinh = await lamVe();
+        } catch (loi) {
+          if (!loi.treo) throw loi;
+          // Đứng im → chờ các việc đang chạy cùng (bật lại bộ xử lý video) xong cho máy rảnh rồi làm lại 1 lần
+          nhat(`⚠️ ${loi.message} → làm lại chèn chữ/logo (lần 2)`);
+          ghiChu("ve", "Bị đứng, đang làm lại…");
+          await dangBatFf?.catch(() => {});
+          mocVe = -1;
+          try {
+            hinh = await lamVe();
+          } catch (loi2) {
+            if (!loi2.treo) throw loi2;
+            throw Object.assign(new Error(`${loi2.message} cả 2 lần. Máy đang thiếu bộ nhớ hoặc bộ mã hoá video bị kẹt.`), { khongHoTro: true });
+          }
+        }
         nhat(`Dựng hình xong: ${hinh.W}×${hinh.H}, mã hoá ${hinh.codec}, ${(hinh.blob.size / 1048576).toFixed(1)}MB`);
         buoc("ve", "xong", `${Math.round((Date.now() - batDau) / 1000)} giây`);
       } catch (loi) {
@@ -1265,7 +1282,7 @@ async function taiFfmpegThat() {
   });
   const coreURL = await taiThanhBlob(`${LOI_FFMPEG}/ffmpeg-core.js`, "text/javascript");
   const wasmURL = await taiThanhBlob(`${LOI_FFMPEG}/ffmpeg-core.wasm`, "application/wasm", (da, tong) =>
-    ghiChu("tai", tong ? `${Math.round((da / tong) * 100)}%` : `${(da / 1048576).toFixed(0)}MB`)
+    ghiChu("tai", tong ? `${Math.min(100, Math.round((da / tong) * 100))}%` : `${(da / 1048576).toFixed(0)}MB`)
   );
   await moi.load({ coreURL, wasmURL });
   ff = moi;

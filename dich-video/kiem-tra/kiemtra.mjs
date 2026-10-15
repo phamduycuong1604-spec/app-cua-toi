@@ -356,6 +356,14 @@ const KICH_BAN = {
   "41-12-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 500, dsDang: "du", han: 1800000 },
   "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
   "43-12-phut-300-cau-gemini-it-luot": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, tachNhac: false, lop: LOP, __dung: { "max:gm:3t2o:doc": { n: 15 } } }, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
+  "1f-chen-chu-treo-lam-lai": { caiDat: { ...CD, lop: { phuDe: { bat: true } } },
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaTreoVe = 1; globalThis.__phahaChoVe = 4; }),
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/đứng im quá 4 giây → làm lại/.test(nk) || !/Dựng hình xong/.test(nk)) kq.loi = "Không làm lại khi chèn chữ đứng im"; } },
+  "1g-chen-chu-treo-ca-hai-lan": { caiDat: { ...CD, lop: { phuDe: { bat: true } } },
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaTreoVe = 99; globalThis.__phahaChoVe = 4; }),
+      sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
+        if (!/cả 2 lần/.test(ve) || !kq.probe) kq.loi = "Treo cả 2 lần mà không xuất video không chữ: " + ve; } },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
   "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
     // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật
