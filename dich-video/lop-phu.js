@@ -198,7 +198,7 @@ export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}
     nhich("đọc hình video");
     const input = new mb.Input({ source: new mb.BlobSource(tep), formats: mb.ALL_FORMATS });
     const vt = await input.getPrimaryVideoTrack();
-    if (!vt) throw new Error("Video không có hình.");
+    if (!vt) throw Object.assign(new Error("Video không có hình."), { khongHinh: true });
     const W = vt.displayWidth - (vt.displayWidth % 2), H = vt.displayHeight - (vt.displayHeight % 2);
     nhich(`tìm bộ mã hoá cho ${W}×${H}`);
     let codec;
@@ -231,6 +231,7 @@ export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}
         processedHeight: H,
         process: (mau) => {
           if (globalThis.__phahaTreoVe > 0 && mau.timestamp > 1) { globalThis.__phahaTreoVe--; return new Promise(() => {}); } // chỉ dùng khi kiểm tra
+          if (globalThis.__phahaLoiVe > 0 && mau.timestamp > 1) { globalThis.__phahaLoiVe--; throw new Error("Decoder failure"); } // chỉ dùng khi kiểm tra
           mau.drawWithFit(ctx, { fit: "fill" });
           ve(ctx, W, H, mau.timestamp);
           return khung;

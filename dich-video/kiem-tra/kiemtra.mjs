@@ -147,6 +147,7 @@ async function chay(ten, o) {
   await p.route("https://api.deepseek.com/**", async (rt) => { const u = rt.request().url(); dem("ds");
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
     if (u.endsWith("/user/balance")) return rt.fulfill({ headers: J, body: JSON.stringify({ is_available: !o.dsHet, balance_infos: [{ currency: "USD", total_balance: o.dsHet ? "0.00" : "1.98" }] }) });
+    if (o.dsSai) return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ error: { message: "Authentication Fails, Your api key: ****8NHQ is invalid" } }) });
     if (o.dsHet) return rt.fulfill({ status: 402, headers: J, body: JSON.stringify({ error: { message: "Insufficient Balance" } }) });
     const b = JSON.parse(rt.request().postData()); goi.dsModel = b.model; goi.dsJson = b.response_format?.type;
     goi.dsLoiDan = b.messages?.[0]?.content?.slice(0, 400);
@@ -344,6 +345,13 @@ const KICH_BAN = {
   "4k-luu-cai-dat-quen-gioi-han-gemini": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 1 } } }, luuLai: true },
   "4j-gemini-du-luot-van-doc": { caiDat: { ...CD, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, __dung: { "max:gm:3t2o:doc": { n: 15 } } } },
   "4h-edge-roi-vai-cau": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "roi", han: 600000 },
+  "4m-iphone-chi-giong-may-tach-nhac": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-sai", groq: "gsk", cf: true }, bat: { el: false, vt: false, gemini: false, fpt: false, fish: false, az: false, gc: false, edge: false }, tachNhac: true, kiemPd: true, lop: LOP }, logo: true, dsSai: true, han: 600000,
+      trong: async (p) => { await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 }); await p.click("#nut-bo-qua-pd"); },
+      sau: async (p, kq) => { const nk = (await p.textContent("#o-nhat-ky")).split("\n");
+        const iDoc = nk.findIndex((l) => /Đã đọc .*Giọng máy/.test(l)), iTach = nk.findIndex((l) => /Tách nhạc: .*âm thanh, kiểu/.test(l));
+        if (nk.some((l) => /chạy song song với nghe/.test(l))) kq.loi = "Vẫn tách nhạc sớm khi dùng Giọng máy";
+        else if (!(iDoc >= 0 && iTach > iDoc)) kq.loi = `Giọng máy không đọc trước tách nhạc (đọc ${iDoc}, tách ${iTach})`;
+        else if (!nk.some((l) => /được \d+ câu \(dịch bằng Groq\)/.test(l))) kq.loi = "Nhật ký ghi sai dịch vụ dịch: " + nk.filter((l) => /được \d+ câu/.test(l)).join(" / "); } },
   "4l-giong-may-het-bo-nho-thu-lai": { caiDat: { ...CD, bat: DU, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", mayOom: true, han: 600000 },
   "4f-giong-may": { caiDat: { ...CD, bat: DU, tachNhac: true, dv: { el: CD.dv.el } }, elHet: 0, gemTTS: "het", edge: "hong", han: 600000,
       sau: async (p, kq) => { kq.nhatMay = (await p.textContent("#o-nhat-ky")).split("\n").filter((l) => /Giọng máy|↪️|Đã đọc|Bỏ qua/.test(l)).join("\n"); } },
@@ -358,7 +366,7 @@ const KICH_BAN = {
   "1c-may-manh-chay-song-song": { caiDat: { ...CD, tachNhac: true, lop: LOP, __songSong: "bat" }, logo: true },
   "40-12-phut-300-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
   "41-12-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai12.mp4", daiGiay: 725, soCau: 500, dsDang: "du", han: 1800000 },
-  "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 2400000 },
+  "42-20-phut-500-cau": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: false, fish: false, az: false, gc: false, edge: true }, tachNhac: true, lop: LOP }, logo: true, video: "dai20.mp4", daiGiay: 1210, soCau: 500, dsDang: "du", han: 4800000 },
   "43-12-phut-300-cau-gemini-it-luot": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, bat: { el: false, gemini: true, fish: false, az: false, gc: false, edge: true }, tachNhac: false, lop: LOP, __dung: { "max:gm:3t2o:doc": { n: 15 } } }, video: "dai12.mp4", daiGiay: 725, soCau: 300, dsDang: "du", han: 1800000 },
   "1f-chen-chu-treo-lam-lai": { caiDat: { ...CD, lop: { phuDe: { bat: true } } },
       truoc: async (p) => p.evaluate(() => { globalThis.__phahaTreoVe = 1; globalThis.__phahaChoVe = 4; }),
@@ -379,6 +387,14 @@ const KICH_BAN = {
       truoc: async (p) => p.evaluate(() => { VideoEncoder.isConfigSupported = () => new Promise(() => {}); }),
       sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
         if (!/bị lỗi/.test(ve) || !kq.probe) kq.loi = "Mã thẳng hỏng mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
+  "1k-chen-chu-loi-giai-ma-lam-lai": { caiDat: { ...CD, tachNhac: true, lop: LOP }, logo: true,
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaLoiVe = 1; }),
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/bị lỗi: Decoder failure → làm lại/.test(nk) || !/Dựng hình xong/.test(nk) || !kq.probe) kq.loi = "Không làm lại khi giải mã lỗi :: " + kq.loi; } },
+  "1l-chen-chu-loi-giai-ma-ca-hai-lan": { caiDat: { ...CD, lop: LOP }, logo: true,
+      truoc: async (p) => p.evaluate(() => { globalThis.__phahaLoiVe = 9; }),
+      sau: async (p, kq) => { const ve = await p.textContent('[data-buoc="ve"]');
+        if (!/cả 2 lần/.test(ve) || !kq.probe) kq.loi = "Lỗi giải mã 2 lần mà không xuất video không chữ: " + ve + " :: " + kq.loi; } },
   "1d-hai-thanh-che": { caiDat: { ...CD, lop: { phuDe: { bat: true }, che: { bat: true, kieu: "mau", mau: "#ff0000", x: 50, y: 88, w: 90, h: 10 }, che2: { bat: true, kieu: "mau", mau: "#0000ff", x: 50, y: 10, w: 90, h: 10 } } }, sau: async (p, kq) => { kq.oChe2 = await p.$$eval('[data-o^="lop.che2"]', (d) => d.length); } },
   "1e-chon-giong-nhanh": { caiDat: { ...CD, bat: { ...DU, el: true, gemini: true, edge: true } }, gemTTS: "het", truoc: async (p) => {
     // Tắt ElevenLabs và Gemini ngay ở màn hình chính → video này phải đọc bằng giọng còn bật
