@@ -1152,7 +1152,8 @@ async function chay(lamTuDau) {
             const nac = Math.floor(p * 4);
             if (nac !== mocVe) { mocVe = nac; nhat(`Chèn chữ/logo: ${Math.round(p * 100)}%`); }
           },
-          globalThis.__phahaChoVe || 60
+          globalThis.__phahaChoVe || 60,
+          (viec) => nhat("Chèn chữ: " + viec)
         );
         try {
           hinh = await lamVe();

@@ -127,49 +127,27 @@ function vePhuDe(ctx, W, H, chu, p) {
   ctx.restore();
 }
 
+// Thư viện dựng video: tải từ jsDelivr, chậm/kẹt thì lấy bản giống hệt từ unpkg
+const MB_DU_PHONG = "https://unpkg.com/mediabunny@1.61.1/dist/bundles/mediabunny.min.mjs";
+let thuVien = null;
+const henGio = (hua, giay, ten) => Promise.race([hua, new Promise((_, loi) => setTimeout(() => loi(new Error(ten + " quá " + giay + " giây")), giay * 1000))]);
+async function taiThuVien(ghi) {
+  if (thuVien) return thuVien;
+  for (const [url, giay] of [[MB, 25], [MB_DU_PHONG, 40]]) {
+    try { return (thuVien = await henGio(import(url), giay, "tải thư viện")); }
+    catch (loi) { ghi(`tải thư viện từ ${new URL(url).hostname} không được (${loi.message})`); }
+  }
+  throw new Error("Không tải được thư viện dựng video (mạng chậm hoặc bị chặn). Thử lại sau, hoặc đổi mạng Wi-Fi/4G.");
+}
+
 // Xuất phần HÌNH (không tiếng) có phụ đề/lớp che/logo
-export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60) {
+// Canh treo cả quá trình: quá choToiDa giây không nhích (lúc trang đang mở) thì huỷ và báo treo để làm lại
+export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60, ghi = () => {}) {
   if (typeof VideoEncoder === "undefined" || typeof OffscreenCanvas === "undefined") {
     throw Object.assign(new Error("Điện thoại chưa hỗ trợ chèn chữ/logo (cần iOS 17 trở lên)."), { khongHoTro: true });
   }
-  try { await document.fonts.load(`700 40px ${PHONG}`); } catch {}
-  const mb = await import(MB);
-  const input = new mb.Input({ source: new mb.BlobSource(tep), formats: mb.ALL_FORMATS });
-  const vt = await input.getPrimaryVideoTrack();
-  if (!vt) throw new Error("Video không có hình.");
-  const W = vt.displayWidth - (vt.displayWidth % 2), H = vt.displayHeight - (vt.displayHeight % 2);
-  const codec = await mb.getFirstEncodableVideoCodec(["avc", "hevc", "vp9", "av1"], { width: W, height: H });
-  if (!codec) throw Object.assign(new Error("Điện thoại không dựng lại được video cỡ này."), { khongHoTro: true });
-  const khung = new OffscreenCanvas(W, H);
-  const ctx = khung.getContext("2d");
-  const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }), target: new mb.BufferTarget() });
-  const conv = await mb.Conversion.init({
-    input,
-    output,
-    showWarnings: false,
-    audio: { discard: true },
-    video: {
-      codec,
-      forceTranscode: true,
-      allowTransformationMetadata: false,
-      quality: mb.QUALITY_HIGH,
-      processedWidth: W,
-      processedHeight: H,
-      process: (mau) => {
-        if (globalThis.__phahaTreoVe > 0 && mau.timestamp > 1) { globalThis.__phahaTreoVe--; return new Promise(() => {}); } // chỉ dùng khi kiểm tra
-        mau.drawWithFit(ctx, { fit: "fill" });
-        ve(ctx, W, H, mau.timestamp);
-        return khung;
-      },
-    },
-  });
-  if (!conv.isValid) {
-    throw Object.assign(new Error("Điện thoại không đọc được hình của video này."), { khongHoTro: true });
-  }
-  // Canh treo: bộ giải mã/mã hoá của máy thỉnh thoảng đứng im không báo lỗi (vd đang bận việc khác, máy hết bộ nhớ)
-  // → quá choToiDa giây không nhích (lúc trang đang mở) thì huỷ và báo treo để làm lại
-  let lanCuoi = Date.now(), canh = 0;
-  conv.onProgress = (p) => { lanCuoi = Date.now(); baoTienDo(p); };
+  let lanCuoi = Date.now(), canh = 0, conv = null, dangLam = "chuẩn bị";
+  const nhich = (viec) => { lanCuoi = Date.now(); if (viec) { dangLam = viec; ghi(viec); } };
   const hienLai = () => { if (!document.hidden) lanCuoi = Date.now(); };
   document.addEventListener("visibilitychange", hienLai);
   // Không chờ conv.cancel() xong: bộ mã hoá đã kẹt thì cancel cũng có thể kẹt theo
@@ -178,18 +156,62 @@ export async function xuatHinh(tep, ve, baoTienDo, choToiDa = 60) {
       if (document.hidden) { lanCuoi = Date.now(); return; }
       if (Date.now() - lanCuoi > choToiDa * 1000) {
         clearInterval(canh);
-        conv.cancel().catch(() => {});
-        loi(Object.assign(new Error(`Chèn chữ/logo đứng im quá ${choToiDa} giây`), { treo: true }));
+        conv?.cancel().catch(() => {});
+        loi(Object.assign(new Error(`Chèn chữ/logo đứng im quá ${choToiDa} giây (lúc ${dangLam})`), { treo: true }));
       }
     }, 2000);
   });
-  const chay = conv.execute();
+  const lam = async () => {
+    nhich("tải phông chữ");
+    try { await henGio(document.fonts.load(`700 40px ${PHONG}`), 8, "tải phông chữ"); } catch {}
+    nhich("tải thư viện dựng video");
+    const mb = await taiThuVien(ghi);
+    nhich("đọc hình video");
+    const input = new mb.Input({ source: new mb.BlobSource(tep), formats: mb.ALL_FORMATS });
+    const vt = await input.getPrimaryVideoTrack();
+    if (!vt) throw new Error("Video không có hình.");
+    const W = vt.displayWidth - (vt.displayWidth % 2), H = vt.displayHeight - (vt.displayHeight % 2);
+    nhich(`tìm bộ mã hoá cho ${W}×${H}`);
+    const codec = await mb.getFirstEncodableVideoCodec(["avc", "hevc", "vp9", "av1"], { width: W, height: H });
+    if (!codec) throw Object.assign(new Error("Điện thoại không dựng lại được video cỡ này."), { khongHoTro: true });
+    const khung = new OffscreenCanvas(W, H);
+    const ctx = khung.getContext("2d");
+    const output = new mb.Output({ format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }), target: new mb.BufferTarget() });
+    nhich(`khởi động bộ mã hoá ${codec}`);
+    conv = await mb.Conversion.init({
+      input,
+      output,
+      showWarnings: false,
+      audio: { discard: true },
+      video: {
+        codec,
+        forceTranscode: true,
+        allowTransformationMetadata: false,
+        quality: mb.QUALITY_HIGH,
+        processedWidth: W,
+        processedHeight: H,
+        process: (mau) => {
+          if (globalThis.__phahaTreoVe > 0 && mau.timestamp > 1) { globalThis.__phahaTreoVe--; return new Promise(() => {}); } // chỉ dùng khi kiểm tra
+          mau.drawWithFit(ctx, { fit: "fill" });
+          ve(ctx, W, H, mau.timestamp);
+          return khung;
+        },
+      },
+    });
+    if (!conv.isValid) {
+      throw Object.assign(new Error("Điện thoại không đọc được hình của video này."), { khongHoTro: true });
+    }
+    conv.onProgress = (p) => { nhich(); baoTienDo(p); };
+    nhich("dựng hình");
+    await conv.execute();
+    return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec, W, H };
+  };
+  const chay = lam();
   chay.catch(() => {});
   try {
-    await Promise.race([chay, biTreo]);
+    return await Promise.race([chay, biTreo]);
   } finally {
     clearInterval(canh);
     document.removeEventListener("visibilitychange", hienLai);
   }
-  return { blob: new Blob([output.target.buffer], { type: "video/mp4" }), codec, W, H };
 }
