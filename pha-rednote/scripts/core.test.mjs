@@ -51,7 +51,7 @@ test('Actual download submit reaches file loading, preserves the video on captio
  assert.equal(context.PHADownload.getVideoFile().size,bytes.length);assert.equal(get('original').value,'主光');
  assert.deepEqual(dispatched,['pha-video-reset','pha-video-loaded']);assert.equal(context.PHADownload.isBusy(),false);
  assert.equal(get('extractBtn').disabled,false);assert.equal(get('chooseFile').disabled,false);
- assert.equal(get('resultTag').textContent,'VIDEO SẴN SÀNG');assert.match(get('status').textContent,/Video gốc đã sẵn sàng/);
+ assert.equal(get('resultTag').textContent,'VIDEO SẴN SÀNG');assert.match(get('status').textContent,/Video \(bản (gốc|1080p của Rednote)\) đã sẵn sàng/);
  URL.revokeObjectURL(get('video').src);
 });
 
@@ -248,7 +248,7 @@ test('Actual phone UI receives a large shared attachment, keeps caption and unlo
 test('Original caption only: no translation UI, provider, Shortcut or API request',async()=>{
  const {context,get}=await actualPageContext(()=>assert.fail('No translation requests allowed'));
  for(const id of ['translateBtn','translated','settingsBtn','apiKey','saveSettings','shortcutName','launchChatGPT'])assert.equal(get(id),null);
- const html=await(await worker.fetch(new Request('https://site.test/'),{})).text();assert.match(html,/Lấy video gốc → Dịch & lồng tiếng/);assert.doesNotMatch(html,/PHAChatGPT|shortcuts:\/\/|translate.googleapis|doTranslate|browserTranslate/);
+ const html=await(await worker.fetch(new Request('https://site.test/'),{})).text();assert.match(html,/Lấy video → Dịch & lồng tiếng/);assert.doesNotMatch(html,/PHAChatGPT|shortcuts:\/\/|translate.googleapis|doTranslate|browserTranslate/);
  assert.equal((await worker.fetch(new Request('https://site.test/api/translate',{method:'POST',body:'{}'}),{})).status,404);
  assert.match(context.PHADownload.getProfile().label,/Pha Light/);
 });
