@@ -7,6 +7,7 @@
 import { FFmpeg } from "./ffmpeg/index.js";
 import { macDinhLop, canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { taoDuPhong, chuaDich, loiDanThem } from "./du-phong.js";
+import { KENH, KENH_MAC_DINH, QUY_TAC_RIENG_SAN } from "./chuyen-mon.js";
 import { khoaLai, moKhoa, layTuMayChu, guiLenMayChu, layLichSuMayChu } from "./dong-bo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +21,7 @@ const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,
 
 // ----- CÀI ĐẶT (lưu trên máy) -----
 const caiDat = Object.assign(
-  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "", kiemPd: false },
+  { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "", kiemPd: false, kenh: KENH_MAC_DINH },
   docLuu("phaha-dv-cai-dat")
 );
 // Mỗi dịch vụ đọc có mã, giọng, danh sách giọng riêng
@@ -40,6 +41,9 @@ delete caiDat.dichVu;
   caiDat.lop = { phuDe: { ...md.phuDe, ...cu.phuDe }, che: { ...md.che, ...cu.che }, che2: { ...md.che2, ...cu.che2 }, logo: { ...md.logo, ...cu.logo } };
 }
 delete caiDat.khoaGc; delete caiDat.giongGc; delete caiDat.dsGiongGc;
+// Chuyên môn dịch: quy tắc riêng của từng kênh (kênh chưa có thì lấy quy tắc dựng sẵn)
+caiDat.quyTacRieng = Object.assign({}, QUY_TAC_RIENG_SAN, caiDat.quyTacRieng);
+if (!Object.hasOwn(KENH, caiDat.kenh)) caiDat.kenh = KENH_MAC_DINH;
 // Dịch vụ dự phòng khi Gemini hết lượt
 caiDat.capNhat ||= 0;
 caiDat.dp = Object.assign({ ds: "", groq: "", cf: true, azNghe: true, azDich: "", azDichVung: "", or: "" }, caiDat.dp);
@@ -382,12 +386,35 @@ for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
 }
 $("o-kiem-pd").checked = !!caiDat.kiemPd;
 $("o-kiem-pd").addEventListener("change", (e) => { caiDat.kiemPd = e.target.checked; luuCaiDat(); });
+// Chuyên môn dịch video (giống app PHA rednote): chọn kênh, xem quy tắc, ghi quy tắc riêng cho từng kênh
+{
+  const chon = $("o-kenh"), ds = Object.entries(KENH);
+  for (const [nhan, phan] of [["Hệ sinh thái PhaHa", ds.slice(0, 8)], ["Chuyên môn khác", ds.slice(8)]]) {
+    const nhom = document.createElement("optgroup");
+    nhom.label = nhan;
+    for (const [id, k] of phan) nhom.append(new Option(k.label, id));
+    chon.append(nhom);
+  }
+  chon.addEventListener("change", () => { caiDat.kenh = chon.value; luuCaiDat(); hienKenh(); });
+  $("o-quy-tac-rieng").addEventListener("input", (e) => { caiDat.quyTacRieng[caiDat.kenh] = e.target.value.slice(0, 3000); luuCaiDat(); });
+  $("nut-xoa-quy-tac").addEventListener("click", () => { caiDat.quyTacRieng[caiDat.kenh] = ""; luuCaiDat(); hienKenh(); });
+}
+queueMicrotask(() => hienKenh()); // hiện kênh & quy tắc đã lưu ngay khi mở app
+function hienKenh() {
+  const k = KENH[caiDat.kenh] || KENH[KENH_MAC_DINH];
+  $("o-kenh").value = caiDat.kenh;
+  $("kenh-mo-ta").textContent = k.description;
+  $("kenh-quy-tac").textContent = k.rules || "Kênh này không có quy tắc riêng – dịch sát nghĩa thông thường.";
+  const o = $("o-quy-tac-rieng");
+  if (document.activeElement !== o) o.value = caiDat.quyTacRieng[caiDat.kenh] || "";
+}
 function hienODich() {
   for (const [id, khoa] of [["o-chu-de", "chuDe"], ["o-tu-dien", "tuDien"]]) {
     const o = $(id);
     if (o && document.activeElement !== o && o.value.trim() !== (caiDat[khoa] || "")) o.value = caiDat[khoa] || "";
   }
   $("o-kiem-pd").checked = !!caiDat.kiemPd;
+  hienKenh();
 }
 
 function hienTrangThai() {
@@ -1058,7 +1085,7 @@ async function chay(lamTuDau) {
   nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
   nhat(`Máy: ${moTaMay()}`);
   nhat(`Video: ${tepVideo.name} · ${(tepVideo.size / 1048576).toFixed(1)}MB`);
-  nhat(`Cài đặt: dịch bằng ${dungDeepSeek() ? "DeepSeek (nghe bằng Groq/Cloudflare)" : "Gemini"} · thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · lớp che: ${[l.che.bat && "thanh 1", l.che2?.bat && "thanh 2"].filter(Boolean).join(" + ") || "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
+  nhat(`Cài đặt: dịch bằng ${dungDeepSeek() ? "DeepSeek (nghe bằng Groq/Cloudflare)" : "Gemini"} · thứ tự giọng ${dvDocDung(true).map((dv) => DICH_VU[dv].ten + (tenGiong(dv) ? " / " + tenGiong(dv) : "")).join(" → ")} · tách nhạc: ${caiDat.tachNhac ? caiDat.mhTach : "tắt"} · phụ đề: ${l.phuDe.bat ? "bật" : "tắt"} · chuyên môn: ${KENH[caiDat.kenh]?.label || "thông thường"}${caiDat.quyTacRieng?.[caiDat.kenh]?.trim() ? " + quy tắc riêng" : ""} · lớp che: ${[l.che.bat && "thanh 1", l.che2?.bat && "thanh 2"].filter(Boolean).join(" + ") || "tắt"} · logo: ${l.logo.bat && anhLogo ? "bật" : "tắt"}`);
   ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = true));
   $("the-tien-do").classList.remove("an");
   $("the-ket-qua").classList.add("an");

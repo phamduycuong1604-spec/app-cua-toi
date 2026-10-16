@@ -12,6 +12,8 @@ const DEEPSEEK = "https://api.deepseek.com";
 const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|字幕提供|字幕志愿者|明镜与点点|Amara|中文字幕|感谢观看|感謝觀看/;
 
 // Câu "dịch" mà vẫn còn chữ Trung (AI chép lại nguyên văn) = chưa dịch
+import { KENH, thuatNguKenh } from "./chuyen-mon.js";
+
 export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 2;
 
 // AI dịch xong nhưng chèn kèm chữ Trung (vd "màu nghệ (姜黄色)") → bỏ phần chữ Trung, giữ lời Việt.
@@ -32,13 +34,21 @@ export function docTuDien(chu) {
   }
   return ra;
 }
-// Lời dặn thêm cho AI dịch: chủ đề video + thuật ngữ bắt buộc.
+// Lời dặn thêm cho AI dịch: chuyên môn của kênh + quy tắc riêng + chủ đề video + thuật ngữ bắt buộc.
 // Có chữ gốc thì chỉ gửi thuật ngữ xuất hiện trong đó (đỡ dài lời nhắc); không có thì gửi tối đa 80 từ.
 export function loiDanThem(caiDat, chuGoc) {
   const phan = [];
+  const idKenh = Object.hasOwn(KENH, caiDat.kenh || "") ? caiDat.kenh : "general";
+  const kenh = KENH[idKenh];
+  if (kenh.rules) phan.push(`Kênh "${kenh.label}" (${kenh.description}) – quy tắc dịch: ${kenh.rules}`);
+  const rieng = String(caiDat.quyTacRieng?.[idKenh] || "").trim();
+  if (rieng) phan.push(`Quy tắc riêng của người dùng – ƯU TIÊN CAO NHẤT, làm đúng theo (kể cả cách xưng hô), nếu trái với lời dặn khác thì theo quy tắc này:\n${rieng.slice(0, 3000)}`);
   const chuDe = String(caiDat.chuDe || "").trim();
   if (chuDe) phan.push(`Chủ đề / lĩnh vực của video: ${chuDe}. Dùng đúng thuật ngữ chuyên ngành tiếng Việt của lĩnh vực này, đúng cách người trong nghề hay nói; không dịch từng chữ.`);
-  let tu = docTuDien(caiDat.tuDien);
+  // Từ điển người dùng tự ghi được ưu tiên hơn thuật ngữ có sẵn của kênh
+  const tuDien = new Map(thuatNguKenh(idKenh));
+  for (const [zh, vi] of docTuDien(caiDat.tuDien)) { tuDien.delete(zh); tuDien.set(zh, vi); }
+  let tu = [...tuDien].reverse();
   if (chuGoc != null) tu = tu.filter(([zh]) => chuGoc.includes(zh));
   if (tu.length) phan.push("BẮT BUỘC dịch các từ sau đúng như bảng (không dùng từ khác):\n" + tu.slice(0, 80).map(([zh, vi]) => `${zh} → ${vi}`).join("\n"));
   return phan.join("\n");
