@@ -176,4 +176,8 @@ input[type=color] { width: 40px; height: 32px; border: none; background: none; p
   font: inherit; font-size: 16px; background: var(--nen); color: var(--chu);
 }
 textarea.o-dich { resize: vertical; }
+select.o-dich { appearance: auto; }
+.kenh-quy-tac { margin: 6px 0 2px; }
+.kenh-quy-tac summary { cursor: pointer; font-size: 14px; }
+#kenh-quy-tac { white-space: pre-line; }
 .ds-giong-nhanh .tt-nho { font-size: 13px; opacity: .75; margin-left: auto; text-align: right; }

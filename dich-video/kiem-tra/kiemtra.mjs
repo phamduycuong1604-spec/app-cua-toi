@@ -67,6 +67,7 @@ async function chay(ten, o) {
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
+    { const t = JSON.stringify(JSON.parse(rt.request().postData() || "{}").contents || ""); if (/Quy tắc riêng/.test(t)) goi.gemQuyTac = (/Quy tắc riêng[^\\]*\\n([^\\]*)/.exec(t) || [])[1] || "có"; }
     if (o.gemini === "het") return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) });
     if (o.gemCham) await new Promise((r) => setTimeout(r, o.gemCham));
     rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(o.cau || CAU) }] } }] }) }); });
@@ -322,6 +323,26 @@ const KICH_BAN = {
         await p.click("#nut-dung-viet");
       },
       sau: async (p, kq) => { if (kq.cau?.[0] !== "Xin chào anh bạn" || kq.cau?.[2] !== "Cảm ơn nhé") kq.loi = "Ghép theo giờ sai: " + kq.cau; } },
+  "29q-chuyen-mon-kenh": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, tuDien: "谢谢 = đa tạ" },
+      truoc: async (p) => {
+        // mặc định: Pha Chuyện Ảnh + quy tắc riêng dựng sẵn → đổi sang Pha Lab, ghi quy tắc riêng
+        await p.evaluate(() => (document.getElementById("o-kenh").closest("details").open = true));
+        const md = [await p.inputValue("#o-kenh"), await p.inputValue("#o-quy-tac-rieng")];
+        if (md[0] !== "pha_story" || !/Xưng thầy với các trò/.test(md[1])) throw new Error("Mặc định sai: " + md.join(" | "));
+        await p.selectOption("#o-kenh", "pha_lab");
+        if (await p.inputValue("#o-quy-tac-rieng")) throw new Error("Pha Lab chưa có quy tắc riêng mà ô không trống");
+        await p.fill("#o-quy-tac-rieng", "Xưng anh em.");
+      },
+      sau: async (p, kq) => { const t = kq.goi.dsThem || "", nk = await p.textContent("#o-nhat-ky");
+        if (!/Pha Lab/.test(t) || !/Xưng anh em\./.test(t) || /Xưng thầy/.test(t) || !/谢谢 → đa tạ/.test(t)) kq.loi = "Lời dặn chuyên môn sai: " + t.slice(0, 300);
+        else if (!/chuyên môn: Pha Lab \+ quy tắc riêng/.test(nk)) kq.loi = "Nhật ký không ghi chuyên môn";
+        await p.evaluate(() => (document.getElementById("o-kenh").closest("details").open = true));
+        await p.selectOption("#o-kenh", "pha_story");
+        if (!/Xưng thầy/.test(await p.inputValue("#o-quy-tac-rieng"))) kq.loi = "Quy tắc riêng của Pha Chuyện Ảnh bị mất khi đổi kênh";
+        await p.click("#nut-xoa-quy-tac");
+        if (await p.inputValue("#o-quy-tac-rieng")) kq.loi = "Nút xoá quy tắc không xoá"; } },
+  "29r-chuyen-mon-gemini": { caiDat: { ...CD, quyTacRieng: { pha_story: "Xưng thầy với các trò." } },
+      sau: async (p, kq) => { if (kq.goi.gemQuyTac !== "Xưng thầy với các trò.") kq.loi = "Gemini không nhận quy tắc riêng: " + kq.goi.gemQuyTac; } },
   "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
   "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
   "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },
