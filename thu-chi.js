@@ -346,6 +346,17 @@ function veChonMucChi() {
     };
     khung.appendChild(nut);
   });
+  const nutThem = document.createElement("button");
+  nutThem.type = "button";
+  nutThem.className = "nut-nguon nut-tuy-chinh";
+  nutThem.textContent = "＋ Thêm mục";
+  nutThem.onclick = themMucChiMoi;
+  const nutSua = document.createElement("button");
+  nutSua.type = "button";
+  nutSua.className = "nut-nguon nut-tuy-chinh";
+  nutSua.textContent = "✏️ Sửa";
+  nutSua.onclick = () => moSuaDanhSach("cd-muc-chi");
+  khung.append(nutThem, nutSua);
 }
 tc("noi-dung").addEventListener("input", veChonMucChi);
 document.querySelectorAll(".nut-loai").forEach((nut) => (nut.onclick = () => chonLoai(nut.dataset.loai)));
@@ -372,6 +383,73 @@ function veChonGoi() {
     };
     khung.appendChild(nut);
   });
+  khung.appendChild(taoNutTuyChinh("＋ Thêm gói", "Tự đặt tên & giá", themGoiMoi));
+  khung.appendChild(taoNutTuyChinh("✏️ Sửa danh sách", "Đổi tên, giá, xóa gói", () => moSuaDanhSach("cd-goi-mau")));
+}
+
+// Ô nút nét đứt dùng cho "Thêm" / "Sửa danh sách"
+function taoNutTuyChinh(tieuDe, phu, khiBam) {
+  const nut = document.createElement("button");
+  nut.type = "button";
+  nut.className = "nut-goi nut-tuy-chinh";
+  const ten = document.createElement("span");
+  ten.textContent = tieuDe;
+  const chuPhu = document.createElement("small");
+  chuPhu.textContent = phu;
+  nut.append(ten, chuPhu);
+  nut.onclick = khiBam;
+  return nut;
+}
+
+// Thêm gói màu mới ngay trong khung bán preset.
+// Các khoản đã bán lưu tên & giá riêng, nên thêm/sửa/xóa gói KHÔNG ảnh hưởng dữ liệu cũ.
+async function themGoiMoi() {
+  const ten = (prompt("Tên gói màu mới:") || "").trim();
+  if (!ten) return;
+  const giaChu = prompt("Giá gói (đồng), ví dụ 150000.\nĐể trống nếu muốn tự nhập giá mỗi lần bán (như Combo):", "");
+  if (giaChu === null) return;
+  const gia = Number(giaChu.replace(/[^\d]/g, "")) || null;
+
+  await capNhatCaiDatMoiNhat();
+  if (caiDat.goiMau.some((g) => g.ten.toLowerCase() === ten.toLowerCase())) {
+    alert(`Gói "${ten}" đã có trong danh sách rồi.`);
+  } else {
+    caiDat.goiMau = [...caiDat.goiMau, { ten, gia }];
+    luuCaiDat();
+  }
+  // Chọn luôn gói vừa thêm
+  tc("ten-preset").value = ten;
+  tc("gia-goi").value = gia || "";
+  capNhatThanhTien();
+  veChonGoi();
+  if (!gia) tc("gia-goi").focus();
+}
+
+// Thêm mục chi mới ngay trong khung nhập chi
+async function themMucChiMoi() {
+  const muc = (prompt("Tên mục chi mới (ví dụ: Xăng xe, Quảng cáo):") || "").trim();
+  if (!muc) return;
+  await capNhatCaiDatMoiNhat();
+  if (!caiDat.mucChi.some((m) => m.toLowerCase() === muc.toLowerCase())) {
+    caiDat.mucChi = [...caiDat.mucChi, muc];
+    luuCaiDat();
+  }
+  tc("noi-dung").value = muc;
+  veChonMucChi();
+  tc("so-tien").focus();
+}
+
+// Trước khi thêm vào danh sách, lấy bản mới nhất từ tài khoản (tránh 2 máy sửa đè nhau)
+async function capNhatCaiDatMoiNhat() {
+  if (typeof taiVeTuTaiKhoan === "function" && CO_TAI_KHOAN && veDangNhap() && !docChoGui().includes("cai-dat")) {
+    await taiVeTuTaiKhoan();
+  }
+}
+
+// Mở ⚙️ Cài đặt, cuộn tới danh sách cần sửa
+function moSuaDanhSach(idKhung) {
+  moCaiDat();
+  setTimeout(() => document.getElementById(idKhung).closest("section").scrollIntoView({ behavior: "smooth" }), 50);
 }
 tc("ten-preset").addEventListener("input", veChonGoi);
 

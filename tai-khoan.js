@@ -8,7 +8,7 @@
 //   chạy sau khi mọi file đã tải xong (sự kiện DOMContentLoaded)
 // =====================================================
 
-const PHIEN_BAN_APP = "17"; // tăng mỗi lần sửa app, để biết điện thoại đã nhận bản mới chưa
+const PHIEN_BAN_APP = "18"; // tăng mỗi lần sửa app, để biết điện thoại đã nhận bản mới chưa
 
 // Có máy chủ thì mới dùng tài khoản (may-chu.js)
 const CO_TAI_KHOAN = typeof DIA_CHI_MAY_CHU === "string" && DIA_CHI_MAY_CHU !== "";
