@@ -43,7 +43,11 @@ function moCaiDat() {
 }
 
 document.getElementById("nut-cai-dat").onclick = moCaiDat;
-cd("dong").onclick = () => manCaiDat.classList.add("an");
+cd("dong").onclick = () => {
+  manCaiDat.classList.add("an");
+  veChonGoi();
+  veChonMucChi();
+};
 
 
 // ----- 1. TÀI KHOẢN -----
