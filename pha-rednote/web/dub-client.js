@@ -2417,19 +2417,22 @@ async function goiGemini(loai, noiDung) {
   for (let daThu = 0; ; daThu++) {
     const dang = soMaDoc;
     try {
-      return await goiGeminiMotMa(loai, noiDung);
+      // Chưa thử hết các mã: gặp giới hạn mỗi phút thì đổi ngay sang mã kế tiếp thay vì ngồi chờ
+      return await goiGeminiMotMa(loai, noiDung, { doiMaKhiCho: daThu < ds.length - 1 });
     } catch (loi) {
       // Hết lượt hôm nay (hoặc mọi loại Gemini của mã này đã được nhớ là hết) → đổi sang mã kế tiếp
-      if (loi?.message !== "HET_NGAY" || daThu >= ds.length - 1) throw loi;
+      if ((loi?.message !== "HET_NGAY" && !loi?.doiMa) || daThu >= ds.length - 1) throw loi;
       if (soMaDoc !== dang) continue; // luồng đọc khác vừa đổi mã rồi → dùng luôn mã mới
       const cu = soMaDoc;
       soMaDoc = (soMaDoc + 1) % ds.length;
       daBaoNghi = new Set();
-      nhat(`🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} hết lượt hôm nay → chuyển sang mã số ${soMaDoc + 1}`);
+      nhat(loi.doiMa
+        ? `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} đang bị giới hạn mỗi phút (Google bảo chờ ${loi.choGiay} giây) → chuyển ngay sang mã số ${soMaDoc + 1}`
+        : `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} hết lượt hôm nay → chuyển sang mã số ${soMaDoc + 1}`);
     }
   }
 }
-async function goiGeminiMotMa(loai, noiDung) {
+async function goiGeminiMotMa(loai, noiDung, tuyChon = {}) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   let ds = [...new Set([tuChon, moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
   let daHoi = false, loiCuoi = null, hetNgay = null;
@@ -2445,7 +2448,7 @@ async function goiGeminiMotMa(loai, noiDung) {
       continue;
     }
     try {
-      const kq = await goiMoHinh(ds[i], noiDung, loai);
+      const kq = await goiMoHinh(ds[i], noiDung, loai, tuyChon);
       moHinhDung[loai] = ds[i];
       return kq;
     } catch (loi) {
@@ -2505,7 +2508,7 @@ async function timMoHinh(loai) {
 
 // các mô hình không nhận tuỳ chọn tắt "suy nghĩ" (lưu trên máy để lần sau khỏi thử)
 const khongTatSuyNghi = new Set(Array.isArray(docLuu("phaha-dv-khong-tat-suy-nghi")) ? docLuu("phaha-dv-khong-tat-suy-nghi") : []);
-async function goiMoHinh(moHinh, noiDung, loai) {
+async function goiMoHinh(moHinh, noiDung, loai, tuyChon = {}) {
   let quaLau = 0;
   for (let lan = 0; ; lan++) {
     // Nghe & dịch: tắt chế độ "suy nghĩ" của Gemini để trả lời nhanh hơn nhiều
@@ -2571,6 +2574,8 @@ async function goiMoHinh(moHinh, noiDung, loai) {
       if (/per ?day|PerDay/i.test(thongBao + chiTiet) || !giay || giay > 60 || lan >= 3) {
         throw Object.assign(new Error("HET_NGAY"), { chiTiet: thongBao, doiMoHinh: true, choGiay: giay });
       }
+      // Giới hạn mỗi phút: còn mã khác chưa thử thì đổi mã ngay (không ghi nhớ là hết lượt), hết mã mới ngồi chờ
+      if (tuyChon.doiMaKhiCho) throw Object.assign(new Error("CHO_PHUT"), { doiMa: true, choGiay: giay });
       await cho(giay + 1, loai === "nghe" ? "dich" : "long");
       continue;
     }
