@@ -65,7 +65,9 @@ async function chay(ten, o) {
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
     if (u.includes("tts") && (o.gemPhut || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "45s" }] } }) }); }
     if (u.includes("tts") && o.tts404 && o.tts404.test(u) && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ error: { code: 404, message: "models/x is not found for API version v1beta, or is not supported for generateContent." } }) }); }
+    if (u.includes("tts") && o.gemHetSau?.[khoaGui] && u.includes(o.gemHetSau[khoaGui].mh) && (dem("ttsTot:" + khoaGui), goi["ttsTot:" + khoaGui]) > o.gemHetSau[khoaGui].sau) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
+    if (u.includes("tts")) (goi.mhDoc ||= []).push(/models\/([^:]+):/.exec(u)?.[1]);
     if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
     { const t = JSON.stringify(JSON.parse(rt.request().postData() || "{}").contents || ""); if (/Quy tắc riêng/.test(t)) goi.gemQuyTac = (/Quy tắc riêng[^\\]*\\n([^\\]*)/.exec(t) || [])[1] || "có"; }
@@ -271,6 +273,12 @@ const KICH_BAN = {
   "27d-gemini-xoay-loi-lan": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222, MA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", tts404: /flash-tts|pro-preview-tts/, maDocTot: ["MA-DOC-333333"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   // Mã 1 bị giới hạn mỗi phút (Google bảo chờ 45 giây) → đổi ngay sang mã 2, không ngồi chờ
+  "27g-gemini-giu-1-loai-khi-xoay-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } },
+      gemHetSau: { "MA-DOC-111111": { mh: "flash-preview-tts", sau: 1 } },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = [...new Set(await p.evaluate(() => globalThis.__phahaMhDoc || []))];
+        kq.mhDung = mh;
+        if (mh.length !== 1 || !/flash-preview-tts/.test(mh[0])) kq.loi = "Đọc bằng nhiều loại Gemini (giọng lệch): " + mh.join(", ");
+        else if (!/Cả video đọc bằng gemini-2.5-flash-preview-tts/.test(nk) || !/chuyển sang mã số 2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
   "27e-gemini-xoay-khi-cho-phut": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/giới hạn mỗi phút[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
