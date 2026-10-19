@@ -1722,12 +1722,17 @@ async function docCau(chu, dv) {
   if (!chu) return new Float32Array(0);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
-  if (khoGiong.has(khoa)) return khoGiong.get(khoa);
+  // Giọng Gemini đã đọc ở lần trước: chỉ dùng lại nếu cùng loại Gemini với cả video (giọng khỏi lệch)
+  const daCo = khoGiong.get(khoa);
+  if (daCo && (dv !== "gemini" || !moHinhDocCoDinh || daCo.mh === moHinhDocCoDinh)) {
+    if (dv === "gemini") moHinhDocCoDinh ||= daCo.mh;
+    return daCo.mau;
+  }
   const kq = await DICH_VU[dv].doc(chu);
   let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
-  khoGiong.set(khoa, mau);
+  khoGiong.set(khoa, { mau, mh: dv === "gemini" ? moHinhDocCoDinh : "" });
   return mau;
 }
 
@@ -1741,6 +1746,7 @@ async function docGemini(chu, lan = 0) {
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
     },
   });
+  if (tl.moHinh) (globalThis.__phahaMhDoc ||= []).push(tl.moHinh); // để bộ kiểm tra xem cả video có cùng 1 loại không
   const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
   if (!phan) {
     // Gemini thỉnh thoảng trả lời mà không kèm tiếng (lỗi ngẫu nhiên) → gửi lại câu đó
@@ -2192,6 +2198,7 @@ async function longTiengThu() {
 }
 
 async function longTiengBang(dv) {
+  if (dv === "gemini") moHinhDocCoDinh = null; // mỗi lần lồng tiếng chốt lại 1 loại Gemini cho cả video
   const tong = new Float32Array(Math.ceil(thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
   let xong = 0, hong = false;
   // Bỏ câu rỗng (vd câu chỉ có chữ Trung/ký hiệu, sửa chữ xong thành trống) – dịch vụ đọc sẽ báo lỗi nếu gửi chữ trống
@@ -2437,6 +2444,9 @@ const MO_HINH = {
   doc: ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"],
 };
 const moHinhDung = {}; // mô hình đã chạy được
+// Giọng đọc đồng nhất: mỗi loại Gemini đọc cùng tên giọng (vd Kore) nghe vẫn khác nhau → cả video chỉ dùng 1 loại.
+// Loại đầu tiên đọc được sẽ được giữ; mã nào hết lượt loại đó thì đổi MÃ, không đổi sang loại khác.
+let moHinhDocCoDinh = null;
 const moHinhNghi = new Set(); // mô hình đang quá tải hoặc hết lượt hôm nay → bỏ qua
 // Lưu trên máy: mô hình nào hết lượt tới lúc nào / đã ngừng → lần sau khỏi thử lại
 function napMoHinhNghi() {
@@ -2492,8 +2502,10 @@ async function goiGemini(loai, noiDung) {
       const cu = soMaDoc;
       soMaDoc = (soMaDoc + 1) % ds.length;
       daBaoNghi = new Set();
-      nhat(loi.doiMa
+      nhat(loi.message === "CHO_PHUT"
         ? `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} đang bị giới hạn mỗi phút (Google bảo chờ ${loi.choGiay} giây) → chuyển ngay sang mã số ${soMaDoc + 1}`
+        : loi.doiMa
+        ? `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length}: ${loi.message} → chuyển sang mã số ${soMaDoc + 1}`
         : `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length} hết lượt hôm nay → chuyển sang mã số ${soMaDoc + 1}`);
     }
   }
@@ -2501,9 +2513,12 @@ async function goiGemini(loai, noiDung) {
 async function goiGeminiMotMa(loai, noiDung, tuyChon = {}) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   if (tuChon) return goiMoHinh(tuChon, noiDung, loai, tuyChon);
-  let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
-  let daHoi = false, loiCuoi = null, hetNgay = null;
+  const coDinh = loai === "doc" ? moHinhDocCoDinh : null;
+  let ds = coDinh ? [coDinh] : [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
+  let daHoi = !!coDinh, loiCuoi = null, hetNgay = null;
   for (let i = 0; i < ds.length; i++) {
+    // luồng đọc khác vừa chốt loại Gemini cho video → bỏ danh sách cũ, chỉ dùng loại đã chốt
+    if (loai === "doc" && moHinhDocCoDinh && moHinhDocCoDinh !== coDinh) return goiGeminiMotMa(loai, noiDung, tuyChon);
     if (moHinhNghi.has(tenNghi(ds[i], loai))) {
       if (!daBaoNghi.has(tenNghi(ds[i], loai))) {
         daBaoNghi.add(tenNghi(ds[i], loai));
@@ -2515,6 +2530,12 @@ async function goiGeminiMotMa(loai, noiDung, tuyChon = {}) {
     try {
       const kq = await goiMoHinh(ds[i], noiDung, loai, tuyChon);
       moHinhDung[loai] = ds[i];
+      if (loai === "doc") {
+        // luồng đọc khác vừa chốt loại khác → đọc lại câu này bằng đúng loại đã chốt cho giọng khỏi lệch
+        if (moHinhDocCoDinh && moHinhDocCoDinh !== ds[i]) { nhat(`↻ Đọc lại đoạn này bằng ${moHinhDocCoDinh} cho giọng đồng nhất`); return goiGeminiMotMa(loai, noiDung, tuyChon); }
+        if (!moHinhDocCoDinh) { moHinhDocCoDinh = ds[i]; nhat(`🎙️ Cả video đọc bằng ${ds[i]} (giữ 1 loại Gemini cho giọng đồng nhất; mã hết lượt thì đổi mã, không đổi loại)`); }
+      }
+      if (loai === "doc") Object.defineProperty(kq, "moHinh", { value: ds[i] }); // loại Gemini thật sự đã đọc đoạn này
       return kq;
     } catch (loi) {
       if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
@@ -2545,6 +2566,8 @@ async function goiGeminiMotMa(loai, noiDung, tuyChon = {}) {
   const nho = docLuu("phaha-dv-gemini-nghi"), hetLuotNho = (m) => (nho[tenNghi(m, loai)] || 0) - Date.now() <= 2 * 86400000;
   if (ds.every((m) => moHinhNghi.has(tenNghi(m, loai))) && (!loiCuoi || loiCuoi.status === 404) && ds.some((m) => hetLuotNho(m) && moHinhNghi.has(tenNghi(m, loai))))
     throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
+  // Đang giữ 1 loại cho giọng đồng nhất mà loại đó không dùng được với mã này → đổi sang mã kế tiếp
+  if (coDinh) throw Object.assign(new Error(`${coDinh} không dùng được với mã này`), { doiMa: true, choGiay: loiCuoi?.choGiay || 0 });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }
