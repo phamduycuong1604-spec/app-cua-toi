@@ -1,6 +1,6 @@
 // =====================================================
 // AI DỊCH VIDEO (cho trang dich-video/ của PhaHa)
-// Chỉ người đã đăng nhập app PHAHA mới dùng được (vé gửi trong header X-Ve).
+// Chỉ chủ app (tài khoản quản trị đã đăng nhập, vé gửi trong header X-Ve) mới dùng được.
 //  /ai/nghe   : nghe tiếng Trung bằng Whisper của Cloudflare (miễn phí 10.000 "neuron"/ngày)
 //  /ai/dich   : dịch chữ bằng mô hình ngôn ngữ của Cloudflare
 //  /ai/edge   : đọc tiếng Việt bằng giọng "Đọc to" của Edge (miễn phí, trả về MP3)
@@ -29,12 +29,16 @@ const DUOC_CHUYEN = [
 
 export async function xuLyAi(yeuCau, env, duongDan, traLoi) {
   if (!duongDan.startsWith("/ai/")) return null;
+  let nguoi;
   try {
     const ve = yeuCau.headers.get("X-Ve") || "";
-    await xacThuc(new Request(yeuCau.url, { headers: { Authorization: "Bearer " + ve } }), env);
+    nguoi = await xacThuc(new Request(yeuCau.url, { headers: { Authorization: "Bearer " + ve } }), env);
   } catch {
     return traLoi({ loi: "Cần đăng nhập app PHAHA để dùng máy chủ" }, 401);
   }
+  // Chỉ chủ app (tài khoản quản trị) được dùng máy chủ cho dịch video: người dùng khác tự dùng mã API của họ,
+  // không chạy qua máy chủ này và không dùng chung lượt miễn phí của máy chủ (Workers AI, Edge…)
+  if (!nguoi.quanTri) return traLoi({ loi: "Máy chủ PHAHA chỉ dành cho chủ app. Bạn dùng app bằng mã API của riêng bạn (⚙️ Cài đặt)." }, 403);
 
   if (duongDan === "/ai/nghe" && yeuCau.method === "POST") {
     if (!env.AI) return traLoi({ loi: "Máy chủ chưa bật Workers AI" }, 501);

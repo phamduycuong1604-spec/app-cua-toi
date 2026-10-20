@@ -2,7 +2,7 @@
 // GIAO DIỆN MÀN HÌNH CHÍNH: chọn video / dán link RedNote, tuỳ chỉnh âm thanh – phụ đề – lớp che – logo,
 // ô xem trước, bảng lời thoại, tự kiểm tra phụ đề (SRT), lưu kết quả, nhật ký
 // =====================================================
-import { $, caiDat, S, nhat, ghiChu, luuCaiDat, dongHo, taiXuong, tenTep, coMayChu, daDangNhap, mayChu, veDangNhap, TEN_BUOC, ghiDangChay } from "./nen.js";
+import { $, caiDat, S, nhat, ghiChu, luuCaiDat, dongHo, taiXuong, tenTep, coMayChu, daDangNhap, dungDuocMayChu, mayChu, veDangNhap, TEN_BUOC, ghiDangChay } from "./nen.js";
 import { veLop } from "./lop-phu.js";
 import { taoSrt, docSrt, ganBanDich } from "./phu-de.js";
 import { taiFfmpeg } from "./video.js";
@@ -40,6 +40,7 @@ async function taiTuLink() {
   if (dangTaiLink || S.dangChay) return;
   if (!LINK_REDNOTE.test(chu)) return bao("⚠️ Chưa thấy link RedNote. Trong RedNote bấm Chia sẻ → Sao chép link, rồi dán vào ô trên.");
   if (!coMayChu() || !daDangNhap()) return bao("⚠️ Cần đăng nhập app PHAHA (tab Lịch việc) để tải video từ link.");
+  if (!dungDuocMayChu()) return bao("⚠️ Tải từ link chỉ dành cho chủ app. Cách khác: trong RedNote bấm Chia sẻ → Lưu video (保存视频), rồi bấm 🎬 Chọn video ở trên.");
   dangTaiLink = true;
   $("nut-tai-link").disabled = true;
   try {

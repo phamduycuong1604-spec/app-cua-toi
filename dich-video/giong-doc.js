@@ -5,7 +5,7 @@
 // =====================================================
 import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
-  coMayChu, daDangNhap, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
+  dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
 import { goiGemini, moHinhDocDaChot, chotMoHinhDoc, conLuotGeminiDoc } from "./gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
@@ -424,7 +424,7 @@ function ghiDvHetThang(dv) {
 
 // Dịch vụ đọc dùng được, theo đúng thứ tự ưu tiên; giọng máy luôn có, đứng cuối làm lớp dự phòng
 export function dvDocDung(imLang) {
-  const vao = coMayChu() && daDangNhap();
+  const vao = dungDuocMayChu(); // Fish, Edge đi qua máy chủ PHAHA → chỉ chủ app
   const co = {
     el: () => !!caiDat.dv.el.khoa,
     gemini: () => !!(caiDat.khoa || caiDat.khoaDoc),

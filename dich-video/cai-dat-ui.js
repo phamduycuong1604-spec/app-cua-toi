@@ -1,7 +1,7 @@
 // =====================================================
 // HỘP ⚙️ CÀI ĐẶT + các ô trên màn hình chính (giọng cho video này, chuyên môn dịch, chủ đề, thuật ngữ)
 // =====================================================
-import { $, caiDat, nhat, luuCaiDat, kyTuThang, coMayChu, daDangNhap } from "./nen.js";
+import { $, caiDat, nhat, luuCaiDat, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu } from "./nen.js";
 import { KENH, KENH_MAC_DINH } from "./chuyen-mon.js";
 import { quenGhiNhoGemini } from "./gemini.js";
 import { THU_TU, CAC_DV, CAU_MAU, DICH_VU, LOAI_GC, tenGiong, taiDsGiong, dvDocDung, dvHetThang, docCau } from "./giong-doc.js";
@@ -43,9 +43,7 @@ export function moCaiDat() {
   $("o-dp-az-dich-vung").value = caiDat.dp.azDichVung;
   $("o-dp-cf").checked = caiDat.dp.cf;
   $("o-dp-az-nghe").checked = caiDat.dp.azNghe;
-  $("chu-dp-cf").textContent = coMayChu()
-    ? (daDangNhap() ? "✅ Đã đăng nhập app PHAHA – dùng được" : "⚠️ Chưa đăng nhập app PHAHA trên máy này – mở tab Lịch việc để đăng nhập")
-    : "⚠️ Chưa có máy chủ PHAHA";
+  $("chu-dp-cf").textContent = lyDoKhongMayChu() ? "⚠️ " + lyDoKhongMayChu() : "✅ Đã đăng nhập app PHAHA – dùng được";
   $("o-mh-el").value = caiDat.dv.el.mh;
   hienTrangThai();
   // Mở sẵn mục giọng đang được dùng đầu tiên
@@ -84,17 +82,24 @@ export function layTuForm() {
   try { localStorage.removeItem("phaha-dv-het-thang"); } catch {}
 }
 
+// Vì sao không dùng được máy chủ PHAHA (Fish, Edge, Cloudflare); "" = dùng được
+export function lyDoKhongMayChu() {
+  if (!coMayChu()) return "chưa có máy chủ PHAHA";
+  if (!daDangNhap()) return "cần đăng nhập app PHAHA (tab Lịch việc)";
+  if (!dungDuocMayChu()) return "chỉ chủ app dùng được (qua máy chủ PHAHA)";
+  return "";
+}
 // Chữ nhỏ cạnh tên mỗi dịch vụ đọc: sẵn sàng / thiếu gì
 export function trangThai(dv) {
   if (dv !== "may" && !caiDat.bat[dv]) return "⏸ đang tắt";
-  const vao = coMayChu() && daDangNhap();
+  const khongMC = lyDoKhongMayChu();
   const thieu = {
     el: !caiDat.dv.el.khoa && "chưa có mã",
     gemini: !caiDat.khoa && !caiDat.khoaDoc && "chưa có mã Gemini",
-    fish: (!caiDat.dv.fish.khoa && "chưa có mã") || (!vao && "cần đăng nhập app PHAHA"),
+    fish: (!caiDat.dv.fish.khoa && "chưa có mã") || khongMC,
     az: !caiDat.dv.az.khoa && "chưa có mã",
     gc: !caiDat.dv.gc.khoa && !caiDat.khoa && "chưa có mã",
-    edge: !vao && "cần đăng nhập app PHAHA",
+    edge: khongMC,
     fpt: !caiDat.dv.fpt.khoa && "chưa có mã",
     vt: !caiDat.dv.vt.khoa && "chưa có mã",
   }[dv];

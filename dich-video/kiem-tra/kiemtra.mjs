@@ -110,8 +110,10 @@ async function chay(ten, o) {
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: o.groqMang ? '["Chào bạn","Cảm ơn"]' : "<think>x</think>" + DICH } }] }) }); });
   await p.route("https://viec-hom-nay-nhac.phamduycuong1604.workers.dev/**", async (rt) => { const u = rt.request().url(); const h = rt.request().headers();
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
+    if (u.endsWith("/tai-khoan/toi")) return rt.fulfill({ headers: J, body: JSON.stringify({ ten: "a", quanTri: !o.khongChu }) });
     if (!u.includes("/ai/")) return rt.fulfill({ headers: J, body: "{}" });
     dem("cf");
+    if (o.khongChu) { dem("mayChuBiGoi"); return rt.fulfill({ status: 403, headers: J, body: JSON.stringify({ loi: "Máy chủ PHAHA chỉ dành cho chủ app." }) }); }
     if (h["x-ve"] !== "VE") return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: "Cần đăng nhập" }) });
     if (u.endsWith("/ai/rednote")) { dem("rnTim"); goi.rnLink = JSON.parse(rt.request().postData()).link;
       if (o.link === "anh") return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ loi: "Bài RedNote này là ảnh, không có video." }) });
@@ -170,7 +172,7 @@ async function chay(ten, o) {
   await p.route("https://openrouter.ai/**", (rt) => { dem("or"); rt.fulfill({ headers: J, body: JSON.stringify(rt.request().url().endsWith("/models") ? { data: [{ id: "deepseek/x:free" }] } : { choices: [{ message: { content: "Kết quả: " + DICH } }] }) }); });
 
   await p.goto(`http://localhost:${CONG}/dich-video/`);
-  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
+  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("la-quan-tri", cd.__khongChu ? "0" : "1"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
     [{ ...o.caiDat, __khongVe: o.khongVe }, o.logo ? "data:image/png;base64," + fs.readFileSync(`${S}/logo.png`).toString("base64") : null]);
   await p.reload();
   if (o.caiDat.__dangChay) goi.baoTatGiuaChung = (await p.textContent("#o-nhat-ky")).includes("TRANG BỊ TẮT GIỮA CHỪNG");
@@ -355,6 +357,21 @@ const KICH_BAN = {
         if (await p.inputValue("#o-quy-tac-rieng")) kq.loi = "Nút xoá quy tắc không xoá"; } },
   "29r-chuyen-mon-gemini": { caiDat: { ...CD, quyTacRieng: { pha_story: "Xưng thầy với các trò." } },
       sau: async (p, kq) => { if (kq.goi.gemQuyTac !== "Xưng thầy với các trò.") kq.loi = "Gemini không nhận quy tắc riêng: " + kq.goi.gemQuyTac; } },
+  "50-nguoi-dung-thuong-khong-qua-may-chu": { caiDat: { ...CD, __khongChu: true, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, bat: { el: false, vt: false, gemini: false, fpt: false, fish: true, az: false, gc: false, edge: true }, dv: { fish: { khoa: "fk", giong: "f1", ds: [] } } }, khongChu: true, han: 600000,
+      truoc: async (p) => {
+        await p.fill("#o-link", "http://xhslink.com/a/AbCd");
+        await p.click("#nut-tai-link");
+        await p.waitForFunction(() => /⚠️|✅|❌/.test(document.getElementById("tt-tai-link").textContent));
+      },
+      sau: async (p, kq) => {
+        const nk = await p.textContent("#o-nhat-ky"), link = await p.textContent("#tt-tai-link");
+        const thuTu = (/thứ tự giọng ([^·]*)/.exec(nk) || [])[1] || "";
+        if (kq.goi.cf || kq.goi.mayChuBiGoi) kq.loi = `Người dùng thường vẫn gọi máy chủ PHAHA (${kq.goi.cf} lần)`;
+        else if (/Edge|Fish/.test(thuTu)) kq.loi = "Vẫn dùng Edge/Fish (qua máy chủ): " + thuTu;
+        else if (!/chỉ dành cho chủ app/.test(link)) kq.loi = "Tải link RedNote không báo chỉ dành cho chủ app: " + link;
+        else if (!/Đã đọc .*Giọng máy/.test(nk) || !kq.probe) kq.loi = "Không lồng tiếng được bằng giọng không qua máy chủ";
+        kq.thuTu = thuTu; } },
+  "50b-nguoi-dung-thuong-trang-thai": { caiDat: { ...CD, __khongChu: true, dv: { fish: { khoa: "fk", giong: "f1", ds: [] } } }, khongChu: true, kiemMa: true },
   "29j-deepseek-chep-nguyen-van": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsChep: true },
   "29k-deepseek-tra-dang-boc": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "boc" },
   "29l-deepseek-tra-dang-mang": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsDang: "mang" },

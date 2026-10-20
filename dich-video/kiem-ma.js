@@ -2,11 +2,11 @@
 // NÚT 🔎 KIỂM TRA CÁC MÃ: thử từng mã đã dán (chỉ hỏi danh sách/số dư, không tốn lượt đọc/dịch)
 // và hiện hạn mức + % còn lại (lấy số thật nếu dịch vụ cho xem, không thì đếm trên máy này)
 // =====================================================
-import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, coMayChu, daDangNhap, quaMayChu, API_GEMINI } from "./nen.js";
+import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, quaMayChu, API_GEMINI } from "./nen.js";
 import { dsKhoaDoc, hanMucGemini, hanMuc } from "./gemini.js";
 import { EL_API, FISH_API, VT_API, FPT_API, azApi } from "./giong-doc.js";
 import { duPhong } from "./nghe-dich.js";
-import { layTuForm } from "./cai-dat-ui.js";
+import { layTuForm, lyDoKhongMayChu } from "./cai-dat-ui.js";
 
 const gioLamMoiQT = () => new Date(Date.UTC(2000, 0, 1)).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 // Đọc câu trả lời: JSON nếu được, kèm nguyên văn (_t) để báo lỗi khi dịch vụ không ghi lý do rõ
@@ -124,8 +124,8 @@ export function khoiDongKiemMa() {
     nut.disabled = true;
     nut.textContent = "⏳ Đang kiểm tra…";
     const kq = await Promise.all(danhSachThu().map(kiemMotMa));
-    const vao = coMayChu() && daDangNhap();
-    kq.push(`${vao ? "✅" : "⚠️"} Máy chủ PHAHA (Fish, Edge, Viettel, Cloudflare): ${vao ? "đã đăng nhập" : "chưa đăng nhập app PHAHA trên máy này"}`);
+    const khongMC = lyDoKhongMayChu();
+    kq.push(`${khongMC ? "⚠️" : "✅"} Máy chủ PHAHA (Fish, Edge, Cloudflare, tải link RedNote): ${khongMC || "đã đăng nhập, dùng được"}`);
     kq.push("Edge: không giới hạn · Cloudflare: 10.000 đơn vị/ngày (máy chủ không báo số còn lại).");
     kq.push("(ước tính) = app tự đếm trên máy này, dùng ở máy khác sẽ không tính vào.");
     o.textContent = kq.join("\n");

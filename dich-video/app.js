@@ -13,7 +13,7 @@
 //   lop-phu.js    vẽ phụ đề/lớp che/logo lên hình
 //   giao-dien.js, cai-dat-ui.js, dong-bo-ui.js, kiem-ma.js  màn hình & cài đặt
 // =====================================================
-import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo } from "./nen.js";
+import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo, capNhatQuyen } from "./nen.js";
 import { canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { KENH } from "./chuyen-mon.js";
 import { batDauLanMoiGemini } from "./gemini.js";
@@ -262,5 +262,6 @@ khoiDongCaiDat();
 khoiDongDongBo();
 khoiDongKiemMa();
 ghiMocCaiDat();
+capNhatQuyen();
 $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));
