@@ -110,7 +110,16 @@ async function chay(ten, o) {
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: o.groqMang ? '["Chào bạn","Cảm ơn"]' : "<think>x</think>" + DICH } }] }) }); });
   await p.route("https://viec-hom-nay-nhac.phamduycuong1604.workers.dev/**", async (rt) => { const u = rt.request().url(); const h = rt.request().headers();
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
-    if (u.endsWith("/tai-khoan/toi")) return rt.fulfill({ headers: J, body: JSON.stringify({ ten: "a", quanTri: !o.khongChu }) });
+    if (u.endsWith("/tai-khoan/toi")) {
+      dem("hoiToi");
+      if (o.hetHanRoi || (o.hetHanSau && goi.hoiToi > o.hetHanSau)) return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: 'Tài khoản "lan" đã hết hạn dùng từ ngày 01/10/2026. Liên hệ chủ app để gia hạn.' }) });
+      return rt.fulfill({ headers: J, body: JSON.stringify({ ten: "a", quanTri: !o.khongChu, hetHan: o.khongChu ? Date.now() + 30 * 864e5 : null }) });
+    }
+    if (u.endsWith("/tai-khoan/dang-nhap")) {
+      const b = JSON.parse(rt.request().postData() || "{}");
+      if (b.ten === "lan" && b.matKhau === "123456") return rt.fulfill({ headers: J, body: JSON.stringify({ ve: "VE", ten: "lan", quanTri: false, hetHan: Date.now() + 30 * 864e5 }) });
+      return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: "Sai tên đăng nhập hoặc mật khẩu" }) });
+    }
     if (!u.includes("/ai/")) return rt.fulfill({ headers: J, body: "{}" });
     dem("cf");
     if (o.khongChu) { dem("mayChuBiGoi"); return rt.fulfill({ status: 403, headers: J, body: JSON.stringify({ loi: "Máy chủ PHAHA chỉ dành cho chủ app." }) }); }
@@ -195,6 +204,7 @@ async function chay(ten, o) {
   } else
   await p.setInputFiles("#o-video", `${S}/${o.video || "thu-vp9.mp4"}`);
   if (o.truoc) await o.truoc(p);
+  if (o.chiTruoc) { const kq = { ten, loi: o.chiTruoc.loi || "", ...o.chiTruoc }; await p.close(); return { ...kq, nhatKy: "" }; }
   const t0 = Date.now();
   await p.click("#nut-bat-dau");
   const tam = {};
@@ -265,7 +275,7 @@ const KICH_BAN = {
       sau: async (p, kq) => { kq.nhatThuTu = (await p.textContent("#o-nhat-ky")).split("\n").filter((l) => /↪️|Đã đọc|thứ tự/.test(l)).join("\n"); } },
   "22-el-thu-vien-tu-chon": { caiDat: { ...CD, bat: DU, dv: { ...CD.dv, el: { khoa: "sk", mh: "eleven_v3" }, fish: { khoa: "fk" } } }, elKhongViet: true },
   "23-fish-tu-chon-giong": { caiDat: { ...CD, bat: { ...DU, el: false }, dv: { ...CD.dv, fish: { khoa: "fk" } } }, gemTTS: "het" },
-  "24-edge-chua-dang-nhap": { caiDat: { ...CD, bat: { ...DU, el: false, gemini: false, az: false }, dv: { ...CD.dv, fish: { khoa: "fk" } } }, khongVe: true, han: 600000 },
+  "24-edge-chua-dang-nhap": { caiDat: { ...CD, bat: { ...DU, el: false, gemini: false, az: false }, dv: { ...CD.dv, fish: { khoa: "fk" } }, __khongChu: true }, khongChu: true, han: 600000 },
   "27-gemini-ma-rieng": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het",
       sau: async (p, kq) => { kq.goi.khoaDoc = [...kq.goi.khoaDoc]; kq.goi.khoaNghe = [...kq.goi.khoaNghe]; } },
   // Dán 3 mã đọc: mã 1, 2 hết lượt → tự chuyển sang mã 3 và đọc bằng Gemini
@@ -285,7 +295,7 @@ const KICH_BAN = {
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/giới hạn mỗi phút[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
-  "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongVe: true },
+  "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },
   "29-deepseek-dich": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } } },
   "29b-deepseek-het-tien": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsHet: true },
   "29c-deepseek-nghe-hong-ve-gemini": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: false, azNghe: false } }, groq: "het" },
@@ -357,6 +367,30 @@ const KICH_BAN = {
         if (await p.inputValue("#o-quy-tac-rieng")) kq.loi = "Nút xoá quy tắc không xoá"; } },
   "29r-chuyen-mon-gemini": { caiDat: { ...CD, quyTacRieng: { pha_story: "Xưng thầy với các trò." } },
       sau: async (p, kq) => { if (kq.goi.gemQuyTac !== "Xưng thầy với các trò.") kq.loi = "Gemini không nhận quy tắc riêng: " + kq.goi.gemQuyTac; } },
+  "51-chua-dang-nhap-phai-dang-nhap": { caiDat: { ...CD, __khongChu: true }, khongVe: true, khongChu: true,
+      truoc: async (p) => {
+        if (!(await p.isVisible("#man-dang-nhap"))) throw new Error("Chưa đăng nhập mà không hiện màn hình đăng nhập");
+        await p.fill("#o-dn-ten", "lan"); await p.fill("#o-dn-mk", "sai-mk"); await p.click("#nut-dang-nhap");
+        await p.waitForFunction(() => /Sai tên/.test(document.getElementById("dn-bao").textContent));
+        await p.fill("#o-dn-mk", "123456"); await p.click("#nut-dang-nhap");
+        await p.waitForSelector("#man-dang-nhap", { state: "hidden", timeout: 10000 });
+        const tt = await p.textContent("#tt-tai-khoan");
+        if (!/lan · dùng đến/.test(tt)) throw new Error("Không hiện tài khoản & hạn dùng: " + tt);
+      } },
+  "51b-tai-khoan-het-han-bi-khoa": { caiDat: { ...CD, __khongChu: true }, khongChu: true, hetHanRoi: true,
+      truoc: async (p) => {
+        await p.waitForFunction(() => /hết hạn/.test(document.getElementById("dn-bao").textContent), null, { timeout: 10000 });
+        if (!(await p.isVisible("#man-dang-nhap"))) throw new Error("Hết hạn mà vẫn dùng được app");
+        if (await p.evaluate(() => !!localStorage.getItem("ve-dang-nhap"))) throw new Error("Hết hạn mà chưa xoá vé đăng nhập");
+      }, chiTruoc: { cua: "khoá đúng" } },
+  "51c-het-han-giua-chung-khong-cho-chay": { caiDat: { ...CD, __khongChu: true }, khongChu: true, hetHanSau: 1,
+      chiTruoc: { cua: "" },
+      truoc: async (p) => {
+        await p.waitForSelector("#man-dang-nhap", { state: "hidden" });
+        await p.click("#nut-bat-dau");
+        await p.waitForFunction(() => /hết hạn/.test(document.getElementById("dn-bao").textContent), null, { timeout: 10000 });
+        if (await p.isVisible("#the-tien-do")) throw new Error("Hết hạn giữa chừng mà vẫn chạy");
+      } },
   "50-nguoi-dung-thuong-khong-qua-may-chu": { caiDat: { ...CD, __khongChu: true, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, bat: { el: false, vt: false, gemini: false, fpt: false, fish: true, az: false, gc: false, edge: true }, dv: { fish: { khoa: "fk", giong: "f1", ds: [] } } }, khongChu: true, han: 600000,
       truoc: async (p) => {
         await p.fill("#o-link", "http://xhslink.com/a/AbCd");

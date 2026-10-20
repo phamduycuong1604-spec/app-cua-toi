@@ -184,14 +184,6 @@ export const daDangNhap = () => !!veDangNhap();
 // đi vòng khi trình duyệt bị chặn). Người dùng khác chỉ gọi thẳng dịch vụ bằng mã API của riêng họ.
 export const laChuApp = () => { try { return localStorage.getItem("la-quan-tri") === "1"; } catch { return false; } };
 export const dungDuocMayChu = () => coMayChu() && daDangNhap() && laChuApp();
-// Hỏi lại máy chủ quyền của tài khoản đang đăng nhập (quản trị có thể vừa đổi) – lỗi mạng thì giữ như cũ
-export async function capNhatQuyen() {
-  if (!coMayChu() || !daDangNhap()) return;
-  try {
-    const r = await fetch(mayChu() + "/tai-khoan/toi", { headers: { Authorization: "Bearer " + veDangNhap() } });
-    if (r.ok) localStorage.setItem("la-quan-tri", (await r.json()).quanTri ? "1" : "0");
-  } catch {}
-}
 // Gọi dịch vụ ngoài đi vòng qua máy chủ PHAHA (khi dịch vụ chặn gọi thẳng từ trình duyệt)
 export const quaMayChu = (url, tuyChon = {}) => [mayChu() + "/ai/chuyen", { ...tuyChon, headers: { ...tuyChon.headers, "X-Dich-Den": url, "X-Ve": veDangNhap() } }];
 

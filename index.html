@@ -275,6 +275,14 @@
       <div class="nhan">Cấp tài khoản mới</div>
       <input id="cd-ten-moi" class="o-nhap" type="text" placeholder="Tên đăng nhập (vd: lan, minh.anh)" autocapitalize="none">
       <input id="cd-mk-nguoi-moi" class="o-nhap" type="text" placeholder="Mật khẩu ban đầu (ít nhất 6 ký tự)" autocapitalize="none">
+      <select id="cd-thoi-han" class="o-nhap" aria-label="Thời hạn dùng">
+        <option value="0">Thời hạn: không giới hạn</option>
+        <option value="7">Thời hạn: 7 ngày</option>
+        <option value="30" selected>Thời hạn: 30 ngày</option>
+        <option value="90">Thời hạn: 90 ngày</option>
+        <option value="180">Thời hạn: 180 ngày</option>
+        <option value="365">Thời hạn: 1 năm</option>
+      </select>
       <label class="dong-chon"><input id="cd-la-quan-tri" type="checkbox"> Cho làm quản trị viên</label>
       <button type="button" id="cd-tao-tai-khoan" class="nut nut-chinh nut-rong">Tạo tài khoản</button>
     </section>
