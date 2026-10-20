@@ -57,7 +57,10 @@ export function loiDanThem(caiDat, chuGoc) {
 export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
   const ve = () => { try { return localStorage.getItem("ve-dang-nhap") || ""; } catch { return ""; } };
-  const coMayChu = () => !!(mayChu && ve() && caiDat.dp.cf);
+  // Chỉ chủ app (tài khoản quản trị) được dùng máy chủ PHAHA; người dùng khác chỉ gọi thẳng dịch vụ bằng mã của họ
+  const laChu = () => { try { return localStorage.getItem("la-quan-tri") === "1"; } catch { return false; } };
+  const dungMayChu = () => !!(mayChu && ve() && laChu());
+  const coMayChu = () => dungMayChu() && !!caiDat.dp.cf;
   const quaMayChu = new Set(); // các tên miền phải đi vòng qua máy chủ PHAHA (trình duyệt bị chặn)
 
   // Gọi một dịch vụ bên ngoài; trình duyệt bị chặn thì đi vòng qua máy chủ PHAHA
@@ -77,6 +80,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     const host = new URL(url).hostname;
     const quaMC = async () => {
       if (!mayChu || !ve()) throw new Error(`${ten}: trình duyệt bị chặn gọi thẳng, cần đăng nhập app PHAHA để đi vòng qua máy chủ`);
+      if (!laChu()) throw new Error(`${ten}: trình duyệt bị chặn gọi thẳng (chỉ chủ app mới được đi vòng qua máy chủ PHAHA)`);
       return fetch(mayChu + "/ai/chuyen", { ...tuyChon, headers: { ...tuyChon.headers, "X-Dich-Den": url, "X-Ve": ve() } });
     };
     let r;
@@ -86,6 +90,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
         r = await fetch(url, tuyChon);
       } catch (loi) {
         if (loi?.name === "TimeoutError" || loi?.name === "AbortError") throw loi;
+        if (!dungMayChu()) throw new Error(`${ten}: không gọi thẳng được (${loi.message})`);
         nhat(`${ten}: không gọi thẳng được (${loi.message}), thử đi vòng qua máy chủ PHAHA`);
         quaMayChu.add(host);
         r = await quaMC();
