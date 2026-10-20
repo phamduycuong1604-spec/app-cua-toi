@@ -40,6 +40,24 @@ export async function taoBangTaiKhoan(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS lich_su (ten TEXT, phan TEXT, gia_tri TEXT, luc INTEGER)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS lich_su_theo_nguoi ON lich_su (ten, phan, luc)"),
   ]);
+  // Hạn dùng tài khoản (mốc ms; NULL = không giới hạn). Bảng cũ chưa có cột → thêm (có rồi thì bỏ qua lỗi)
+  await env.DB.prepare("ALTER TABLE nguoi_dung ADD COLUMN het_han INTEGER").run().catch(() => {});
+}
+
+// ----- HẠN DÙNG TÀI KHOẢN (quản trị cấp; tài khoản quản trị không bao giờ hết hạn) -----
+const MOT_NGAY = 24 * 60 * 60 * 1000;
+const ngayVN = (ms) => {
+  const d = new Date(ms + 7 * 60 * 60 * 1000); // giờ Việt Nam
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+};
+const daHetHan = (nguoi) => !nguoi.quan_tri && nguoi.het_han != null && nguoi.het_han <= Date.now();
+const loiHetHan = (nguoi) => new LoiNguoiDung(`Tài khoản "${nguoi.ten}" đã hết hạn dùng từ ngày ${ngayVN(nguoi.het_han)}. Liên hệ chủ app để gia hạn.`, 401);
+// Số ngày → mốc hết hạn (0 / trống = không giới hạn); gia hạn thì cộng tiếp từ hạn cũ nếu hạn cũ còn
+function tinhHetHan(soNgay, hanCu = null) {
+  const n = Number(soNgay);
+  if (!n) return null;
+  if (!Number.isFinite(n) || n < 0 || n > 3650) throw new LoiNguoiDung("Số ngày dùng không hợp lệ (1–3650).");
+  return Math.max(Date.now(), hanCu || 0) + Math.round(n) * MOT_NGAY;
 }
 
 // ----- CÁC HÀM NHỎ -----
@@ -94,7 +112,7 @@ function kiemTraMatKhau(matKhau) {
 async function luuNguoiDung(env, ten, matKhau, quanTri) {
   const muoi = hex(crypto.getRandomValues(new Uint8Array(16)));
   const bam = await bamMatKhau(matKhau, muoi);
-  await env.DB.prepare("INSERT INTO nguoi_dung VALUES (?1, ?2, ?3, ?4, ?5)")
+  await env.DB.prepare("INSERT INTO nguoi_dung (ten, muoi, bam, quan_tri, tao_luc) VALUES (?1, ?2, ?3, ?4, ?5)")
     .bind(ten, muoi, bam, quanTri ? 1 : 0, Date.now())
     .run();
 }
@@ -122,11 +140,12 @@ export async function xacThuc(yeuCau, env) {
   const ve = (yeuCau.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!ve) throw new LoiNguoiDung("Chưa đăng nhập", 401);
   const nguoi = await env.DB.prepare(
-    "SELECT nguoi_dung.ten, nguoi_dung.quan_tri FROM phien JOIN nguoi_dung ON nguoi_dung.ten = phien.ten " +
+    "SELECT nguoi_dung.ten, nguoi_dung.quan_tri, nguoi_dung.het_han FROM phien JOIN nguoi_dung ON nguoi_dung.ten = phien.ten " +
       "WHERE phien.ve_bam = ?1 AND phien.het_han > ?2"
   ).bind(await sha256(ve), Date.now()).first();
   if (!nguoi) throw new LoiNguoiDung("Phiên đăng nhập đã hết hạn, hãy đăng nhập lại", 401);
-  return { ten: nguoi.ten, quanTri: !!nguoi.quan_tri, ve };
+  if (daHetHan(nguoi)) throw loiHetHan(nguoi);
+  return { ten: nguoi.ten, quanTri: !!nguoi.quan_tri, hetHan: nguoi.quan_tri ? null : nguoi.het_han ?? null, ve };
 }
 
 async function canQuanTri(yeuCau, env) {
@@ -190,7 +209,8 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
         throw new LoiNguoiDung("Sai tên đăng nhập hoặc mật khẩu", 401);
       }
       await env.DB.prepare("DELETE FROM dang_nhap_sai WHERE ten = ?1").bind(ten).run();
-      return traLoi({ ve: await taoVe(env, ten), ten, quanTri: !!nguoi.quan_tri });
+      if (daHetHan(nguoi)) throw loiHetHan(nguoi);
+      return traLoi({ ve: await taoVe(env, ten), ten, quanTri: !!nguoi.quan_tri, hetHan: nguoi.quan_tri ? null : nguoi.het_han ?? null });
     }
 
     if (p === "POST /tai-khoan/dang-xuat") {
@@ -201,7 +221,7 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
 
     if (p === "GET /tai-khoan/toi") {
       const nguoi = await xacThuc(yeuCau, env);
-      return traLoi({ ten: nguoi.ten, quanTri: nguoi.quanTri });
+      return traLoi({ ten: nguoi.ten, quanTri: nguoi.quanTri, hetHan: nguoi.hetHan });
     }
 
     if (p === "POST /tai-khoan/doi-mat-khau") {
@@ -221,9 +241,9 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
     if (p === "GET /quan-tri/nguoi-dung") {
       await canQuanTri(yeuCau, env);
       const { results } = await env.DB.prepare(
-        "SELECT ten, quan_tri, tao_luc FROM nguoi_dung ORDER BY tao_luc"
+        "SELECT ten, quan_tri, tao_luc, het_han FROM nguoi_dung ORDER BY tao_luc"
       ).all();
-      return traLoi({ nguoiDung: results.map((r) => ({ ten: r.ten, quanTri: !!r.quan_tri, taoLuc: r.tao_luc })) });
+      return traLoi({ nguoiDung: results.map((r) => ({ ten: r.ten, quanTri: !!r.quan_tri, taoLuc: r.tao_luc, hetHan: r.quan_tri ? null : r.het_han ?? null })) });
     }
 
     if (p === "POST /quan-tri/nguoi-dung") {
@@ -234,8 +254,22 @@ export async function xuLyTaiKhoan(yeuCau, env, duongDan, traLoi) {
       if (await env.DB.prepare("SELECT 1 FROM nguoi_dung WHERE ten = ?1").bind(ten).first()) {
         throw new LoiNguoiDung("Tên đăng nhập này đã có người dùng");
       }
+      const hetHan = than.quanTri ? null : tinhHetHan(than.soNgay);
       await luuNguoiDung(env, ten, matKhau, !!than.quanTri);
-      return traLoi({ ok: true });
+      if (hetHan) await env.DB.prepare("UPDATE nguoi_dung SET het_han = ?2 WHERE ten = ?1").bind(ten, hetHan).run();
+      return traLoi({ ok: true, hetHan });
+    }
+
+    // Gia hạn: soNgay > 0 → cộng thêm (tính từ hạn cũ nếu còn, không thì từ hôm nay); 0 → không giới hạn
+    if (p === "POST /quan-tri/gia-han") {
+      await canQuanTri(yeuCau, env);
+      const than = await docThan();
+      const ten = kiemTraTen(than.ten);
+      const nguoi = await env.DB.prepare("SELECT ten, het_han FROM nguoi_dung WHERE ten = ?1").bind(ten).first();
+      if (!nguoi) throw new LoiNguoiDung("Không tìm thấy tài khoản", 404);
+      const hetHan = tinhHetHan(than.soNgay, nguoi.het_han);
+      await env.DB.prepare("UPDATE nguoi_dung SET het_han = ?2 WHERE ten = ?1").bind(ten, hetHan).run();
+      return traLoi({ ok: true, hetHan });
     }
 
     if (p === "POST /quan-tri/dat-lai-mat-khau") {

@@ -12,8 +12,9 @@
 //   gemini.js     gọi Gemini (xoay mã, chờ giới hạn, giữ 1 loại cho giọng đồng nhất)
 //   lop-phu.js    vẽ phụ đề/lớp che/logo lên hình
 //   giao-dien.js, cai-dat-ui.js, dong-bo-ui.js, kiem-ma.js  màn hình & cài đặt
+//   cua-vao.js    chỉ tài khoản do chủ app cấp (còn hạn) mới dùng được app
 // =====================================================
-import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo, capNhatQuyen } from "./nen.js";
+import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo } from "./nen.js";
 import { canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { KENH } from "./chuyen-mon.js";
 import { batDauLanMoiGemini } from "./gemini.js";
@@ -25,6 +26,7 @@ import { khoiDongCaiDat, moCaiDat } from "./cai-dat-ui.js";
 import { khoiDongDongBo } from "./dong-bo-ui.js";
 import { khoiDongKiemMa } from "./kiem-ma.js";
 import { loiDeHieu } from "./loi.js";
+import { khoiDongCuaVao, kiemTraVao } from "./cua-vao.js";
 
 // Tách nhạc và chèn chữ chạy CÙNG LÚC thì nhanh hơn ~1 phút nhưng iPhone hay tràn bộ nhớ và tắt trang
 // → mặc định chạy LẦN LƯỢT (chỉ chạy cùng lúc khi bật "phaha-song-song" = "bat", dành cho máy mạnh).
@@ -54,6 +56,7 @@ function ghiCaiDatVaoNhat(lamTuDau) {
 // =====================================================
 async function chay(lamTuDau) {
   if (S.dangChay || !S.tepVideo) return;
+  if (!(await kiemTraVao())) return; // tài khoản hết hạn / bị thu hồi → không cho chạy
   if (!caiDat.khoa && !duPhong.coDuPhong()) {
     alert("Cần dán mã Gemini (hoặc cài dịch vụ dự phòng) trước. Mở Cài đặt nhé.");
     moCaiDat();
@@ -262,6 +265,6 @@ khoiDongCaiDat();
 khoiDongDongBo();
 khoiDongKiemMa();
 ghiMocCaiDat();
-capNhatQuyen();
+khoiDongCuaVao();
 $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));

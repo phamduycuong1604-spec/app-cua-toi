@@ -277,6 +277,13 @@ cd("luu-danh-sach").onclick = () => {
 
 // ----- 3. QUẢN TRỊ: QUẢN LÝ TÀI KHOẢN -----
 
+// "· dùng đến 20/11/2026" / "· ĐÃ HẾT HẠN 20/10/2026" / "· không giới hạn"
+function moTaHan(hetHan) {
+  if (!hetHan) return "· không giới hạn";
+  const ngay = new Date(hetHan).toLocaleDateString("vi-VN");
+  return hetHan <= Date.now() ? `· ĐÃ HẾT HẠN ${ngay}` : `· dùng đến ${ngay}`;
+}
+
 async function taiDanhSachNguoiDung() {
   const khung = cd("nguoi-dung");
   khung.innerHTML = `<p class="tom-tat">Đang tải…</p>`;
@@ -300,9 +307,31 @@ async function taiDanhSachNguoiDung() {
     const ten = document.createElement("b");
     ten.textContent = nguoi.ten + " ";
     const phu = document.createElement("small");
-    phu.textContent = nguoi.quanTri ? "· quản trị" : "";
+    phu.textContent = nguoi.quanTri ? "· quản trị" : moTaHan(nguoi.hetHan);
+    if (!nguoi.quanTri && nguoi.hetHan && nguoi.hetHan <= Date.now()) phu.style.color = "#c0392b";
     ten.appendChild(phu);
     dong.appendChild(ten);
+
+    // Gia hạn: cộng thêm số ngày (tính từ hạn cũ nếu còn, không thì từ hôm nay); 0 = không giới hạn
+    if (!nguoi.quanTri) {
+      const nutHan = document.createElement("button");
+      nutHan.className = "nut-nho";
+      nutHan.textContent = "Gia hạn";
+      nutHan.onclick = async () => {
+        const nhap = prompt(`Gia hạn cho "${nguoi.ten}" thêm bao nhiêu ngày?
+(0 = không giới hạn)
+Hiện tại: ${moTaHan(nguoi.hetHan).replace(/^· /, "")}`, "30");
+        if (nhap === null || nhap.trim() === "") return;
+        try {
+          const { hetHan } = await goiMayChu("/quan-tri/gia-han", { cach: "POST", than: { ten: nguoi.ten, soNgay: Number(nhap) } });
+          alert(`Đã gia hạn "${nguoi.ten}": ${moTaHan(hetHan).replace(/^· /, "")}`);
+          taiDanhSachNguoiDung();
+        } catch (loi) {
+          alert(loi.message);
+        }
+      };
+      dong.appendChild(nutHan);
+    }
 
     const nutDatLai = document.createElement("button");
     nutDatLai.className = "nut-nho";
@@ -342,11 +371,12 @@ cd("tao-tai-khoan").onclick = async () => {
   const ten = cd("ten-moi").value.trim();
   const matKhau = cd("mk-nguoi-moi").value;
   try {
-    await goiMayChu("/quan-tri/nguoi-dung", {
+    const { hetHan } = await goiMayChu("/quan-tri/nguoi-dung", {
       cach: "POST",
-      than: { ten, matKhau, quanTri: cd("la-quan-tri").checked },
+      than: { ten, matKhau, quanTri: cd("la-quan-tri").checked, soNgay: Number(cd("thoi-han").value) },
     });
-    alert(`Đã tạo tài khoản!\n\nGửi cho người dùng:\n• Link app: ${location.origin + location.pathname}\n• Tên đăng nhập: ${ten.toLowerCase()}\n• Mật khẩu: ${matKhau}\n\nNhắc họ vào ⚙️ Cài đặt để đổi mật khẩu.`);
+    const han = cd("la-quan-tri").checked ? "không giới hạn (quản trị)" : moTaHan(hetHan).replace(/^· /, "");
+    alert(`Đã tạo tài khoản!\n\nGửi cho người dùng:\n• Link app: ${location.origin + location.pathname}\n• Link dịch video: ${location.origin + location.pathname.replace(/[^/]*$/, "")}dich-video/\n• Tên đăng nhập: ${ten.toLowerCase()}\n• Mật khẩu: ${matKhau}\n• Thời hạn: ${han}\n\nNhắc họ đổi mật khẩu sau khi đăng nhập.`);
     cd("ten-moi").value = cd("mk-nguoi-moi").value = "";
     cd("la-quan-tri").checked = false;
     taiDanhSachNguoiDung();
