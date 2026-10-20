@@ -1,4 +1,3 @@
-import { DIA_CHI_MAY_CHU, siteFetch as fetch, siteCapabilities, assertRunning } from "./site-bridge.js";
 // =====================================================
 // DỰ PHÒNG KHI GEMINI HẾT LƯỢT: nghe tiếng Trung + dịch sang tiếng Việt
 // bằng các dịch vụ miễn phí khác.
@@ -13,7 +12,9 @@ const DEEPSEEK = "https://api.deepseek.com";
 const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|字幕提供|字幕志愿者|明镜与点点|Amara|中文字幕|感谢观看|感謝觀看/;
 
 // Câu "dịch" mà vẫn còn chữ Trung (AI chép lại nguyên văn) = chưa dịch
-export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 1;
+import { KENH, thuatNguKenh } from "./chuyen-mon.js";
+
+export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 2;
 
 // AI dịch xong nhưng chèn kèm chữ Trung (vd "màu nghệ (姜黄色)") → bỏ phần chữ Trung, giữ lời Việt.
 // Chỉ bỏ khi lời Việt đã đủ dài; còn lại (chép nguyên câu gốc) giữ nguyên để bị coi là chưa dịch.
@@ -24,10 +25,44 @@ export function boChuTrung(x) {
   return s;
 }
 
-export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () => "" }) {
-  const mayChu = typeof DIA_CHI_MAY_CHU === "string" ? DIA_CHI_MAY_CHU : "";
-  const ve=()=>"";
-  const coMayChu = () => !!(mayChu && (siteCapabilities.cloudflare || caiDat.dp.cfKey && caiDat.dp.cfAccount) && caiDat.dp.cf);
+// Từ điển thuật ngữ người dùng tự ghi (mỗi dòng: 中文 = tiếng Việt) → danh sách cặp
+export function docTuDien(chu) {
+  const ra = [];
+  for (const dong of String(chu || "").split(/\n/)) {
+    const m = dong.match(/^\s*(.+?)\s*(?:=>|->|→|=|:|：|\t)\s*(.+?)\s*$/);
+    if (m && m[1] && m[2]) ra.push([m[1], m[2]]);
+  }
+  return ra;
+}
+// Lời dặn thêm cho AI dịch: chuyên môn của kênh + quy tắc riêng + chủ đề video + thuật ngữ bắt buộc.
+// Có chữ gốc thì chỉ gửi thuật ngữ xuất hiện trong đó (đỡ dài lời nhắc); không có thì gửi tối đa 80 từ.
+export function loiDanThem(caiDat, chuGoc) {
+  const phan = [];
+  const idKenh = Object.hasOwn(KENH, caiDat.kenh || "") ? caiDat.kenh : "general";
+  const kenh = KENH[idKenh];
+  if (kenh.rules) phan.push(`Kênh "${kenh.label}" (${kenh.description}) – quy tắc dịch: ${kenh.rules}`);
+  const rieng = String(caiDat.quyTacRieng?.[idKenh] || "").trim();
+  if (rieng) phan.push(`Quy tắc riêng của người dùng – ƯU TIÊN CAO NHẤT, làm đúng theo (kể cả cách xưng hô), nếu trái với lời dặn khác thì theo quy tắc này:\n${rieng.slice(0, 3000)}`);
+  const chuDe = String(caiDat.chuDe || "").trim();
+  if (chuDe) phan.push(`Chủ đề / lĩnh vực của video: ${chuDe}. Dùng đúng thuật ngữ chuyên ngành tiếng Việt của lĩnh vực này, đúng cách người trong nghề hay nói; không dịch từng chữ.`);
+  // Từ điển người dùng tự ghi được ưu tiên hơn thuật ngữ có sẵn của kênh
+  const tuDien = new Map(thuatNguKenh(idKenh));
+  for (const [zh, vi] of docTuDien(caiDat.tuDien)) { tuDien.delete(zh); tuDien.set(zh, vi); }
+  let tu = [...tuDien].reverse();
+  if (chuGoc != null) tu = tu.filter(([zh]) => chuGoc.includes(zh));
+  if (tu.length) phan.push("BẮT BUỘC dịch các từ sau đúng như bảng (không dùng từ khác):\n" + tu.slice(0, 80).map(([zh, vi]) => `${zh} → ${vi}`).join("\n"));
+  return phan.join("\n");
+}
+
+export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
+  const mayChu = location.origin;
+  // Máy chủ là chính trang PHA Rednote (riêng của chủ app) → luôn được đi vòng, không cần đăng nhập
+  const ve = () => "x";
+  const laChu = () => true;
+  const dungMayChu = () => !!mayChu;
+  const coMayChu = () => dungMayChu() && !!caiDat.dp.cf;
+  // Cloudflare Workers AI: trang chưa có sẵn AI thì dùng token + Account ID của chủ app (cài trong Cài đặt)
+  const maCf = () => ({ "X-Cf-Key": caiDat.dp.cfKey || "", "X-Cf-Account": caiDat.dp.cfAccount || "" });
   const quaMayChu = new Set(); // các tên miền phải đi vòng qua máy chủ PHAHA (trình duyệt bị chặn)
 
   // Gọi một dịch vụ bên ngoài; trình duyệt bị chặn thì đi vòng qua máy chủ PHAHA
@@ -44,11 +79,11 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
     }
   }
   async function goiThat(url, tuyChon, ten) {
-    assertRunning();
     const host = new URL(url).hostname;
     const quaMC = async () => {
-      if (!mayChu) throw new Error(`${ten}: trình duyệt bị chặn gọi thẳng, cần đăng nhập app PHAHA để đi vòng qua máy chủ`);
-      return fetch(mayChu + "/ai/chuyen", { ...tuyChon, headers: { ...tuyChon.headers, "X-Dich-Den": url, "X-Cf-Key": caiDat.dp.cfKey||"", "X-Cf-Account": caiDat.dp.cfAccount||"" } });
+      if (!mayChu || !ve()) throw new Error(`${ten}: trình duyệt bị chặn gọi thẳng, cần đăng nhập app PHAHA để đi vòng qua máy chủ`);
+      if (!laChu()) throw new Error(`${ten}: trình duyệt bị chặn gọi thẳng (chỉ chủ app mới được đi vòng qua máy chủ PHAHA)`);
+      return fetch(mayChu + "/ai/chuyen", { ...tuyChon, headers: { ...tuyChon.headers, "X-Dich-Den": url, "X-Ve": ve() } });
     };
     let r;
     if (quaMayChu.has(host)) r = await quaMC();
@@ -57,6 +92,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
         r = await fetch(url, tuyChon);
       } catch (loi) {
         if (loi?.name === "TimeoutError" || loi?.name === "AbortError") throw loi;
+        if (!dungMayChu()) throw new Error(`${ten}: không gọi thẳng được (${loi.message})`);
         nhat(`${ten}: không gọi thẳng được (${loi.message}), thử đi vòng qua máy chủ PHAHA`);
         quaMayChu.add(host);
         r = await quaMC();
@@ -69,7 +105,6 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
     const chu = await r.text().catch(() => "");
     let j = {};
     try { j = JSON.parse(chu); } catch {}
-    if(Array.isArray(j))j=j[0]||{};
     const tb = j.error?.message || j.error?.code || j.loi || j.message || (typeof j.error === "string" ? j.error : "") || chu.slice(0, 200) || r.statusText;
     return Object.assign(new Error(`${ten}: mã ${r.status} · ${String(tb).slice(0, 200)}`), {
       status: r.status,
@@ -114,12 +149,14 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
               f.append("language", "zh");
               f.append("response_format", "verbose_json");
               f.append("temperature", "0");
+              // Gợi ý các thuật ngữ trong từ điển để nghe đúng chữ chuyên môn
+              const goiY = docTuDien(caiDat.tuDien).map(([zh]) => zh).filter((zh) => /[\u3400-\u9fff]/.test(zh)).join("，").slice(0, 200);
+              if (goiY) f.append("prompt", goiY);
               return { method: "POST", headers: { Authorization: "Bearer " + caiDat.dp.groq }, body: f };
             }, "Groq Whisper");
             const j = await r.json();
             dem("groq", Math.round((wav.length - 44) / 32000)); // giây âm thanh đã gửi (16kHz, 1 kênh)
-            if(!Array.isArray(j.segments))throw Error("Groq chưa trả lời thoại có mốc giờ.");
-            return j.segments
+            return (j.segments || [])
               .filter((s) => !(s.no_speech_prob > 0.85 && s.avg_logprob < -1)) // chỉ bỏ đoạn gần như chắc chắn là tiếng ồn
               .map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
           } catch (loi) {
@@ -134,11 +171,10 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       ten: "Cloudflare",
       co: coMayChu,
       async chay(wav, b64) {
-        const r = await fetch(mayChu + "/ai/nghe", { method: "POST", headers: { "Content-Type": "text/plain", "X-Cf-Key": caiDat.dp.cfKey||"", "X-Cf-Account": caiDat.dp.cfAccount||"" }, body: b64 });
+        const r = await fetch(mayChu + "/ai/nghe", { method: "POST", headers: { "Content-Type": "text/plain", ...maCf() }, body: b64 });
         if (!r.ok) throw await docLoi(r, "Cloudflare Whisper");
         const j = await r.json();
-        if(!Array.isArray(j.segments))throw Error("Cloudflare chưa trả lời thoại có mốc giờ.");
-        return j.segments.map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
+        return (j.segments || []).map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
       },
     },
     azure: {
@@ -153,8 +189,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
           return { method: "POST", headers: { "Ocp-Apim-Subscription-Key": caiDat.dv.az.khoa }, body: f };
         }, "Azure nghe");
         const j = await r.json();
-        if(!Array.isArray(j.phrases))throw Error("Azure chưa trả lời thoại có mốc giờ.");
-        return j.phrases.map((p) => ({
+        return (j.phrases || []).map((p) => ({
           start: p.offsetMilliseconds / 1000,
           end: (p.offsetMilliseconds + p.durationMilliseconds) / 1000,
           zh: String(p.text || "").trim(),
@@ -167,10 +202,11 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
   let lanTraLoiCuoi = ""; // câu trả lời thô gần nhất của AI dịch – ghi vào nhật ký khi dịch hỏng để biết vì sao
   function loiNhac(cau) {
     const ds = cau.map((c, i) => `${i + 1}. (${(c.end - c.start).toFixed(1)}s) ${c.zh}`).join("\n");
+    const them = loiDanThem(caiDat, cau.map((c) => c.zh).join("\n"));
     return [
       {
         role: "system",
-        content: chuyenMon()+"\nBạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý từng câu: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Mỗi câu gốc phải có đúng 1 câu dịch, không gộp, không bỏ câu nào. Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; giữ nguyên tên phần mềm, công cụ và tên riêng trong phụ đề; chuẩn hóa phát âm ở bước đọc.",
+        content: "Bạn là biên dịch viên lồng tiếng phim/video từ tiếng Trung sang tiếng Việt. Dịch tự nhiên như người Việt nói, xưng hô hợp ngữ cảnh. Dịch ĐẦY ĐỦ Ý từng câu: không bỏ chi tiết, số liệu, tên gọi, nguyên liệu, bước làm, mẹo, cảm xúc. Diễn đạt gọn để đọc vừa thời lượng ghi trong ngoặc (khoảng 4–5 âm tiết mỗi giây) – chỉ rút gọn CÁCH NÓI, không bỏ Ý. Mỗi câu gốc phải có đúng 1 câu dịch, không gộp, không bỏ câu nào. Không thêm chú thích, không giải thích. Viết sao cho máy đọc tiếng Việt đọc đúng: số viết bằng chữ, không dùng ký hiệu (%, +, &, /, ~, #), không để chữ Trung hay chữ viết tắt tiếng Anh; tên riêng/thương hiệu nước ngoài thì dịch nghĩa hoặc viết theo cách đọc tiếng Việt (vd DIY → tự làm)." + (them ? "\n\n" + them : ""),
       },
       {
         role: "user",
@@ -279,7 +315,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
     deepseek: {
       ten: "DeepSeek",
       co: () => !!caiDat.dp.ds && caiDat.dichBang === "deepseek", // tắt công tắc = không dùng DeepSeek
-      chay: (cau) => chatOpenAI(`${DEEPSEEK}/chat/completions`, caiDat.dp.ds, [caiDat.mhDs||"deepseek-flash"], cau, "DeepSeek dịch", {
+      chay: (cau) => chatOpenAI(`${DEEPSEEK}/chat/completions`, caiDat.dp.ds, ["deepseek-chat"], cau, "DeepSeek dịch", {
         body: () => ({ response_format: { type: "json_object" } }),
       }),
     },
@@ -296,7 +332,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       async chay(cau) {
         const r = await fetch(mayChu + "/ai/dich", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Cf-Key": caiDat.dp.cfKey||"", "X-Cf-Account": caiDat.dp.cfAccount||"" },
+          headers: { "Content-Type": "application/json", ...maCf() },
           body: JSON.stringify({ messages: loiNhac(cau) }),
         });
         if (!r.ok) throw await docLoi(r, "Cloudflare dịch");
@@ -314,7 +350,6 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       ten: "Azure Translator",
       co: () => !!caiDat.dp.azDich,
       async chay(cau) {
-        nhat("Azure Translator dịch dự phòng; không áp dụng được lời nhắc chuyên môn tùy chỉnh.");
         const r = await goiCoThuLai("https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=zh-Hans&to=vi", () => ({
           method: "POST",
           headers: {
@@ -331,6 +366,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
   };
 
   const hong = new Map(); // dịch vụ đã hỏng/hết lượt trong lần chạy này → lỗi của nó
+  let dichBoi = ""; // dịch vụ vừa dịch xong (để nhật ký ghi đúng tên)
   async function thuLanLuot(bang, thuTu, viec, lam) {
     let loiCuoi = null;
     for (const k of thuTu) {
@@ -340,12 +376,13 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
       const bd = Date.now();
       try {
         const kq = await lam(n);
+        if (viec === "dịch") dichBoi = n.ten;
         nhat(`${n.ten} (${viec}): xong sau ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
         return kq;
       } catch (loi) {
         loiCuoi = loi;
         hong.set(viec + k, loi);
-        nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}`);
+        nhat(`↪️ ${n.ten} (${viec}) không dùng được: ${loi.message}${/\b401\b|invalid|Authentication/i.test(loi.message) ? ` → MÃ ${n.ten.toUpperCase()} SAI HOẶC ĐÃ BỊ XOÁ: tạo mã mới rồi dán lại trong ⚙️ Cài đặt` : ""}`);
       }
     }
     if (!loiCuoi) throw new Error(`Chưa cài dịch vụ dự phòng nào để ${viec}. Mở ⚙️ Cài đặt → 🔁 Dự phòng khi Gemini hết lượt, thêm mã Groq (miễn phí).`);
@@ -377,8 +414,10 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
         await thu(n, conLai());
         // còn sót → chia nhóm 5 câu, dịch lại bằng chính dịch vụ này
         for (let lan = 0; lan < 2 && conLai().length; lan++) {
-          const sot = conLai();
-          for (let i = 0; i < sot.length; i += 5) await thu(n, sot.slice(i, i + 5));
+          const sot = conLai(), nhom = [];
+          for (let i = 0; i < sot.length; i += 5) nhom.push(sot.slice(i, i + 5));
+          // gửi 3 nhóm cùng lúc cho nhanh
+          await Promise.all([0, 1, 2].map(async () => { while (nhom.length) await thu(n, nhom.shift()); }));
         }
       } catch (loi) {
         loiCuoi = loi;
@@ -395,13 +434,14 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {}, chuyenMon = () =
     goi, // gọi dịch vụ ngoài (tự đi vòng qua máy chủ PHAHA khi bị chặn) – dùng cho nút Kiểm tra mã
     // Có dịch vụ dự phòng nào dùng được không
     coDuPhong: () => Object.values(NGHE).some((n) => n.co()) && Object.values(DICH).some((n) => n.co()),
-    batDauLanMoi: () => hong.clear(),
+    batDauLanMoi: () => { hong.clear(); dichBoi = ""; },
+    dichBoi: () => dichBoi,
     // Dịch lại những câu chưa dịch được (vd Gemini trả về còn chữ Trung) → mảng lời Việt
     dichBu: dichBuKy,
     // Nghe 1 đoạn âm thanh + dịch → [{start, end, zh, vi}] (giây, tính từ đầu đoạn)
     async ngheVaDich(wav, b64) {
       let cau = await thuLanLuot(NGHE, ["groq", "cloudflare", "azure"], "nghe", (n) => n.chay(wav, b64));
-      cau = cau.filter((c) => c.zh && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start);
+      cau = cau.filter((c) => c.zh && !CAU_AO.test(c.zh) && c.end > c.start);
       if (!cau.length) return [];
       // Dịch từng nhóm tối đa 40 câu, tối đa 3 nhóm cùng lúc (nhóm sau không phải chờ nhóm trước)
       const cacNhom = [];
