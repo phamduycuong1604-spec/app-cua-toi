@@ -1,8 +1,9 @@
 <section id="videoStudio" aria-label="Dịch và lồng tiếng video">
 
+
   <header class="dau-trang">
     <div>
-      <a class="ve-phaha" href="#top">‹ Về PHAHA</a>
+      <a class="ve-phaha" href="#top">‹ Về phần tải video</a>
       <p class="phu-de">Lồng tiếng Trung → Việt</p>
       <!-- PHA_APP_RELEASE -->
       <h2>PhaHa · Dịch video</h2><p id="chuyen-mon-video" class="goi-y"></p><a class="ve-phaha" href="/dub/device-test.html">Kiểm tra trên iPhone ↗</a>
@@ -24,7 +25,7 @@
       </div>
       <p id="tt-tai-link" class="tt-tai-link an"></p>
       <video id="xem-goc" class="khung-video an" controls playsinline></video>
-      <button id="nut-bat-dau" class="nut-chinh an">▶ Bắt đầu dịch & lồng tiếng</button><button id="nut-dung" type="button" class="nut-phu an">Dừng xử lý</button>
+      <button id="nut-bat-dau" class="nut-chinh an">▶ Bắt đầu dịch & lồng tiếng</button>
     </section>
 
     <!-- TUỲ CHỈNH: âm thanh, phụ đề, lớp che, logo (có ô xem thử) -->
@@ -32,6 +33,28 @@
       <h2>🎛️ Tuỳ chỉnh video</h2>
       <canvas id="xem-truoc" class="khung-video"></canvas>
       <p class="goi-y" id="goi-y-xem">Bấm ▶ video ở trên rồi dừng ở đoạn có chữ Trung để căn chỉnh.</p>
+
+      <details class="muc" open>
+        <summary>🎙️ Giọng đọc cho video này</summary>
+        <p class="goi-y">Tích giọng muốn dùng. App đọc theo thứ tự từ trên xuống, giọng trên lỗi hoặc hết lượt thì chuyển giọng dưới. Đây cũng là công tắc trong ⚙️ Cài đặt (đổi ở đâu cũng được, app nhớ cho lần sau).</p>
+        <div id="ds-giong-nhanh" class="ds-giong-nhanh"></div>
+      </details>
+
+      <details class="muc">
+        <summary>📚 Dịch sát nghĩa (chuyên môn, chủ đề & thuật ngữ)</summary>
+        <p class="goi-y">Chuyên môn và quy tắc bổ sung của kênh <b>chọn ở phần “Dán link Rednote” phía trên</b>; phần dịch dùng đúng lựa chọn đó.</p>
+        <p class="goi-y" id="kenh-mo-ta"></p>
+        <details class="kenh-quy-tac">
+          <summary>Quy tắc dịch video của kênh</summary>
+          <p class="goi-y" id="kenh-quy-tac"></p>
+        </details>
+        <p class="goi-y">Ghi thêm chủ đề video và các từ chuyên môn hay gặp – AI dịch sẽ dùng đúng từ bạn ghi. App tự nhớ cho các video sau.</p>
+        <label class="nhan" for="o-chu-de">Chủ đề / lĩnh vực</label>
+        <input id="o-chu-de" class="o-dich" autocomplete="off" placeholder="vd: chăm sóc da, mỹ phẩm Hàn Quốc">
+        <label class="nhan" for="o-tu-dien">Từ điển thuật ngữ (mỗi dòng: chữ Trung = tiếng Việt)</label>
+        <textarea id="o-tu-dien" class="o-dich" rows="5" placeholder="精华 = tinh chất&#10;面膜 = mặt nạ&#10;敏感肌 = da nhạy cảm"></textarea>
+        <label class="cong-tac"><input type="checkbox" id="o-kiem-pd"> ✋ Tự kiểm tra phụ đề (video quan trọng): nghe xong app dừng lại, đưa SRT tiếng Trung để bạn tự dịch rồi dán SRT tiếng Việt vào</label>
+      </details>
 
       <details class="muc" open>
         <summary>🎵 Âm thanh</summary>
@@ -82,6 +105,20 @@
           <div class="truot" data-o="lop.che.h" data-min="2" data-max="60" data-buoc="0.5" data-don-vi="%">Chiều cao</div>
           <div class="truot" data-o="lop.che.w" data-min="5" data-max="100" data-buoc="1" data-don-vi="%">Chiều rộng</div>
         </div>
+        <label class="cong-tac"><input type="checkbox" data-o="lop.che2.bat"> Thêm thanh che thứ 2 (vd tiêu đề chữ Trung ở trên)</label>
+        <div data-hien="lop.che2.bat">
+          <div class="hang-chon">
+            <select data-o="lop.che2.kieu">
+              <option value="mo">Làm mờ</option>
+              <option value="mau">Tô màu</option>
+            </select>
+            <label data-hien="lop.che2.kieu=mau">Màu <input type="color" data-o="lop.che2.mau"></label>
+          </div>
+          <div class="truot" data-o="lop.che2.y" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trên ↔ dưới)</div>
+          <div class="truot" data-o="lop.che2.x" data-min="0" data-max="100" data-buoc="0.5" data-don-vi="%">Vị trí (trái ↔ phải)</div>
+          <div class="truot" data-o="lop.che2.h" data-min="2" data-max="60" data-buoc="0.5" data-don-vi="%">Chiều cao</div>
+          <div class="truot" data-o="lop.che2.w" data-min="5" data-max="100" data-buoc="1" data-don-vi="%">Chiều rộng</div>
+        </div>
       </details>
 
       <details class="muc">
@@ -118,6 +155,23 @@
       <p class="goi-y">Giữ màn hình mở, đừng chuyển sang app khác khi đang chạy.</p>
     </section>
 
+    <!-- Tự kiểm tra phụ đề: chép SRT tiếng Trung, dán SRT tiếng Việt -->
+    <section class="the an" id="the-kiem-pd">
+      <h2>✋ Kiểm tra phụ đề</h2>
+      <p class="goi-y">App đã nghe xong và đang chờ bạn. Tách nhạc nền vẫn chạy ngầm trong lúc chờ.</p>
+      <label class="nhan" for="pd-trung">1. SRT tiếng Trung (gốc)</label>
+      <textarea id="pd-trung" class="o-dich" rows="6" readonly></textarea>
+      <div class="hang-nut">
+        <button type="button" id="nut-chep-trung" class="nut-phu">📋 Chép SRT tiếng Trung</button>
+        <button type="button" id="nut-tai-trung" class="nut-phu">⬇️ Tải file .srt</button>
+      </div>
+      <label class="nhan" for="pd-viet">2. Dán SRT tiếng Việt bạn đã dịch</label>
+      <textarea id="pd-viet" class="o-dich" rows="6" placeholder="1&#10;00:00:01,000 --> 00:00:03,000&#10;Xin chào các bạn&#10;&#10;2&#10;..."></textarea>
+      <p class="goi-y an" id="pd-bao"></p>
+      <button type="button" id="nut-dung-viet" class="nut-chinh">✅ Dùng bản dịch này & lồng tiếng</button>
+      <button type="button" id="nut-bo-qua-pd" class="nut-phu">⏩ Giữ bản dịch của app & lồng tiếng</button>
+    </section>
+
     <!-- Kết quả -->
     <section class="the an" id="the-ket-qua">
       <h2>🎉 Video đã lồng tiếng</h2>
@@ -129,12 +183,10 @@
     <!-- NHẬT KÝ: ghi lại quá trình chạy gần nhất -->
     <section class="the">
       <details class="nhat-ky">
-        <summary>📋 Nhật ký xử lý</summary>
+        <summary>📋 Nhật ký lần chạy gần nhất</summary>
         <p class="goi-y">Gặp lỗi hoặc chạy chậm: bấm Sao chép rồi dán gửi người hỗ trợ.</p>
         <pre id="o-nhat-ky"></pre>
         <button type="button" id="nut-chep-nhat-ky" class="nut-phu nut-nho">📋 Sao chép nhật ký</button>
-        <button type="button" id="nut-xoa-nhat-ky" class="nut-phu nut-nho">🗑 Xóa toàn bộ nhật ký</button>
-        <p id="tt-nhat-ky" class="goi-y" role="status"></p>
       </details>
     </section>
 
@@ -153,14 +205,13 @@
   <!-- CÀI ĐẶT -->
   <dialog id="hop-cai-dat" class="hop">
     <form method="dialog">
-      <h2>⚙️ Cài đặt dịch video</h2>
-      <details class="muc-dp"><summary>🔊 Thứ tự giọng đọc</summary><div id="thu-tu-giong"></div></details>
+      <h2>⚙️ Cài đặt</h2>
 
       <details class="muc-dp" id="muc-dong-bo">
         <summary>🔄 Đồng bộ cài đặt giữa các máy</summary>
         <p class="goi-y" id="tt-dong-bo"></p>
         <label class="nhan">Mật khẩu đồng bộ</label>
-        <input id="o-mk-dong-bo" type="password" autocomplete="new-password" placeholder="Tự đặt (≥ 10 ký tự), nhập giống nhau ở mọi máy">
+        <input id="o-mk-dong-bo" type="password" autocomplete="new-password" placeholder="Tự đặt (≥ 6 ký tự), nhập giống nhau ở mọi máy">
         <label class="cong-tac"><input type="checkbox" id="o-tu-dong-bo"> Tự đồng bộ (mở app thì lấy bản mới, lưu thì gửi lên)</label>
         <button type="button" id="nut-dong-bo" class="nut-phu">🔄 Đồng bộ ngay</button>
         <button type="button" id="nut-khoi-phuc-cd" class="nut-phu">♻️ Khôi phục cài đặt cũ</button>
@@ -263,7 +314,7 @@
         <label class="cong-tac"><input type="checkbox" id="bat-gemini"> Dùng Gemini</label>
         <label class="nhan">Mã Gemini riêng cho giọng đọc (không bắt buộc)</label>
         <input id="o-khoa-doc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên · dán tối đa 10 mã, cách nhau dấu phẩy">
-        <p class="goi-y">Dán <b>mã miễn phí</b> riêng vào đây. Mã này <b>chỉ dùng để đọc</b> tiếng Việt; nghe & dịch vẫn dùng mã miễn phí ở trên.<br>Lưu ý: tạo mã này trong <b>dự án mới</b> (aistudio.google.com → Create API key → <i>Create in new project</i>) thì mới có lượt miễn phí riêng, không dùng chung lượt với mã ở trên.</p>
+        <p class="goi-y">Mã này <b>chỉ dùng để đọc</b> tiếng Việt; nghe & dịch vẫn dùng mã ở trên.<br>• <b>Mã miễn phí</b>: tạo trong <b>dự án mới</b> (aistudio.google.com → Create API key → <i>Create in new project</i>) để có lượt riêng (~15 lượt/ngày).<br>• <b>Mã trả phí</b> (không giới hạn 15 lượt): tạo mã trong dự án Google Cloud <b>đã gắn thanh toán</b>. Mua xong bấm Lưu để app quên giới hạn cũ của mã.</p>
         <label class="nhan">Giọng mặc định</label>
         <select id="o-giong">
           <option value="Kore">Nữ – rõ ràng, chắc chắn (Kore)</option>
@@ -335,7 +386,7 @@
       </details>
 
       <details class="dv-doc" data-dv="fish">
-        <summary>5. Fish Audio <span class="tt" id="tt-fish"></span></summary>
+        <summary>5. Fish Audio (miễn phí) <span class="tt" id="tt-fish"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-fish"> Dùng Fish Audio</label>
         <label class="nhan">Mã Fish Audio (API key)</label>
         <input id="o-khoa-fish" type="password" autocomplete="off" placeholder="Dán mã API">
@@ -352,7 +403,7 @@
           <button type="button" id="nut-tai-giong-fish" class="nut-phu nut-nho">🔄 Tải danh sách giọng</button>
           <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="fish">🔊 Nghe thử</button>
         </div>
-        <p class="goi-y">Dùng bản Fish Audio (hạn mức theo tài khoản). Danh sách là các giọng Việt được dùng nhiều nhất. Cần đăng nhập app PHAHA (đi qua máy chủ PHAHA).</p>
+        <p class="goi-y">Dùng bản S2.1 Pro Free (miễn phí, giới hạn "dùng hợp lý"). Danh sách là các giọng Việt được dùng nhiều nhất. Cần đăng nhập app PHAHA (đi qua máy chủ PHAHA).</p>
       </details>
 
       <details class="dv-doc" data-dv="az">
@@ -395,12 +446,12 @@
         <div class="hang-nut-giong">
           <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="edge">🔊 Nghe thử</button>
         </div>
-        <p class="goi-y">Giọng "Đọc to" của trình duyệt Edge: không cần mã, hạn mức do Microsoft quyết định. Không chính thức – Microsoft có thể chặn bất cứ lúc nào. Cần đăng nhập app PHAHA.</p>
+        <p class="goi-y">Giọng "Đọc to" của trình duyệt Edge: không cần mã, gần như không giới hạn. Không chính thức – Microsoft có thể chặn bất cứ lúc nào. Cần đăng nhập app PHAHA.</p>
       </details>
 
       <details class="dv-doc" data-dv="gc">
         <summary>Thêm: Google Cloud (không bắt buộc) <span class="tt" id="tt-gc"></span></summary>
-        <label class="cong-tac"><input type="checkbox" id="bat-gc"> Dùng Google Cloud (đứng sau Azure)</label>
+        <label class="cong-tac"><input type="checkbox" id="bat-gc"> Dùng Google Cloud (đọc sau Gemini, ElevenLabs, Viettel)</label>
         <label class="nhan">Mã Google Cloud</label>
         <input id="o-khoa-gc" type="password" autocomplete="off" placeholder="Để trống = dùng mã Gemini ở trên">
         <label class="nhan">Giọng mặc định</label>
@@ -428,8 +479,11 @@
         <input id="o-dp-groq" type="password" autocomplete="off" placeholder="gsk_...">
         <p class="goi-y">Vào <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → đăng nhập Google → <b>Create API Key</b> → sao chép. Không cần thẻ.</p>
 
-        <label class="nhan">2. Cloudflare</label><label class="nhan">Cloudflare API token</label><input id="o-dp-cf-key" type="password" autocomplete="off"><label class="nhan">Cloudflare Account ID</label><input id="o-dp-cf-account" autocomplete="off"><p class="goi-y"><a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Lấy token Workers AI và Account ID</a></p>
-        <label class="cong-tac"><input type="checkbox" id="o-dp-cf"> Dùng AI của máy chủ PHAHA</label>
+        <label class="nhan">2. Cloudflare (đi qua máy chủ của trang này)</label>
+        <label class="cong-tac"><input type="checkbox" id="o-dp-cf"> Dùng Cloudflare Workers AI</label>
+        <label class="nhan">Cloudflare API token (bỏ trống nếu trang đã có sẵn AI)</label><input id="o-dp-cf-key" type="password" autocomplete="off">
+        <label class="nhan">Cloudflare Account ID</label><input id="o-dp-cf-account" autocomplete="off">
+        <p class="goi-y"><a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Lấy token Workers AI và Account ID</a></p>
         <p class="goi-y" id="chu-dp-cf"></p>
 
         <label class="nhan">3. Azure (dùng mã Azure ở phần giọng đọc)</label>
@@ -448,7 +502,6 @@
 
       <details>
         <summary>Nâng cao</summary>
-        <label class="nhan">Mô hình DeepSeek</label><input id="o-mh-ds" placeholder="deepseek-flash">
         <label class="nhan">Mô hình nghe & dịch</label>
         <input id="o-mh-nghe" placeholder="gemini-flash-latest">
         <label class="nhan">Mô hình đọc (Gemini)</label>
@@ -461,7 +514,4 @@
       </div>
     </form>
   </dialog>
-
-
-
 </section>

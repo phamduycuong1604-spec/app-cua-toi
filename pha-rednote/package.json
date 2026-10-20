@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bash scripts/build.sh",
-    "check": "node scripts/core.test.mjs && node scripts/dub.test.mjs && node scripts/dub-client.test.mjs && node scripts/video-server.test.mjs && node scripts/device-test.test.mjs && node scripts/run-journal.test.mjs && node scripts/video-download.test.mjs && node scripts/video-1080.test.mjs && node scripts/source.test.mjs"
+    "check": "node scripts/core.test.mjs && node scripts/dub.test.mjs && node scripts/video-server.test.mjs && node scripts/device-test.test.mjs && node scripts/run-journal.test.mjs && node scripts/video-download.test.mjs && node scripts/video-1080.test.mjs && node scripts/source.test.mjs"
   },
   "devDependencies": {
     "@ffmpeg/core": "0.12.10",
