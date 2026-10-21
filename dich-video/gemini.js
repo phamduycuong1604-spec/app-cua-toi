@@ -17,6 +17,10 @@ const moHinhDung = {}; // loại đã chạy được gần nhất → lần sau
 let moHinhDocCoDinh = null;
 export const moHinhDocDaChot = () => moHinhDocCoDinh;
 export const chotMoHinhDoc = (mh) => (moHinhDocCoDinh = mh);
+// Loại Gemini đã chốt mà hết lượt ở MỌI mã → bỏ hẳn loại đó trong lần chạy này, đọc lại cả video bằng loại khác
+const moHinhDocBo = new Set();
+export const boMoHinhDoc = (mh) => moHinhDocBo.add(mh);
+export const moHinhDocBiBo = (mh) => moHinhDocBo.has(mh);
 
 // ----- Ghi nhớ "loại Gemini nào hết lượt/ngừng" theo từng mã, lưu trên máy để lần sau khỏi thử lại -----
 const moHinhNghi = new Set();
@@ -43,6 +47,7 @@ function luuMoHinhNghi(m, giay) {
 // Bắt đầu 1 lần chạy mới: nạp lại ghi nhớ, nhật ký "bỏ qua" ghi lại từ đầu
 export function batDauLanMoiGemini() {
   daBaoNghi = new Set();
+  moHinhDocBo.clear();
   napMoHinhNghi();
 }
 // Đổi mã / bấm Lưu (có thể vừa nâng mã lên trả phí) → quên mọi ghi nhớ hết lượt để thử lại thật
@@ -92,7 +97,8 @@ async function goiMotMa(loai, noiDung, tuyChon = {}) {
   const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
   if (tuChon) return goiMoHinh(tuChon, noiDung, loai, tuyChon);
   const coDinh = loai === "doc" ? moHinhDocCoDinh : null;
-  let ds = coDinh ? [coDinh] : [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
+  const conDung = (m) => loai !== "doc" || !moHinhDocBo.has(m);
+  let ds = coDinh ? [coDinh] : [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))].filter(conDung);
   let daHoi = !!coDinh, loiCuoi = null, hetNgay = null;
   for (let i = 0; i < ds.length; i++) {
     // luồng đọc khác vừa chốt loại Gemini cho video → bỏ danh sách cũ, chỉ dùng loại đã chốt
@@ -141,7 +147,7 @@ async function goiMotMa(loai, noiDung, tuyChon = {}) {
     // Hết danh sách: hỏi Google xem hiện có loại nào khác
     if (i === ds.length - 1 && !daHoi) {
       daHoi = true;
-      ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t)));
+      ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t) && conDung(t)));
     }
   }
   // Có loại báo hết lượt hôm nay (các loại khác ngừng/không có) → coi là mã này hết lượt, để xoay sang mã kế tiếp
