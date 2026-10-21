@@ -4,7 +4,7 @@
 // - Mỗi lần mở app và mỗi lần bấm Bắt đầu: hỏi lại máy chủ (chủ app vừa gia hạn / thu hồi là có hiệu lực ngay)
 // - Đăng nhập dùng chung với app PHAHA (cùng tài khoản, cùng vé đăng nhập trên máy này)
 // =====================================================
-import { $, coMayChu, mayChu, veDangNhap, nhat } from "./nen.js";
+import { $, coMayChu, mayChu, veDangNhap, nhat, chuyenCaiDatTheoTaiKhoan } from "./nen.js";
 
 const ngay = (ms) => new Date(ms).toLocaleDateString("vi-VN");
 const hanLuu = () => { try { return Number(localStorage.getItem("han-dung")) || 0; } catch { return 0; } };
@@ -18,6 +18,13 @@ function ghiTaiKhoan({ ve, ten, quanTri, hetHan }) {
 }
 function xoaTaiKhoan() {
   try { for (const k of ["ve-dang-nhap", "la-quan-tri", "han-dung"]) localStorage.removeItem(k); } catch {}
+}
+// Đổi tài khoản trên máy này → cất cài đặt (mã API…) của người cũ, nạp của người mới, tải lại trang
+function napLaiNeuDoiTaiKhoan(loiNhan = "") {
+  if (!chuyenCaiDatTheoTaiKhoan()) return false;
+  try { if (loiNhan) sessionStorage.setItem("dn-bao", loiNhan); } catch {}
+  location.reload();
+  return true;
 }
 
 function moCua() {
@@ -40,13 +47,14 @@ function dongCua(lyDo) {
 // Mất mạng / máy chủ không trả lời → tin hạn dùng đã lưu trên máy (không khoá oan khi mạng chập chờn)
 export async function kiemTraVao() {
   if (!coMayChu()) return true; // bản chạy không có máy chủ PHAHA (vd tự cài riêng) → không khoá
-  if (!veDangNhap()) { dongCua(""); return false; }
+  if (!veDangNhap()) { dongCua($("dn-bao").textContent); return false; } // giữ lời nhắn đang hiện (vd vừa hết hạn)
   try {
     const r = await fetch(mayChu() + "/tai-khoan/toi", { cache: "no-store", headers: { Authorization: "Bearer " + veDangNhap() } });
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 || r.status === 403) {
       xoaTaiKhoan();
-      dongCua(j.loi || "Phiên đăng nhập đã hết hạn, hãy đăng nhập lại.");
+      const loiNhan = j.loi || "Phiên đăng nhập đã hết hạn, hãy đăng nhập lại.";
+      if (!napLaiNeuDoiTaiKhoan(loiNhan)) dongCua(loiNhan);
       return false;
     }
     if (r.ok) ghiTaiKhoan(j);
@@ -72,6 +80,7 @@ async function dangNhap() {
     if (!r.ok) throw new Error(j.loi || `Máy chủ báo lỗi ${r.status}`);
     ghiTaiKhoan(j);
     $("o-dn-mk").value = "";
+    if (napLaiNeuDoiTaiKhoan()) return;
     nhat(`👤 Đăng nhập: ${j.ten}${j.hetHan ? ` (dùng đến ${ngay(j.hetHan)})` : ""}`);
     moCua();
   } catch (loi) {
@@ -86,15 +95,19 @@ async function dangXuat() {
   if (!confirm("Đăng xuất khỏi app trên máy này?")) return;
   fetch(mayChu() + "/tai-khoan/dang-xuat", { method: "POST", headers: { Authorization: "Bearer " + veDangNhap() } }).catch(() => {});
   xoaTaiKhoan();
-  dongCua("");
+  if (!napLaiNeuDoiTaiKhoan()) dongCua("");
 }
 
 export function khoiDongCuaVao() {
   $("nut-dang-nhap").addEventListener("click", dangNhap);
   $("o-dn-mk").addEventListener("keydown", (e) => { if (e.key === "Enter") dangNhap(); });
   $("nut-dang-xuat").addEventListener("click", dangXuat);
+  // Lời nhắn từ trước khi tải lại trang (vd hết hạn)
+  let loiNhan = "";
+  try { loiNhan = sessionStorage.getItem("dn-bao") || ""; sessionStorage.removeItem("dn-bao"); } catch {}
+  if (loiNhan) dongCua(loiNhan);
   // Hết hạn sẵn trên máy → khoá ngay, không chờ hỏi máy chủ
   const han = hanLuu();
-  if (coMayChu() && (!veDangNhap() || (han && han <= Date.now()))) dongCua(veDangNhap() ? `Tài khoản đã hết hạn dùng từ ngày ${ngay(han)}. Liên hệ chủ app để gia hạn.` : "");
+  if (coMayChu() && (!veDangNhap() || (han && han <= Date.now()))) dongCua(veDangNhap() ? `Tài khoản đã hết hạn dùng từ ngày ${ngay(han)}. Liên hệ chủ app để gia hạn.` : loiNhan);
   return kiemTraVao();
 }

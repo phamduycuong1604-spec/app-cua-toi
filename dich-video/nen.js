@@ -19,7 +19,42 @@ export function ghiLuu(ten, giaTri) {
   try { localStorage.setItem(ten, JSON.stringify(giaTri)); } catch {}
 }
 
-// ----- CÀI ĐẶT (lưu trên máy) -----
+// ----- CÀI ĐẶT RIÊNG TỪNG TÀI KHOẢN trên cùng 1 máy -----
+// Mã API, mật khẩu đồng bộ, logo… lưu theo TÀI KHOẢN đang đăng nhập: đổi tài khoản / đăng xuất thì cất bộ cũ đi
+// (vẫn trên máy này, để người đó đăng nhập lại là có), nạp bộ của tài khoản mới → khách mượn máy không thấy mã của bạn.
+const CAI_DAT_RIENG = ["phaha-dv-cai-dat", "phaha-dv-logo", "phaha-dv-dong-bo", "phaha-dv-sao-luu", "phaha-dv-nhat-ky"];
+export function taiKhoanDangDung() {
+  try {
+    if (!localStorage.getItem("ve-dang-nhap")) return ""; // chưa đăng nhập
+    return localStorage.getItem("ten-dang-nhap") || (localStorage.getItem("la-quan-tri") === "1" ? "__quan-tri" : "__khach");
+  } catch { return ""; }
+}
+export function chuyenCaiDatTheoTaiKhoan() {
+  try {
+    const moi = taiKhoanDangDung();
+    let cu = localStorage.getItem("phaha-dv-cai-dat-cua");
+    // Lần đầu (bản cũ chưa ghi của ai): cài đặt đang có là của chủ app, trừ khi chủ app đang đăng nhập thì là của chính họ
+    if (cu === null) cu = moi && localStorage.getItem("la-quan-tri") === "1" ? moi : "__quan-tri";
+    if (cu === moi) return localStorage.setItem("phaha-dv-cai-dat-cua", moi), false;
+    // Cất bộ của tài khoản cũ
+    const cat = {};
+    for (const k of CAI_DAT_RIENG) { const v = localStorage.getItem(k); if (v !== null) cat[k] = v; localStorage.removeItem(k); }
+    if (cu && Object.keys(cat).length) localStorage.setItem("phaha-dv-cai-dat@" + cu, JSON.stringify(cat));
+    // Nạp bộ của tài khoản mới (chủ app đăng nhập lần đầu theo tên → lấy bộ đã cất lúc chưa biết tên)
+    let nap = localStorage.getItem("phaha-dv-cai-dat@" + moi);
+    if (!nap && moi && localStorage.getItem("la-quan-tri") === "1" && localStorage.getItem("phaha-dv-cai-dat@__quan-tri")) {
+      nap = localStorage.getItem("phaha-dv-cai-dat@__quan-tri");
+      localStorage.removeItem("phaha-dv-cai-dat@__quan-tri");
+    }
+    if (nap) for (const [k, v] of Object.entries(JSON.parse(nap))) localStorage.setItem(k, v);
+    if (moi) localStorage.removeItem("phaha-dv-cai-dat@" + moi);
+    localStorage.setItem("phaha-dv-cai-dat-cua", moi);
+    return true;
+  } catch { return false; }
+}
+chuyenCaiDatTheoTaiKhoan(); // trước khi đọc cài đặt bên dưới
+
+// ----- CÀI ĐẶT (lưu trên máy, của tài khoản đang đăng nhập) -----
 export const caiDat = Object.assign(
   { khoa: "", khoaDoc: "", dichBang: "gemini", giong: "Kore", amGoc: 15, mhNghe: "", mhDoc: "", dv: {}, tachNhac: false, mhTach: "nhanh", amNen: 90, chuDe: "", tuDien: "", kiemPd: false, kenh: KENH_MAC_DINH },
   docLuu("phaha-dv-cai-dat")
