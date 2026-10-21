@@ -7,7 +7,7 @@ import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { goiGemini, moHinhDocDaChot, chotMoHinhDoc, boMoHinhDoc, moHinhDocBiBo, conLuotGeminiDoc } from "./gemini.js";
+import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, uuTienMoHinh } from "./doc-gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
@@ -62,28 +62,11 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
 }
 
 // ----- Gemini -----
-async function docGemini(chu, lan = 0) {
-  const tl = await goiGemini("doc", {
-    // Chỉ gửi đúng câu cần đọc. Không kèm lời dặn kiểu "Đọc bằng tiếng Việt…" vì các mẫu Gemini đọc giọng
-    // mới (3.x) đọc to luôn cả lời dặn vào video. Tốc độ đã có app tự chỉnh khi xếp giọng vào video.
-    contents: [{ parts: [{ text: chu }] }],
-    generationConfig: {
-      responseModalities: ["AUDIO"],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
-    },
-  });
-  if (tl.moHinh) (globalThis.__phahaMhDoc ||= []).push(tl.moHinh); // để bộ kiểm tra xem cả video có cùng 1 loại không
-  const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-  if (!phan) {
-    // Gemini thỉnh thoảng trả lời mà không kèm tiếng (lỗi ngẫu nhiên) → gửi lại câu đó
-    if (lan < 2) { nhat(`Gemini đọc thiếu tiếng (${tl.candidates?.[0]?.finishReason || "?"}) → gửi lại câu này`); return docGemini(chu, lan + 1); }
-    throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
-  }
-  const byte = tuBase64(phan.inlineData.data);
-  return {
-    pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
-    tanSo: Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || TAN_SO_DOC,
-  };
+// Gemini: xếp hàng, chọn mã + loại, chờ / đổi mã khi bị giới hạn – xem doc-gemini.js
+async function docGemini(chu) {
+  const kq = await docGeminiTTS(chu);
+  (globalThis.__phahaMhDoc ||= []).push(kq.moHinh); // để bộ kiểm tra xem loại Gemini đã đọc từng đoạn
+  return kq;
 }
 
 // ----- Google Cloud Text-to-Speech -----
@@ -384,7 +367,7 @@ function docMayMotLan(chu) {
 // =====================================================
 export const DICH_VU = {
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven, cungLuc: 2 },
-  gemini: { ten: "Gemini", doc: docGemini, cungLuc: 3 },
+  gemini: { ten: "Gemini", doc: docGemini, get cungLuc() { return soLuongDocGemini(); } }, // mã miễn phí: 1 yêu cầu mỗi lúc
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
@@ -449,28 +432,28 @@ export async function docCau(chu, dv) {
   if (!chu) return new Float32Array(0);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
-  // Giọng Gemini đã đọc ở lần trước: chỉ dùng lại nếu cùng loại Gemini với cả video (giọng khỏi lệch)
+  // Đoạn đã đọc thành công ở lần trước → dùng lại luôn, không tốn lượt (Gemini: ưu tiên loại đã đọc đoạn đó cho giọng đồng nhất)
   const daCo = khoGiong.get(khoa);
-  if (daCo && (dv !== "gemini" || (!moHinhDocBiBo(daCo.mh) && (!moHinhDocDaChot() || daCo.mh === moHinhDocDaChot())))) {
-    if (dv === "gemini" && !moHinhDocDaChot()) chotMoHinhDoc(daCo.mh);
+  if (daCo) {
+    if (dv === "gemini") uuTienMoHinh(daCo.mh);
     return daCo.mau;
   }
   const kq = await DICH_VU[dv].doc(chu);
   let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
-  khoGiong.set(khoa, { mau, mh: dv === "gemini" ? moHinhDocDaChot() : "" });
+  khoGiong.set(khoa, { mau, mh: kq.moHinh || "" });
   return mau;
 }
 
-// Gemini: gộp các câu sát nhau (tối đa ~40 giây) vào 1 lần đọc: ít lượt hơn → đỡ phải chờ giới hạn mỗi phút và đỡ tốn lượt ngày.
+// Gemini: gộp các câu cách nhau dưới 1,2 giây (tối đa ~40 giây) vào 1 lần đọc: ít lượt hơn → đỡ phải chờ giới hạn mỗi phút và đỡ tốn lượt ngày.
 // Các dịch vụ khác tính theo số chữ nên đọc từng câu cho khớp miệng.
 function chiaNhom(cau, dv) {
   if (dv !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
   const nhom = [];
   for (const c of cau) {
     const cuoi = nhom[nhom.length - 1];
-    if (cuoi && c.start - cuoi.end < 0.8 && c.end - cuoi.start <= 40) {
+    if (cuoi && c.start - cuoi.end < 1.2 && c.end - cuoi.start <= 40) {
       cuoi.end = Math.max(cuoi.end, c.end);
       cuoi.vi += " " + c.vi.trim();
     } else {
@@ -504,17 +487,16 @@ async function longTiengThu() {
         await taiDsGiong(dv);
         nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
       }
-      // Gemini đọc bằng mã miễn phí: ~15 lượt/ngày → video dài sẽ hết lượt giữa chừng sau vài phút chờ.
-      // Tính trước số lượt cần; không đủ lượt hôm nay thì bỏ qua luôn. Đủ lượt thì vẫn dùng (chậm hơn nhưng giọng tốt).
+      // Gemini mã miễn phí: ~10 lượt/ngày mỗi loại. Tính trước số lượt cần; biết chắc không đủ (hoặc đã hết sạch) thì bỏ qua ngay
       if (dv === "gemini" && ke) {
-        const can = chiaNhom(cauDocDuoc(), "gemini").length, con = conLuotGeminiDoc();
+        const can = chiaNhom(cauDocDuoc(), "gemini").length, con = luotDocConLai();
         if (con !== null && can > con) {
-          nhat(`⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mã miễn phí chỉ còn ~${con} lượt hôm nay → đọc thẳng bằng ${ke}`);
+          nhat(con ? `⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mọi mã chỉ còn ~${con} lượt hôm nay → đọc thẳng bằng ${ke}` : `⏩ Bỏ qua Gemini: mọi loại Gemini ở mọi mã đã hết lượt hôm nay → đọc thẳng bằng ${ke}`);
           loiCuoi = new Error("HET_NGAY");
           continue;
         }
       }
-      return await longTiengBang(dv);
+      return await longTiengBangThat(dv);
     } catch (loi) {
       loiCuoi = loi;
       if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
@@ -524,24 +506,9 @@ async function longTiengThu() {
   throw loiCuoi;
 }
 
-async function longTiengBang(dv) {
-  if (dv !== "gemini") return longTiengBangThat(dv);
-  // Giữ 1 loại Gemini cho cả video; loại đó hết lượt ở mọi mã (vd 2.5 hết mà 3.1 còn) → bỏ loại đó,
-  // đọc lại CẢ video bằng loại khác (giọng vẫn đồng nhất) thay vì bỏ Gemini chuyển sang giọng máy
-  for (let lan = 0; ; lan++) {
-    try {
-      return await longTiengBangThat(dv);
-    } catch (loi) {
-      const mh = moHinhDocDaChot();
-      if (lan >= 2 || !mh || caiDat.mhDoc || loi?.maLa || (loi?.message !== "HET_NGAY" && !loi?.doiMa)) throw loi;
-      boMoHinhDoc(mh);
-      nhat(`↻ ${mh} đã hết lượt ở mọi mã → đọc lại cả video bằng loại Gemini khác (giọng vẫn đồng nhất)`);
-    }
-  }
-}
 async function longTiengBangThat(dv) {
-  if (dv === "gemini") chotMoHinhDoc(null); // mỗi lần lồng tiếng chốt lại 1 loại Gemini cho cả video
   const cau = chiaNhom(cauDocDuoc(), dv);
+  if (dv === "gemini") batDauDocGemini(cau.length); // mỗi lần lồng tiếng chọn lại loại Gemini ưu tiên cho cả video
   const boQua = S.cacCau.length - cauDocDuoc().length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";

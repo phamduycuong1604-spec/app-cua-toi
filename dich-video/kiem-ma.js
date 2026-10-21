@@ -4,6 +4,7 @@
 // =====================================================
 import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, quaMayChu, API_GEMINI, lamSachMa, maHopLe } from "./nen.js";
 import { dsKhoaDoc, hanMucGemini, hanMuc, maNghe } from "./gemini.js";
+import { moTaLuotDoc } from "./doc-gemini.js";
 import { EL_API, FISH_API, VT_API, FPT_API, azApi } from "./giong-doc.js";
 import { duPhong } from "./nghe-dich.js";
 import { layTuForm, lyDoKhongMayChu } from "./cai-dat-ui.js";
@@ -19,10 +20,10 @@ const docJson = async (r) => {
 
 async function chiTietHanMuc(ten, r) {
   try {
-    if (ten.startsWith("Gemini (nghe & dịch")) return hanMucGemini(maNghe(), "nghe") + (caiDat.khoaDoc ? "" : " · " + hanMucGemini(maNghe(), "doc"));
-    if (ten === "Gemini riêng cho giọng đọc") return hanMucGemini(dsKhoaDoc()[0], "doc");
+    if (ten.startsWith("Gemini (nghe & dịch")) return hanMucGemini(maNghe(), "nghe") + (caiDat.khoaDoc ? "" : " · " + moTaLuotDoc(maNghe()));
+    if (ten === "Gemini riêng cho giọng đọc") return moTaLuotDoc(dsKhoaDoc()[0]);
     const soMa = /^Gemini giọng đọc – mã (\d+)$/.exec(ten);
-    if (soMa) return hanMucGemini(dsKhoaDoc()[soMa[1] - 1], "doc");
+    if (soMa) return moTaLuotDoc(dsKhoaDoc()[soMa[1] - 1]);
     if (ten === "Groq") {
       const giay = daDung(`groq:${vanTayMa(caiDat.dp.groq)}`);
       return `nghe: ${hanMuc(Math.round(giay / 60), 480, "phút âm thanh", true, gioLamMoiQT())}`;

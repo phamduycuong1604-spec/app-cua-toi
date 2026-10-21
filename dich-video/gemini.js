@@ -1,26 +1,14 @@
 // =====================================================
-// GỌI GEMINI: tự chờ khi bị giới hạn mỗi phút, tự đổi loại Gemini khi hết lượt,
-// xoay vòng nhiều mã giọng đọc, ghi nhớ loại nào hết lượt hôm nay (theo từng mã)
-// loai = "nghe" (nghe & dịch) hoặc "doc" (đọc giọng)
+// GỌI GEMINI NGHE & DỊCH: tự chờ khi bị giới hạn mỗi phút, tự đổi loại Gemini khi hết lượt,
+// ghi nhớ loại nào hết lượt hôm nay (theo từng mã). Giọng đọc Gemini ở doc-gemini.js
 // =====================================================
 import { API_GEMINI, caiDat, nhat, cho, docLuu, ghiLuu, demDung, daDung, ngayMy, vanTayMa, lamSachMa, maHopLe, LOI_MA_LA } from "./nen.js";
 
 // Mỗi loại Gemini có lượt miễn phí riêng → loại này quá tải/hết lượt thì chuyển loại khác
 const MO_HINH = {
   nghe: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
-  doc: ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"],
 };
 const moHinhDung = {}; // loại đã chạy được gần nhất → lần sau thử trước
-
-// Giọng đọc đồng nhất: cùng tên giọng (vd Kore) nhưng mỗi loại Gemini đọc nghe vẫn khác → cả video chỉ dùng 1 loại.
-// Loại đầu tiên đọc được sẽ được chốt; mã nào hết lượt loại đó thì đổi MÃ, không đổi sang loại khác.
-let moHinhDocCoDinh = null;
-export const moHinhDocDaChot = () => moHinhDocCoDinh;
-export const chotMoHinhDoc = (mh) => (moHinhDocCoDinh = mh);
-// Loại Gemini đã chốt mà hết lượt ở MỌI mã → bỏ hẳn loại đó trong lần chạy này, đọc lại cả video bằng loại khác
-const moHinhDocBo = new Set();
-export const boMoHinhDoc = (mh) => moHinhDocBo.add(mh);
-export const moHinhDocBiBo = (mh) => moHinhDocBo.has(mh);
 
 // ----- Ghi nhớ "loại Gemini nào hết lượt/ngừng" theo từng mã, lưu trên máy để lần sau khỏi thử lại -----
 const moHinhNghi = new Set();
@@ -47,7 +35,6 @@ function luuMoHinhNghi(m, giay) {
 // Bắt đầu 1 lần chạy mới: nạp lại ghi nhớ, nhật ký "bỏ qua" ghi lại từ đầu
 export function batDauLanMoiGemini() {
   daBaoNghi = new Set();
-  moHinhDocBo.clear();
   napMoHinhNghi();
 }
 // Đổi mã / bấm Lưu (có thể vừa nâng mã lên trả phí) → quên mọi ghi nhớ hết lượt để thử lại thật
@@ -61,55 +48,21 @@ export function quenGhiNhoGemini(caHanMuc = false) {
 }
 
 // ----- Mã dùng cho từng việc -----
-// Ô "Gemini riêng cho giọng đọc" nhận tối đa 10 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng):
-// mã đang dùng hết lượt thì tự chuyển sang mã kế tiếp
+// Ô "Gemini riêng cho giọng đọc" nhận tối đa 10 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng)
 export const dsKhoaDoc = () => [...new Set(lamSachMa(caiDat.khoaDoc).split(/[\s,;]+/).filter(Boolean))].slice(0, 10);
-let soMaDoc = 0; // vị trí mã đọc đang dùng trong danh sách
 // Mã nghe & dịch: ô "Mã Gemini"; để trống mà có mã giọng đọc → dùng tạm mã giọng đọc số 1 (khách hay chỉ dán ô giọng đọc)
 export const maNghe = () => lamSachMa(caiDat.khoa) || dsKhoaDoc()[0] || "";
-const khoaGemini = (loai) => (loai === "doc" && (dsKhoaDoc()[soMaDoc] || dsKhoaDoc()[0])) || maNghe();
-const tenNghi = (m, loai) => vanTayMa(khoaGemini(loai) || "") + ":" + m;
+const khoaGemini = () => maNghe();
+const tenNghi = (m) => vanTayMa(khoaGemini() || "") + ":" + m;
 
-// Gọi Gemini; giọng đọc có nhiều mã thì xoay vòng khi mã đang dùng hết lượt / bị giới hạn mỗi phút
+// Gọi Gemini nghe & dịch: thử lần lượt các loại Gemini (loai luôn là "nghe")
 export async function goiGemini(loai, noiDung) {
-  const ds = loai === "doc" ? dsKhoaDoc() : [];
-  if (ds.length < 2) return goiMotMa(loai, noiDung);
-  if (soMaDoc >= ds.length) soMaDoc = 0;
-  for (let daThu = 0; ; daThu++) {
-    const dang = soMaDoc;
-    try {
-      // Chưa thử hết các mã: gặp giới hạn mỗi phút thì đổi ngay sang mã kế tiếp thay vì ngồi chờ
-      return await goiMotMa(loai, noiDung, { doiMaKhiCho: daThu < ds.length - 1 });
-    } catch (loi) {
-      if ((loi?.message !== "HET_NGAY" && !loi?.doiMa) || daThu >= ds.length - 1 || ds.every((k, i) => i === soMaDoc || !maHopLe(k))) throw loi;
-      if (soMaDoc !== dang) continue; // luồng đọc khác vừa đổi mã rồi → dùng luôn mã mới
-      const cu = soMaDoc;
-      // bỏ qua luôn các mã có ký tự lạ (gửi đi chắc chắn hỏng)
-      do {
-        soMaDoc = (soMaDoc + 1) % ds.length;
-        if (!maHopLe(ds[soMaDoc]) && soMaDoc !== cu) nhat(`🔑 Bỏ qua mã Gemini đọc số ${soMaDoc + 1}/${ds.length}: mã có ký tự lạ – xoá mã này trong ⚙️ rồi chép – dán lại`);
-      } while (!maHopLe(ds[soMaDoc]) && soMaDoc !== cu);
-      daBaoNghi = new Set();
-      const ma = `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length}`, sang = `sang mã số ${soMaDoc + 1}`;
-      if (loi.message === "CHO_PHUT") nhat(`${ma} đang bị giới hạn mỗi phút (Google bảo chờ ${loi.choGiay} giây) → chuyển ngay ${sang}`);
-      else if (loi.doiMa) nhat(`${ma}: ${loi.message} → chuyển ${sang}`);
-      else nhat(`${ma} hết lượt hôm nay → chuyển ${sang}`);
-    }
-  }
-}
-
-// Gọi bằng mã đang dùng: thử lần lượt các loại Gemini
-async function goiMotMa(loai, noiDung, tuyChon = {}) {
-  const tuChon = loai === "nghe" ? caiDat.mhNghe : caiDat.mhDoc;
-  if (tuChon) return goiMoHinh(tuChon, noiDung, loai, tuyChon);
-  const coDinh = loai === "doc" ? moHinhDocCoDinh : null;
-  const conDung = (m) => loai !== "doc" || !moHinhDocBo.has(m);
-  let ds = coDinh ? [coDinh] : [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))].filter(conDung);
-  let daHoi = !!coDinh, loiCuoi = null, hetNgay = null;
+  const tuChon = caiDat.mhNghe;
+  if (tuChon) return goiMoHinh(tuChon, noiDung, loai);
+  let ds = [...new Set([moHinhDung[loai], ...MO_HINH[loai]].filter(Boolean))];
+  let daHoi = false, loiCuoi = null, hetNgay = null;
   for (let i = 0; i < ds.length; i++) {
-    // luồng đọc khác vừa chốt loại Gemini cho video → bỏ danh sách cũ, chỉ dùng loại đã chốt
-    if (loai === "doc" && moHinhDocCoDinh && moHinhDocCoDinh !== coDinh) return goiMotMa(loai, noiDung, tuyChon);
-    const nghi = tenNghi(ds[i], loai);
+    const nghi = tenNghi(ds[i]);
     if (moHinhNghi.has(nghi)) {
       if (!daBaoNghi.has(nghi)) {
         daBaoNghi.add(nghi);
@@ -119,20 +72,8 @@ async function goiMotMa(loai, noiDung, tuyChon = {}) {
       continue;
     }
     try {
-      const kq = await goiMoHinh(ds[i], noiDung, loai, tuyChon);
+      const kq = await goiMoHinh(ds[i], noiDung, loai);
       moHinhDung[loai] = ds[i];
-      if (loai === "doc") {
-        // luồng đọc khác vừa chốt loại khác → đọc lại đoạn này bằng đúng loại đã chốt cho giọng khỏi lệch
-        if (moHinhDocCoDinh && moHinhDocCoDinh !== ds[i]) {
-          nhat(`↻ Đọc lại đoạn này bằng ${moHinhDocCoDinh} cho giọng đồng nhất`);
-          return goiMotMa(loai, noiDung, tuyChon);
-        }
-        if (!moHinhDocCoDinh) {
-          moHinhDocCoDinh = ds[i];
-          nhat(`🎙️ Cả video đọc bằng ${ds[i]} (giữ 1 loại Gemini cho giọng đồng nhất; mã hết lượt thì đổi mã, không đổi loại)`);
-        }
-        Object.defineProperty(kq, "moHinh", { value: ds[i] }); // loại Gemini thật sự đã đọc đoạn này
-      }
       return kq;
     } catch (loi) {
       if (loi.status !== 404 && !loi.doiMoHinh) throw loi;
@@ -153,18 +94,15 @@ async function goiMotMa(loai, noiDung, tuyChon = {}) {
     // Hết danh sách: hỏi Google xem hiện có loại nào khác
     if (i === ds.length - 1 && !daHoi) {
       daHoi = true;
-      ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t) && conDung(t)));
+      ds = ds.concat((await timMoHinh(loai)).filter((t) => !ds.includes(t)));
     }
   }
-  // Có loại báo hết lượt hôm nay (các loại khác ngừng/không có) → coi là mã này hết lượt, để xoay sang mã kế tiếp
   if (hetNgay) { ghiHetGemini(loai); throw hetNgay; }
   // Mọi loại đều đang được nhớ là ngừng/hết lượt, trong đó có loại hết lượt (ghi nhớ ngắn, ≤ 1 ngày) → hết lượt hôm nay
   const nho = docLuu("phaha-dv-gemini-nghi");
-  const hetLuotNho = (m) => moHinhNghi.has(tenNghi(m, loai)) && (nho[tenNghi(m, loai)] || 0) - Date.now() <= 2 * 86400000;
-  if (ds.every((m) => moHinhNghi.has(tenNghi(m, loai))) && (!loiCuoi || loiCuoi.status === 404) && ds.some(hetLuotNho))
+  const hetLuotNho = (m) => moHinhNghi.has(tenNghi(m)) && (nho[tenNghi(m)] || 0) - Date.now() <= 2 * 86400000;
+  if (ds.every((m) => moHinhNghi.has(tenNghi(m))) && (!loiCuoi || loiCuoi.status === 404) && ds.some(hetLuotNho))
     throw Object.assign(new Error("HET_NGAY"), { doiMoHinh: true });
-  // Đang giữ 1 loại cho giọng đồng nhất mà loại đó không dùng được với mã này → đổi sang mã kế tiếp
-  if (coDinh) throw Object.assign(new Error(`${coDinh} không dùng được với mã này`), { doiMa: true, choGiay: loiCuoi?.choGiay || 0 });
   if (loiCuoi?.doiMoHinh) throw new Error("Gemini đang quá tải ở mọi loại. Chờ vài phút rồi bấm Bắt đầu lại.");
   throw new Error("Không tìm thấy mô hình Gemini phù hợp. Vào Cài đặt → Nâng cao để nhập tên mô hình.");
 }
@@ -175,7 +113,7 @@ async function timMoHinh(loai) {
     const j = await r.json();
     return (j.models || [])
       .map((m) => m.name.replace("models/", ""))
-      .filter((t) => (loai === "doc" ? /tts/.test(t) : /flash/.test(t) && !/tts|image|live|audio|lite/.test(t)))
+      .filter((t) => /flash/.test(t) && !/tts|image|live|audio|lite/.test(t))
       .sort((a, b) => /flash/.test(b) - /flash/.test(a));
   } catch {
     return [];
@@ -186,7 +124,7 @@ async function timMoHinh(loai) {
 const khongTatSuyNghi = new Set(Array.isArray(docLuu("phaha-dv-khong-tat-suy-nghi")) ? docLuu("phaha-dv-khong-tat-suy-nghi") : []);
 
 // Gọi 1 loại Gemini: chờ/gửi lại khi mạng chập chờn, quá lâu, giới hạn mỗi phút; báo lỗi rõ để bên ngoài đổi loại/mã
-async function goiMoHinh(moHinh, noiDung, loai, tuyChon = {}) {
+async function goiMoHinh(moHinh, noiDung, loai) {
   let quaLau = 0;
   for (let lan = 0; ; lan++) {
     // Nghe & dịch: tắt chế độ "suy nghĩ" để trả lời nhanh hơn nhiều
@@ -246,8 +184,6 @@ async function goiMoHinh(moHinh, noiDung, loai, tuyChon = {}) {
       // Hết lượt trong ngày (hoặc phải chờ quá lâu) → đổi sang loại Gemini khác
       if (/per ?day|PerDay/i.test(thongBao + chiTiet) || !giay || giay > 60 || lan >= 3)
         throw Object.assign(new Error("HET_NGAY"), { chiTiet: thongBao, doiMoHinh: true, choGiay: giay });
-      // Giới hạn mỗi phút: còn mã khác chưa thử thì đổi mã ngay (không ghi nhớ là hết lượt), hết mã mới ngồi chờ
-      if (tuyChon.doiMaKhiCho) throw Object.assign(new Error("CHO_PHUT"), { doiMa: true, choGiay: giay });
       await cho(giay + 1, loai === "nghe" ? "dich" : "long");
       continue;
     }
@@ -286,21 +222,6 @@ function ghiHetGemini(loai) {
   if (da > 0) d[`max:gm:${vt}:${loai}`] = { n: da };
   d[`het:gm:${vt}:${loai}`] = { ngay };
   ghiLuu("phaha-dv-dung", d);
-}
-// Mã Gemini đọc còn bao nhiêu lượt hôm nay (cộng mọi mã đọc). null = chưa biết (mã chưa từng hết lượt, có thể trả phí)
-export function conLuotGeminiDoc() {
-  const cacMa = dsKhoaDoc().length ? dsKhoaDoc() : [caiDat.khoa].filter(Boolean);
-  if (!cacMa.length) return 0;
-  const ngay = ngayMy(), d = docLuu("phaha-dv-dung");
-  let tong = 0;
-  for (const khoa of cacMa) {
-    const vt = vanTayMa(khoa);
-    if (d[`het:gm:${vt}:doc`]?.ngay === ngay) continue;
-    const hoc = d[`max:gm:${vt}:doc`]?.n;
-    if (!hoc) return null;
-    tong += Math.max(0, hoc - daDung(`gm:${vt}:doc`, ngay));
-  }
-  return tong;
 }
 // Giờ (giờ Việt Nam) lúc Gemini làm mới lượt: 0 giờ ở Mỹ
 export function gioLamMoiGemini() {
