@@ -4,117 +4,186 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Preset màu – Ảnh đẹp chỉ với 1 chạm</title>
-<meta name="description" content="Bộ preset màu chỉnh ảnh chuyên nghiệp, dùng được trên điện thoại và máy tính.">
-<meta property="og:title" content="Preset màu – Ảnh đẹp chỉ với 1 chạm">
-<meta property="og:image" content="anh/bia.jpg">
+<meta name="description" content="Các bộ preset màu chỉnh ảnh chuyên nghiệp, dùng được trên điện thoại và máy tính.">
 <style>
 :root{--nen:#fffaf5;--chu:#2a2320;--phu:#7a6e66;--chinh:#d9663b;--vien:#eadfd5;--the:#fff}
 @media (prefers-color-scheme:dark){:root{--nen:#1b1613;--chu:#f6eee8;--phu:#b3a69c;--vien:#3a2f29;--the:#251e1a}}
 *{box-sizing:border-box;margin:0}
 body{font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--nen);color:var(--chu)}
 .hop{max-width:960px;margin:0 auto;padding:0 16px}
-section{padding:40px 0}
+section{padding:32px 0}
 h1{font-size:clamp(28px,6vw,46px);line-height:1.2}
 h2{font-size:clamp(22px,4vw,30px);margin-bottom:16px;text-align:center}
 .phu{color:var(--phu)}
-.nut{display:inline-block;background:var(--chinh);color:#fff;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:999px;font-size:17px}
+.nut{display:inline-block;background:var(--chinh);color:#fff;text-decoration:none;font-weight:700;padding:14px 28px;border-radius:999px;font-size:17px;border:0;cursor:pointer}
 .nut.vien{background:none;color:var(--chinh);border:2px solid var(--chinh)}
-.dau{text-align:center;padding:48px 0 24px}
-.dau p{margin:14px auto 22px;max-width:520px}
-/* so sanh truoc/sau */
+.dau{text-align:center;padding:40px 0 8px}
+.dau p{margin:14px auto 0;max-width:520px}
+/* danh sach bo mau */
+.luoi{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.bo{display:block;text-decoration:none;color:inherit;background:var(--the);border:1px solid var(--vien);border-radius:16px;overflow:hidden;transition:transform .15s}
+.bo:hover{transform:translateY(-3px)}
+.bo .bia{aspect-ratio:4/3;background-size:cover;background-position:center}
+.bo .tt{padding:14px 16px}
+.bo h3{font-size:19px}
+.bo .g{color:var(--chinh);font-weight:800}
+.bo .g s{color:var(--phu);font-weight:400;font-size:14px}
+/* trang chi tiet */
+.quay{display:inline-block;margin:16px 0 0;color:var(--chinh);text-decoration:none;font-weight:600;background:none;border:0;font-size:16px;cursor:pointer}
+.ct-dau{text-align:center;padding:12px 0}
+.ct-dau p{margin-top:8px}
+.gia{font-size:34px;font-weight:800;color:var(--chinh)}
+.gia s{font-size:16px;color:var(--phu);font-weight:400}
 .sosanh{position:relative;aspect-ratio:4/3;max-width:640px;margin:0 auto;border-radius:16px;overflow:hidden;user-select:none;touch-action:pan-y;background:#999}
 .sosanh .lop{position:absolute;inset:0;background-size:cover;background-position:center}
-.sosanh .truoc{background-image:url(anh/truoc.jpg),linear-gradient(135deg,#8a8a8a,#5c5c5c);clip-path:inset(0 50% 0 0)}
-.sosanh .sau{background-image:url(anh/sau.jpg),linear-gradient(135deg,#ffb27a,#d9663b)}
+.sosanh .truoc{clip-path:inset(0 50% 0 0);filter:grayscale(.9) brightness(.85)}
 .sosanh .thanh{position:absolute;top:0;bottom:0;left:50%;width:3px;background:#fff;box-shadow:0 0 6px #0006}
 .sosanh .thanh::after{content:"↔";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:#fff;color:#333;display:grid;place-items:center;font-weight:700}
 .sosanh input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize}
 .nhan{position:absolute;top:10px;padding:2px 10px;border-radius:999px;background:#0008;color:#fff;font-size:13px}
 .nhan.t{left:10px}.nhan.s{right:10px}
-.luoi{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .the{background:var(--the);border:1px solid var(--vien);border-radius:14px;padding:18px}
 .the h3{font-size:18px;margin-bottom:4px}
-.gia{font-size:34px;font-weight:800;color:var(--chinh)}
-.gia s{font-size:16px;color:var(--phu);font-weight:400}
-.the ul{padding-left:20px;margin:10px 0 16px}
-.noibat{border:2px solid var(--chinh)}
+.nho{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.the ul{padding-left:20px;margin:6px 0 0}
 details{background:var(--the);border:1px solid var(--vien);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 summary{cursor:pointer;font-weight:600}
 details p{margin-top:8px;color:var(--phu)}
-.cuoi{text-align:center;padding:40px 0 90px}
+.giua{text-align:center}
+.chia{margin-top:10px;font-size:14px}
 .dinh{position:fixed;left:0;right:0;bottom:0;padding:10px 16px;background:var(--nen);border-top:1px solid var(--vien);text-align:center;z-index:5}
 .dinh .nut{width:100%;max-width:420px}
-@media (min-width:700px){.dinh{display:none}.cuoi{padding-bottom:40px}}
+.cuoi{height:80px}
+[hidden]{display:none!important}
+@media (min-width:700px){.dinh{display:none}.cuoi{height:24px}}
 </style>
 </head>
 <body>
 
-<header class="dau hop">
-  <h1>Ảnh đẹp như ý<br>chỉ với 1 chạm</h1>
-  <p class="phu">Bộ preset màu chỉnh sẵn, dùng được trên điện thoại và máy tính. Không cần giỏi chỉnh ảnh.</p>
-  <a class="nut" href="#bang-gia">Xem giá & mua</a>
-</header>
+<!-- TRANG CHỦ: danh sách các bộ màu -->
+<main id="trang-chu">
+  <header class="dau hop">
+    <h1>Ảnh đẹp như ý<br>chỉ với 1 chạm</h1>
+    <p class="phu">Chọn bộ màu bạn thích để xem chi tiết. Dùng được trên điện thoại và máy tính.</p>
+  </header>
+  <section class="hop"><div class="luoi" id="ds"></div></section>
+  <p class="phu giua" style="padding:8px 16px 40px">Cần tư vấn chọn bộ màu? <a href="#" data-lien-he="Cần tư vấn chọn bộ màu" style="color:var(--chinh)">Nhắn mình nhé</a></p>
+</main>
 
-<section class="hop">
-  <h2>Kéo để xem trước / sau</h2>
-  <div class="sosanh" id="ss">
-    <div class="lop sau"></div>
-    <div class="lop truoc"></div>
-    <span class="nhan t">Trước</span><span class="nhan s">Sau</span>
-    <div class="thanh" id="thanh"></div>
-    <input type="range" min="0" max="100" value="50" id="keo" aria-label="Kéo để so sánh trước và sau">
+<!-- TRANG CHI TIẾT: 1 bộ màu -->
+<main id="trang-ct" hidden>
+  <div class="hop">
+    <button class="quay" id="quay">← Tất cả bộ màu</button>
+    <div class="ct-dau">
+      <h1 id="ct-ten"></h1>
+      <p class="phu" id="ct-slogan"></p>
+      <p class="phu" id="ct-pm" style="font-size:14px"></p>
+    </div>
   </div>
-  <p class="phu" style="text-align:center;margin-top:10px">Thay ảnh bằng ảnh thật của bạn trong thư mục <b>preset/anh</b></p>
-</section>
 
-<section class="hop">
-  <h2>Cách dùng – 3 bước</h2>
-  <div class="luoi">
-    <div class="the"><h3>1. Mua & nhận file</h3><p class="phu">Nhắn mình, chuyển khoản, nhận link tải ngay.</p></div>
-    <div class="the"><h3>2. Cài preset</h3><p class="phu">Có video hướng dẫn từng bước, khoảng 2 phút.</p></div>
-    <div class="the"><h3>3. Bấm 1 chạm</h3><p class="phu">Chọn preset, ảnh đổi màu ngay.</p></div>
-  </div>
-</section>
+  <section class="hop">
+    <h2>Kéo để xem trước / sau</h2>
+    <div class="sosanh" id="ss">
+      <div class="lop sau" id="ct-sau"></div>
+      <div class="lop truoc" id="ct-truoc"></div>
+      <span class="nhan t">Trước</span><span class="nhan s">Sau</span>
+      <div class="thanh" id="thanh"></div>
+      <input type="range" min="0" max="100" value="50" id="keo" aria-label="Kéo để so sánh trước và sau">
+    </div>
+  </section>
 
-<section class="hop" id="bang-gia">
-  <h2>Bảng giá</h2>
-  <div class="luoi">
-    <div class="the"><h3>Gói lẻ</h3><div class="gia">99k</div><ul><li>3 preset tự chọn</li><li>Hướng dẫn cài</li></ul><a class="nut vien" data-lien-he="Gói lẻ 99k">Chọn gói này</a></div>
-    <div class="the noibat"><h3>Gói đầy đủ ⭐</h3><div class="gia">199k <s>299k</s></div><ul><li>Toàn bộ preset</li><li>Cập nhật miễn phí</li><li>Hỗ trợ khi cài</li></ul><a class="nut" data-lien-he="Gói đầy đủ 199k">Chọn gói này</a></div>
-  </div>
-</section>
+  <section class="hop">
+    <div class="nho">
+      <div class="the"><h3>Trong bộ này có</h3><ul id="ct-diem"></ul></div>
+      <div class="the giua"><h3>Giá</h3><div class="gia" id="ct-gia"></div>
+        <a class="nut" id="ct-mua" style="margin-top:10px">Nhắn mua bộ này</a></div>
+    </div>
+  </section>
 
-<section class="hop">
-  <h2>Hay hỏi</h2>
-  <details><summary>Dùng được trên điện thoại không?</summary><p>Được, cả iPhone và Android, cùng máy tính.</p></details>
-  <details><summary>Sau khi mua nhận file thế nào?</summary><p>Mình gửi link tải qua tin nhắn ngay sau khi nhận thanh toán.</p></details>
-  <details><summary>Cài không được thì sao?</summary><p>Nhắn mình, mình hướng dẫn tận tình đến khi dùng được.</p></details>
-</section>
+  <section class="hop">
+    <h2>Cách dùng – 3 bước</h2>
+    <div class="nho">
+      <div class="the"><h3>1. Mua & nhận file</h3><p class="phu">Nhắn mình, chuyển khoản, nhận link tải ngay.</p></div>
+      <div class="the"><h3>2. Cài preset</h3><p class="phu">Có video hướng dẫn, khoảng 2 phút.</p></div>
+      <div class="the"><h3>3. Bấm 1 chạm</h3><p class="phu">Chọn preset, ảnh đổi màu ngay.</p></div>
+    </div>
+  </section>
 
-<footer class="cuoi hop">
-  <p class="phu" style="margin-bottom:14px">Còn thắc mắc? Nhắn mình nhé!</p>
-  <a class="nut" data-lien-he="Cần tư vấn">Nhắn tin tư vấn</a>
-</footer>
+  <section class="hop">
+    <h2>Hay hỏi</h2>
+    <details><summary>Dùng được trên điện thoại không?</summary><p>Được, cả iPhone, Android và máy tính.</p></details>
+    <details><summary>Sau khi mua nhận file thế nào?</summary><p>Mình gửi link tải qua tin nhắn ngay sau khi nhận thanh toán.</p></details>
+    <details><summary>Cài không được thì sao?</summary><p>Nhắn mình, mình hướng dẫn đến khi dùng được.</p></details>
+  </section>
 
-<div class="dinh"><a class="nut" data-lien-he="Muốn mua preset">Nhắn mua ngay</a></div>
+  <section class="hop giua">
+    <button class="nut vien" id="chia">Sao chép link bộ này để gửi bạn bè</button>
+    <p class="phu chia" id="chia-tb"></p>
+  </section>
+  <div class="cuoi"></div>
+  <div class="dinh"><a class="nut" id="ct-mua2">Nhắn mua bộ này</a></div>
+</main>
 
+<script src="bo-mau.js"></script>
 <script>
-/* ===== SỬA 2 DÒNG NÀY ===== */
-var LIEN_HE = "https://zalo.me/0900000000"; // link Zalo hoặc Messenger (m.me/tenfanpage) của bạn
-var NOI_DUNG_MAC_DINH = "Chào bạn, mình muốn mua preset: ";
-/* ========================== */
-document.querySelectorAll("[data-lien-he]").forEach(function(a){
+var $ = function(i){return document.getElementById(i)};
+var NOI_DUNG = "Chào bạn, mình muốn mua bộ preset: ";
+
+function nenAnh(url, mau){
+  return "url('" + url + "'), linear-gradient(135deg," + mau[0] + "," + mau[1] + ")";
+}
+function guiTin(a, noiDung){
   a.href = LIEN_HE; a.target = "_blank"; a.rel = "noopener";
-  a.addEventListener("click", function(){
-    try{ navigator.clipboard.writeText(NOI_DUNG_MAC_DINH + a.dataset.lienHe); }catch(e){}
-  });
+  a.onclick = function(){ try{ navigator.clipboard.writeText(NOI_DUNG_TIN(noiDung)); }catch(e){} };
+}
+function NOI_DUNG_TIN(t){ return t.indexOf("Cần") === 0 ? "Chào bạn, " + t.toLowerCase() : NOI_DUNG + t; }
+
+/* Trang chủ */
+$("ds").innerHTML = BO_MAU.map(function(b){
+  return '<a class="bo" href="?bo=' + b.id + '" data-id="' + b.id + '">' +
+    '<div class="bia" style="background-image:' + nenAnh(b.anhBia, b.mau) + '"></div>' +
+    '<div class="tt"><h3>' + b.ten + '</h3><p class="phu" style="font-size:14px">' + b.slogan + '</p>' +
+    '<p class="g">' + b.gia + (b.giaCu ? ' <s>' + b.giaCu + '</s>' : '') + '</p></div></a>';
+}).join("");
+document.querySelectorAll("[data-lien-he]").forEach(function(a){ guiTin(a, a.dataset.lienHe); });
+
+/* Chuyển trang */
+function hien(id, day){
+  var b = BO_MAU.filter(function(x){return x.id === id})[0];
+  if(!b){ id = null; }
+  $("trang-chu").hidden = !!id; $("trang-ct").hidden = !id;
+  if(day) history.pushState({}, "", id ? "?bo=" + id : location.pathname);
+  window.scrollTo(0, 0);
+  if(!b){ document.title = "Preset màu – Ảnh đẹp chỉ với 1 chạm"; return; }
+  document.title = b.ten + " – Preset màu";
+  $("ct-ten").textContent = b.ten;
+  $("ct-slogan").textContent = b.slogan;
+  $("ct-pm").textContent = "Dùng cho: " + b.phanMem;
+  $("ct-sau").style.backgroundImage = nenAnh(b.sau, b.mau);
+  $("ct-truoc").style.backgroundImage = nenAnh(b.truoc, ["#9a9a9a", "#5c5c5c"]);
+  $("ct-diem").innerHTML = b.diem.map(function(d){return "<li>" + d + "</li>"}).join("");
+  $("ct-gia").innerHTML = b.gia + (b.giaCu ? " <s>" + b.giaCu + "</s>" : "");
+  guiTin($("ct-mua"), b.ten); guiTin($("ct-mua2"), b.ten);
+  $("keo").value = 50; $("keo").oninput();
+  $("chia-tb").textContent = "";
+  $("chia").onclick = function(){
+    var link = location.origin + location.pathname + "?bo=" + b.id;
+    try{ navigator.clipboard.writeText(link); $("chia-tb").textContent = "Đã sao chép link!"; }
+    catch(e){ $("chia-tb").textContent = link; }
+  };
+}
+$("keo").oninput = function(){
+  var v = $("keo").value;
+  $("ct-truoc").style.clipPath = "inset(0 " + (100 - v) + "% 0 0)";
+  $("thanh").style.left = v + "%";
+};
+$("ds").addEventListener("click", function(e){
+  var a = e.target.closest("a.bo"); if(!a) return;
+  e.preventDefault(); hien(a.dataset.id, true);
 });
-var keo = document.getElementById("keo"), truoc = document.querySelector(".truoc"), thanh = document.getElementById("thanh");
-keo.addEventListener("input", function(){
-  var v = keo.value;
-  truoc.style.clipPath = "inset(0 " + (100 - v) + "% 0 0)";
-  thanh.style.left = v + "%";
-});
+$("quay").onclick = function(){ hien(null, true); };
+window.addEventListener("popstate", function(){ hien(new URLSearchParams(location.search).get("bo"), false); });
+hien(new URLSearchParams(location.search).get("bo"), false);
 </script>
 </body>
 </html>
