@@ -17,7 +17,7 @@
 import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo } from "./nen.js";
 import { canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { KENH } from "./chuyen-mon.js";
-import { batDauLanMoiGemini } from "./gemini.js";
+import { batDauLanMoiGemini, maNghe } from "./gemini.js";
 import { ngheVaDich, duPhong, dungDeepSeek, batDauLanMoiNghe } from "./nghe-dich.js";
 import { longTieng, dvDocDung, DICH_VU, tenGiong } from "./giong-doc.js";
 import { taiFfmpeg, tatFfmpeg, ffDangBat, ganVideo, tachTieng, tachNhacNen, dungTachNhac, xuatVideo } from "./video.js";
@@ -57,8 +57,8 @@ function ghiCaiDatVaoNhat(lamTuDau) {
 async function chay(lamTuDau) {
   if (S.dangChay || !S.tepVideo) return;
   if (!(await kiemTraVao())) return; // tài khoản hết hạn / bị thu hồi → không cho chạy
-  if (!caiDat.khoa && !duPhong.coDuPhong()) {
-    alert("Cần dán mã Gemini (hoặc cài dịch vụ dự phòng) trước. Mở Cài đặt nhé.");
+  if (!maNghe() && !duPhong.coDuPhong()) {
+    alert("Cần dán mã Gemini vào ô “Mã Gemini” trên cùng trong ⚙️ Cài đặt (hoặc cài dịch vụ dự phòng) trước nhé.");
     moCaiDat();
     return;
   }

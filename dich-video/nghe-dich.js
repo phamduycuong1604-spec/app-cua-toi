@@ -6,7 +6,7 @@
 // =====================================================
 import { caiDat, nhat, cho, ghiChu, dongHo, demDung, vanTayMa, TAN_SO_NGHE, DOAN_NGHE } from "./nen.js";
 import { taoDuPhong, chuaDich, loiDanThem } from "./du-phong.js";
-import { goiGemini, layChu } from "./gemini.js";
+import { goiGemini, layChu, maNghe } from "./gemini.js";
 import { taoWav, sangBase64 } from "./am-thanh.js";
 import { loiDeHieu } from "./loi.js";
 
@@ -75,13 +75,13 @@ async function ngheMotDoan(mau, batDau) {
     try {
       return await ngheDuPhong(wav, duLieu, dai, batDau, mau);
     } catch (loi) {
-      if (!caiDat.khoa) throw loi;
+      if (!maNghe()) throw loi;
       deepSeekNghi = true;
       nhat(`↪️ Nghe/dịch bằng DeepSeek không được (${loi.message.split("\n")[0]}) → quay về Gemini`);
     }
   }
   // Gemini nghe trước; hết lượt/lỗi thì chuyển lần lượt sang Groq → Cloudflare → Azure → OpenRouter
-  if (caiDat.khoa && !geminiNghi) {
+  if (maNghe() && !geminiNghi) {
     try {
       return await ngheGemini(duLieu, dai, batDau);
     } catch (loi) {
