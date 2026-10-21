@@ -210,6 +210,12 @@ export function vanTayMa(khoa) {
   return h.toString(36);
 }
 
+// Mã chép từ tin nhắn/ghi chú hay dính ký tự vô hình → bỏ đi (giữ nguyên xuống dòng, dấu phẩy giữa các mã)
+export const lamSachMa = (k) => String(k || "").replace(/[\u200b-\u200f\u2060\ufeff\u00ad]/g, "").trim();
+// Mã có ký tự lạ (chữ có dấu, ký tự đặc biệt…) → Safari không gửi đi được, báo "Type error" giống mất mạng
+export const maHopLe = (k) => /^[\x21-\x7e]+$/.test(k);
+export const LOI_MA_LA = "Mã Gemini có ký tự lạ (thường do chép kèm dấu hoặc ký tự ẩn). Mở ⚙️ Cài đặt, xoá mã đó rồi chép – dán lại từ aistudio.google.com.";
+
 // ----- MÁY CHỦ PHAHA (đăng nhập ở tab Lịch việc) -----
 export const coMayChu = () => typeof DIA_CHI_MAY_CHU === "string" && !!DIA_CHI_MAY_CHU;
 export const mayChu = () => (coMayChu() ? DIA_CHI_MAY_CHU : "");
