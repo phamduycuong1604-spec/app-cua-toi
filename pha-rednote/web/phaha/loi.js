@@ -54,6 +54,8 @@ export function loiDeHieu(loi) {
   if (THEO_DICH_VU[loi?.dv]) return THEO_DICH_VU[loi.dv](m, loi);
   if (/API key not valid|API_KEY_INVALID/i.test(m)) return "Mã Gemini không đúng. Mở ⚙️ Cài đặt, dán lại mã.";
   if (loi?.status === 403) return "Mã Gemini không có quyền dùng (403). Kiểm tra mã ở aistudio.google.com.\n" + m;
+  if (/Giọng máy/.test(m) && /out of memory|no available backend/i.test(m))
+    return "Giọng máy không đủ bộ nhớ (điện thoại vừa chạy xong các bước nặng). Bấm 🔁 Làm lại: app giữ lời thoại đã dịch, không phải nghe lại.";
   if (/out of memory|OOM|Aborted/i.test(m)) return "Video quá nặng so với điện thoại. Thử video ngắn hơn hoặc nhẹ hơn.";
   return m;
 }

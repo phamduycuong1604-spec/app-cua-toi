@@ -291,6 +291,13 @@ const KICH_BAN = {
         kq.mhDung = mh;
         if (mh.length !== 1 || !/flash-preview-tts/.test(mh[0])) kq.loi = "Đọc bằng nhiều loại Gemini (giọng lệch): " + mh.join(", ");
         else if (!/Cả video đọc bằng gemini-2.5-flash-preview-tts/.test(nk) || !/chuyển sang mã số 2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
+  // Loại đã chốt (flash) hết lượt ở MỌI mã, loại khác (pro) còn → đọc lại cả video bằng pro, không bỏ Gemini sang giọng khác
+  "27h-gemini-doi-loai-khi-het-moi-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } },
+      gemHetSau: { "MA-DOC-111111": { mh: "flash-preview-tts", sau: 1 }, "MA-DOC-222222": { mh: "flash-preview-tts", sau: 0 } },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/đọc lại cả video bằng loại Gemini khác/.test(nk)) kq.loi = "Không đọc lại bằng loại Gemini khác";
+        else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang; } },
   "27e-gemini-xoay-khi-cho-phut": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/giới hạn mỗi phút[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },

@@ -7,7 +7,7 @@ import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { goiGemini, moHinhDocDaChot, chotMoHinhDoc, conLuotGeminiDoc } from "./gemini.js";
+import { goiGemini, moHinhDocDaChot, chotMoHinhDoc, boMoHinhDoc, moHinhDocBiBo, conLuotGeminiDoc } from "./gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
@@ -340,13 +340,13 @@ async function docEdge(chu) {
 let thoDocMay = null, soYeuCauMay = 0;
 const choDocMay = new Map();
 // iPhone hay báo "Out of memory" khi vừa chạy xong các bước nặng (bộ nhớ của bước trước chưa kịp trả lại)
-// → tắt bộ đọc, chờ vài giây cho máy dọn bộ nhớ rồi thử lại (tối đa 3 lần)
+// → tắt bộ đọc, chờ vài giây cho máy dọn bộ nhớ rồi thử lại (tối đa 4 lần)
 async function docMay(chu) {
   for (let lan = 0; ; lan++) {
     try {
       return await docMayMotLan(chu);
     } catch (loi) {
-      if (lan >= 2 || !/out of memory|no available backend/i.test(loi.message)) throw loi;
+      if (lan >= 3 || !/out of memory|no available backend/i.test(loi.message)) throw loi;
       nhat(`Giọng máy thiếu bộ nhớ → chờ ${5 * (lan + 1)} giây cho điện thoại dọn bộ nhớ rồi thử lại (lần ${lan + 2})`);
       tatGiongMay();
       await new Promise((x) => setTimeout(x, 5000 * (lan + 1)));
@@ -451,7 +451,7 @@ export async function docCau(chu, dv) {
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   // Giọng Gemini đã đọc ở lần trước: chỉ dùng lại nếu cùng loại Gemini với cả video (giọng khỏi lệch)
   const daCo = khoGiong.get(khoa);
-  if (daCo && (dv !== "gemini" || !moHinhDocDaChot() || daCo.mh === moHinhDocDaChot())) {
+  if (daCo && (dv !== "gemini" || (!moHinhDocBiBo(daCo.mh) && (!moHinhDocDaChot() || daCo.mh === moHinhDocDaChot())))) {
     if (dv === "gemini" && !moHinhDocDaChot()) chotMoHinhDoc(daCo.mh);
     return daCo.mau;
   }
@@ -525,6 +525,21 @@ async function longTiengThu() {
 }
 
 async function longTiengBang(dv) {
+  if (dv !== "gemini") return longTiengBangThat(dv);
+  // Giữ 1 loại Gemini cho cả video; loại đó hết lượt ở mọi mã (vd 2.5 hết mà 3.1 còn) → bỏ loại đó,
+  // đọc lại CẢ video bằng loại khác (giọng vẫn đồng nhất) thay vì bỏ Gemini chuyển sang giọng máy
+  for (let lan = 0; ; lan++) {
+    try {
+      return await longTiengBangThat(dv);
+    } catch (loi) {
+      const mh = moHinhDocDaChot();
+      if (lan >= 2 || !mh || caiDat.mhDoc || (loi?.message !== "HET_NGAY" && !loi?.doiMa)) throw loi;
+      boMoHinhDoc(mh);
+      nhat(`↻ ${mh} đã hết lượt ở mọi mã → đọc lại cả video bằng loại Gemini khác (giọng vẫn đồng nhất)`);
+    }
+  }
+}
+async function longTiengBangThat(dv) {
   if (dv === "gemini") chotMoHinhDoc(null); // mỗi lần lồng tiếng chốt lại 1 loại Gemini cho cả video
   const cau = chiaNhom(cauDocDuoc(), dv);
   const boQua = S.cacCau.length - cauDocDuoc().length;
