@@ -14,6 +14,8 @@ const J = {"Access-Control-Allow-Origin":"*","Content-Type":"application/json"};
 const pcm = (giay) => { const n = Math.round(24000*giay); const x = Buffer.alloc(n*2); for (let i=0;i<n;i++) x.writeInt16LE(Math.round(Math.sin(i/24000*2*Math.PI*440)*9000), i*2); return x; };
 const wav = (p) => { const h = Buffer.alloc(44); h.write("RIFF",0); h.writeUInt32LE(36+p.length,4); h.write("WAVE",8); h.write("fmt ",12); h.writeUInt32LE(16,16); h.writeUInt16LE(1,20); h.writeUInt16LE(1,22); h.writeUInt32LE(24000,24); h.writeUInt32LE(48000,28); h.writeUInt16LE(2,32); h.writeUInt16LE(16,34); h.write("data",36); h.writeUInt32LE(p.length,40); return Buffer.concat([h,p]); };
 const CAU = [{start:1,end:3,zh:"你好朋友",vi:"Xin chào bạn của tôi"},{start:4,end:5.5,zh:"谢谢",vi:"Cảm ơn bạn nhiều lắm"},{start:5.8,end:7,zh:"好",vi:"Được"},{start:7.5,end:8.8,zh:"再见",vi:"Tạm biệt"}];
+// Câu cách nhau > 1,2 giây → Gemini đọc thành nhiều đoạn (không gộp được)
+const CAU_THUA = CAU.map((c, i) => ({ ...c, start: c.start + i * 1.5, end: c.end + i * 1.5 }));
 const SEG = [{start:1,end:3,text:"你好朋友",no_speech_prob:0.01,avg_logprob:-0.2},{start:4,end:5.5,text:"请不吝点赞订阅",no_speech_prob:0.1,avg_logprob:-0.3},{start:5.8,end:7,text:"谢谢",no_speech_prob:0.01,avg_logprob:-0.2}];
 const DICH = JSON.stringify({"1":"Chào bạn","2":"Cảm ơn"});
 
@@ -63,11 +65,13 @@ async function chay(ten, o) {
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
+    if (u.includes("tts") && o.gemPhutNgan?.[khoaGui] && !goi["phutNgan:" + khoaGui]) { dem("phutNgan:" + khoaGui); dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: o.gemPhutNgan[khoaGui] + "s" }] } }) }); }
     if (u.includes("tts") && (o.gemPhut || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "45s" }] } }) }); }
     if (u.includes("tts") && o.tts404 && o.tts404.test(u) && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ error: { code: 404, message: "models/x is not found for API version v1beta, or is not supported for generateContent." } }) }); }
     if (u.includes("tts") && o.gemHetSau?.[khoaGui] && u.includes(o.gemHetSau[khoaGui].mh) && (dem("ttsTot:" + khoaGui), goi["ttsTot:" + khoaGui]) > o.gemHetSau[khoaGui].sau) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts")) (goi.mhDoc ||= []).push(/models\/([^:]+):/.exec(u)?.[1]);
+    if (u.includes("tts")) { goi.ttsDangGoi = (goi.ttsDangGoi || 0) + 1; goi.ttsDongThoi = Math.max(goi.ttsDongThoi || 0, goi.ttsDangGoi); await new Promise((x) => setTimeout(x, 150)); goi.ttsDangGoi--; }
     if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
     { const t = JSON.stringify(JSON.parse(rt.request().postData() || "{}").contents || ""); if (/Quy tắc riêng/.test(t)) goi.gemQuyTac = (/Quy tắc riêng[^\\]*\\n([^\\]*)/.exec(t) || [])[1] || "có"; }
@@ -281,34 +285,52 @@ const KICH_BAN = {
   "24-edge-chua-dang-nhap": { caiDat: { ...CD, bat: { ...DU, el: false, gemini: false, az: false }, dv: { ...CD.dv, fish: { khoa: "fk" } }, __khongChu: true }, khongChu: true, han: 600000 },
   "27-gemini-ma-rieng": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het",
       sau: async (p, kq) => { kq.goi.khoaDoc = [...kq.goi.khoaDoc]; kq.goi.khoaNghe = [...kq.goi.khoaNghe]; } },
-  // Dán 3 mã đọc: mã 1, 2 hết lượt → tự chuyển sang mã 3 và đọc bằng Gemini
+  // Dán 3 mã đọc: mã 1, 2 hết lượt ngày → tự chuyển sang mã 3 và đọc bằng Gemini (mã miễn phí: 1 yêu cầu mỗi lúc)
   "27c-gemini-xoay-nhieu-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222\nMA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", maDocTot: ["MA-DOC-333333"],
-      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
-  // Mã 1, 2: loại đầu hết lượt (429), các loại sau "không tìm thấy" (404) → vẫn phải xoay sang mã kế tiếp
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/Chuyển sang mã \d\/\d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/Gemini/.test(kq.docBang) || !/Chuyển sang mã 3\/3/.test(nk)) kq.loi = "Không đọc bằng mã 3: " + kq.docBang;
+        else if (kq.goi.ttsDongThoi !== 1) kq.loi = "Mã miễn phí mà gửi " + kq.goi.ttsDongThoi + " yêu cầu cùng lúc"; } },
+  // Mã 1, 2: loại 2.5 hết lượt (429), các loại 3.x "không tìm thấy" (404) → vẫn phải xoay sang mã kế tiếp
   "27d-gemini-xoay-loi-lan": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222, MA-DOC-333333", bat: { ...DU, el: false } }, gemTTS: "het", tts404: /flash-tts|pro-preview-tts/, maDocTot: ["MA-DOC-333333"],
-      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/chuyển sang mã số \d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
-  // Mã 1 bị giới hạn mỗi phút (Google bảo chờ 45 giây) → đổi ngay sang mã 2, không ngồi chờ
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/Chuyển sang mã \d\/\d/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/Gemini/.test(kq.docBang) || !/Chuyển sang mã 3\/3/.test(nk)) kq.loi = "Không đọc bằng mã 3: " + kq.docBang; } },
+  // Mã 1 hết lượt ngày loại đang dùng sau 1 đoạn → đổi MÃ (mã 2), giữ nguyên loại Gemini cho giọng đồng nhất
   "27g-gemini-giu-1-loai-khi-xoay-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } },
-      gemHetSau: { "MA-DOC-111111": { mh: "flash-preview-tts", sau: 1 } },
+      gemHetSau: { "MA-DOC-111111": { mh: "3.8-flash-tts", sau: 1 } }, cau: CAU_THUA,
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = [...new Set(await p.evaluate(() => globalThis.__phahaMhDoc || []))];
         kq.mhDung = mh;
-        if (mh.length !== 1 || !/flash-preview-tts/.test(mh[0])) kq.loi = "Đọc bằng nhiều loại Gemini (giọng lệch): " + mh.join(", ");
-        else if (!/Cả video đọc bằng gemini-2.5-flash-preview-tts/.test(nk) || !/chuyển sang mã số 2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
-  // Loại đã chốt (flash) hết lượt ở MỌI mã, loại khác (pro) còn → đọc lại cả video bằng pro, không bỏ Gemini sang giọng khác
-  "27h-gemini-doi-loai-khi-het-moi-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } },
-      gemHetSau: { "MA-DOC-111111": { mh: "flash-preview-tts", sau: 1 }, "MA-DOC-222222": { mh: "flash-preview-tts", sau: 0 } },
-      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
-        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
-        if (!/đọc lại cả video bằng loại Gemini khác/.test(nk)) kq.loi = "Không đọc lại bằng loại Gemini khác";
-        else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang; } },
+        if (mh.length !== 1 || !/3\.8-flash-tts/.test(mh[0])) kq.loi = "Đọc bằng nhiều loại Gemini (giọng lệch): " + mh.join(", ");
+        else if (!/Ưu tiên gemini-3.8-flash-tts/.test(nk) || !/Chuyển sang mã 2\/2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
+  // Loại đang dùng hết lượt ở MỌI mã → chỉ các đoạn CÒN THIẾU đọc bằng loại khác; đoạn đã đọc giữ nguyên (không đọc lại)
+  "27h-gemini-doi-loai-khi-het-moi-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, cau: CAU_THUA,
+      gemHetSau: { "MA-DOC-111111": { mh: "3.8-flash-tts", sau: 1 }, "MA-DOC-222222": { mh: "3.8-flash-tts", sau: 0 } },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = await p.evaluate(() => globalThis.__phahaMhDoc || []);
+        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); kq.mhDung = mh;
+        const soDoan = Number(/Đã đọc (\d+) lượt/.exec(nk)?.[1]);
+        if (!/các đoạn CÒN THIẾU đọc bằng gemini-3.1/.test(nk)) kq.loi = "Không đổi loại cho các đoạn còn thiếu";
+        else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang;
+        else if (mh.length !== soDoan || !/3\.8/.test(mh[0])) kq.loi = `Đọc lại đoạn đã có (${mh.length} lần đọc cho ${soDoan} đoạn): ${mh.join(", ")}`; } },
+  // Mã 1 bị giới hạn mỗi phút, Google bảo chờ 45 giây (> 15) → khoá tạm, đổi ngay sang mã 2
   "27e-gemini-xoay-khi-cho-phut": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
-      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/giới hạn mỗi phút[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/Khoá tạm[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/Khoá tạm .* 45 giây/.test(nk) || !/Chuyển sang mã 2\/2/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không khoá tạm mã 1 rồi đổi sang mã 2"; } },
+  // Google bảo chờ 5 giây (≤ 15) → chờ rồi gửi lại CÙNG mã, không khoá, không đổi mã
+  "27l-gemini-cho-ngan-cung-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhutNgan: { "MA-DOC-111111": 3 },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.goi.khoaDoc = [...kq.goi.khoaDoc]; kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (/Khoá tạm|Chuyển sang mã/.test(nk) || kq.goi.khoaDoc.includes("MA-DOC-222222")) kq.loi = "Chờ ngắn mà vẫn khoá / đổi mã";
+        else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang; } },
+  // Mọi loại ở mọi mã đều hết lượt ngày → bỏ Gemini ngay, đọc bằng giọng kế tiếp; không chờ, không thử lại cặp đã hết
+  "27m-gemini-het-sach-sang-giong-sau": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemTTS: "het",
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (/Gemini/.test(kq.docBang)) kq.loi = "Vẫn đọc bằng Gemini";
+        else if (/chờ \d+ giây|Khoá tạm/.test(nk)) kq.loi = "Ngồi chờ thay vì bỏ Gemini ngay";
+        else if (kq.goi.gemTTS > 6) kq.loi = `Gửi ${kq.goi.gemTTS} yêu cầu (thử lại cặp đã hết lượt)`; } },
   // Mã 2 có ký tự lạ (Safari báo "Type error" như mất mạng), mã 3 dính ký tự ẩn → bỏ qua mã 2, dùng mã 3; không bỏ Gemini sang giọng máy
-  "27i-gemini-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333\u200b333", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
+  "27i-gemini-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333​333", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
         if (!/ký tự lạ/.test(nk)) kq.loi = "Không báo mã có ký tự lạ";
         else if (/lỗi mạng|đọc lại toàn bộ bằng/.test(nk)) kq.loi = "Vẫn coi là mất mạng / bỏ Gemini";
-        else if (!/sang mã số 3/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không đọc tiếp bằng mã 3: " + kq.docBang; } },
+        else if (!/Chuyển sang mã 3\/3/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không đọc tiếp bằng mã 3: " + kq.docBang; } },
   "27j-kiem-tra-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333\u200b333" }, kiemMa: true },
   // Khách chỉ dán ô mã giọng đọc, ô "Mã Gemini" trống, không có dự phòng → nghe & dịch dùng tạm mã giọng đọc số 1 (không báo "Cần dán mã")
   "27k-chi-co-ma-giong-doc": { caiDat: { ...CD, khoa: "", khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, khongChu: true,

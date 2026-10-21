@@ -4,6 +4,7 @@
 import { $, caiDat, nhat, luuCaiDat, lamSachMa, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu } from "./nen.js";
 import { KENH, KENH_MAC_DINH } from "./chuyen-mon.js";
 import { quenGhiNhoGemini } from "./gemini.js";
+import { quenLuotDoc } from "./doc-gemini.js";
 import { THU_TU, CAC_DV, CAU_MAU, DICH_VU, LOAI_GC, tenGiong, taiDsGiong, dvDocDung, dvHetThang, docCau } from "./giong-doc.js";
 import { trangDongBo, ghiTrangDongBo, hienTrangDongBo } from "./dong-bo-ui.js";
 import { bamNghe } from "./nghe-thu.js";
@@ -70,6 +71,7 @@ export function layTuForm() {
   // Đổi mã Gemini → quên ghi nhớ "loại Gemini nào hết lượt hôm nay" (đó là của mã cũ), để thử ngay mã mới
   if (lamSachMa($("o-khoa").value) !== caiDat.khoa || lamSachMa($("o-khoa-doc").value) !== caiDat.khoaDoc) {
     quenGhiNhoGemini();
+    quenLuotDoc();
     nhat("Đã đổi mã Gemini → thử lại mọi loại Gemini với mã mới");
   }
   caiDat.khoa = lamSachMa($("o-khoa").value);
@@ -176,7 +178,7 @@ export function khoiDongCaiDat() {
     layTuForm();
     veGiongNhanh();
     // Bấm Lưu = có thể vừa nâng mã Gemini lên trả phí → quên giới hạn Gemini đã ghi nhớ, lần chạy sau thử lại thật
-    if ($("hop-cai-dat").returnValue === "luu") quenGhiNhoGemini(true);
+    if ($("hop-cai-dat").returnValue === "luu") { quenGhiNhoGemini(true); quenLuotDoc(); }
   });
   document.querySelectorAll(".dv-doc input").forEach((o) => o.addEventListener("change", () => { layTuForm(); hienTrangThai(); }));
 
