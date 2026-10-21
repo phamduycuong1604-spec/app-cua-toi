@@ -113,11 +113,14 @@ async function chay(ten, o) {
     if (u.endsWith("/tai-khoan/toi")) {
       dem("hoiToi");
       if (o.hetHanRoi || (o.hetHanSau && goi.hoiToi > o.hetHanSau)) return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: 'Tài khoản "lan" đã hết hạn dùng từ ngày 01/10/2026. Liên hệ chủ app để gia hạn.' }) });
-      return rt.fulfill({ headers: J, body: JSON.stringify({ ten: "a", quanTri: !o.khongChu, hetHan: o.khongChu ? Date.now() + 30 * 864e5 : null }) });
+      const la = goi.dangNhapLa || (o.khongChu ? "lan" : "chu"); // đúng người vừa đăng nhập (như máy chủ thật)
+      return rt.fulfill({ headers: J, body: JSON.stringify({ ten: la, quanTri: la === "chu", hetHan: la === "chu" ? null : Date.now() + 30 * 864e5 }) });
     }
     if (u.endsWith("/tai-khoan/dang-nhap")) {
       const b = JSON.parse(rt.request().postData() || "{}");
+      if ((b.ten === "lan" && b.matKhau === "123456") || (b.ten === "chu" && b.matKhau === "matkhau1")) goi.dangNhapLa = b.ten;
       if (b.ten === "lan" && b.matKhau === "123456") return rt.fulfill({ headers: J, body: JSON.stringify({ ve: "VE", ten: "lan", quanTri: false, hetHan: Date.now() + 30 * 864e5 }) });
+      if (b.ten === "chu" && b.matKhau === "matkhau1") return rt.fulfill({ headers: J, body: JSON.stringify({ ve: "VE", ten: "chu", quanTri: true, hetHan: null }) });
       return rt.fulfill({ status: 401, headers: J, body: JSON.stringify({ loi: "Sai tên đăng nhập hoặc mật khẩu" }) });
     }
     if (!u.includes("/ai/")) return rt.fulfill({ headers: J, body: "{}" });
@@ -181,7 +184,7 @@ async function chay(ten, o) {
   await p.route("https://openrouter.ai/**", (rt) => { dem("or"); rt.fulfill({ headers: J, body: JSON.stringify(rt.request().url().endsWith("/models") ? { data: [{ id: "deepseek/x:free" }] } : { choices: [{ message: { content: "Kết quả: " + DICH } }] }) }); });
 
   await p.goto(`http://localhost:${CONG}/dich-video/`);
-  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("la-quan-tri", cd.__khongChu ? "0" : "1"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
+  await p.evaluate(([cd, logo]) => { localStorage.clear(); if (!cd.__khongVe) localStorage.setItem("ve-dang-nhap", "VE"); localStorage.setItem("la-quan-tri", cd.__khongChu ? "0" : "1"); if (!cd.__khongVe) localStorage.setItem("ten-dang-nhap", cd.__khongChu ? "lan" : "chu"); localStorage.setItem("phaha-dv-cai-dat-cua", cd.__khongVe ? "" : cd.__khongChu ? "lan" : "chu"); localStorage.setItem("phaha-dv-cai-dat", JSON.stringify(cd)); if (cd.__kyTu) localStorage.setItem("phaha-dv-ky-tu", JSON.stringify(cd.__kyTu)); if (cd.__dung) localStorage.setItem("phaha-dv-dung", JSON.stringify(cd.__dung)); if (cd.__songSong) localStorage.setItem("phaha-song-song", cd.__songSong); if (cd.__dangChay) localStorage.setItem("phaha-dang-chay", cd.__dangChay); if (cd.__nghi) localStorage.setItem("phaha-dv-gemini-nghi", JSON.stringify(cd.__nghi)); if (logo) localStorage.setItem("phaha-dv-logo", logo); },
     [{ ...o.caiDat, __khongVe: o.khongVe }, o.logo ? "data:image/png;base64," + fs.readFileSync(`${S}/logo.png`).toString("base64") : null]);
   await p.reload();
   if (o.caiDat.__dangChay) goi.baoTatGiuaChung = (await p.textContent("#o-nhat-ky")).includes("TRANG BỊ TẮT GIỮA CHỪNG");
@@ -381,8 +384,34 @@ const KICH_BAN = {
         await p.waitForFunction(() => /Sai tên/.test(document.getElementById("dn-bao").textContent));
         await p.fill("#o-dn-mk", "123456"); await p.click("#nut-dang-nhap");
         await p.waitForSelector("#man-dang-nhap", { state: "hidden", timeout: 10000 });
+        await p.waitForSelector("#tt-tai-khoan:not(.an)");
         const tt = await p.textContent("#tt-tai-khoan");
         if (!/lan · dùng đến/.test(tt)) throw new Error("Không hiện tài khoản & hạn dùng: " + tt);
+      }, chiTruoc: { cua: "đăng nhập đúng" } },
+  "52-khach-dung-chung-may-khong-thay-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", dp: { ds: "sk-ds", groq: "gsk" } }, chiTruoc: { cua: "tách đúng" },
+      truoc: async (p) => {
+        const maDangCo = () => p.evaluate(() => { const c = JSON.parse(localStorage.getItem("phaha-dv-cai-dat") || "{}"); return [c.khoa, c.khoaDoc, c.dp?.ds, c.dp?.groq, c.dv?.el?.khoa, c.dv?.az?.khoa].filter(Boolean).join(","); });
+        const dangXuat = async () => { p.once("dialog", (d) => d.accept()); await Promise.all([p.waitForEvent("load"), p.click("#nut-dang-xuat")]); await p.waitForSelector("#man-dang-nhap:not(.an)"); };
+        const dangNhap = async (ten, mk) => { await p.fill("#o-dn-ten", ten); await p.fill("#o-dn-mk", mk); await Promise.all([p.waitForEvent("load"), p.click("#nut-dang-nhap")]); await p.waitForFunction((t) => document.getElementById("tt-tai-khoan").textContent.includes("👤 " + t) && !document.getElementById("tt-tai-khoan").classList.contains("an"), ten); };
+        const goc = await maDangCo();
+        if (!goc.includes("MA-DOC-111111")) throw new Error("Chủ app chưa có mã lúc đầu: " + goc);
+        await dangXuat();
+        if (await maDangCo()) throw new Error("Đăng xuất mà mã của chủ app vẫn còn trên trang: " + (await maDangCo()));
+        await dangNhap("lan", "123456");
+        if (await maDangCo()) throw new Error("KHÁCH THẤY MÃ CỦA CHỦ APP: " + (await maDangCo()));
+        await p.click("#nut-cai-dat");
+        if (await p.inputValue("#o-khoa") || await p.inputValue("#o-khoa-doc") || await p.inputValue("#o-khoa-ds")) throw new Error("Ô mã trong ⚙️ của khách không trống");
+        // khách tự dán mã của họ trong ⚙️ → lưu riêng cho khách
+        await p.fill("#o-khoa", "MA-CUA-KHACH");
+        await p.click("#hop-cai-dat button[value=luu]");
+        await p.waitForFunction(() => /MA-CUA-KHACH/.test(localStorage.getItem("phaha-dv-cai-dat") || ""));
+        await dangXuat();
+        await dangNhap("chu", "matkhau1");
+        const sau = await maDangCo();
+        if (sau !== goc) throw new Error(`Chủ app đăng nhập lại mà mã không về đủ: trước "${goc}", sau "${sau}"`);
+        await dangXuat();
+        await dangNhap("lan", "123456");
+        if ((await maDangCo()) !== "MA-CUA-KHACH") throw new Error("Khách đăng nhập lại mất mã của khách: " + (await maDangCo()));
       } },
   "51b-tai-khoan-het-han-bi-khoa": { caiDat: { ...CD, __khongChu: true }, khongChu: true, hetHanRoi: true,
       truoc: async (p) => {
