@@ -310,6 +310,10 @@ const KICH_BAN = {
         else if (/lỗi mạng|đọc lại toàn bộ bằng/.test(nk)) kq.loi = "Vẫn coi là mất mạng / bỏ Gemini";
         else if (!/sang mã số 3/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không đọc tiếp bằng mã 3: " + kq.docBang; } },
   "27j-kiem-tra-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333\u200b333" }, kiemMa: true },
+  // Khách chỉ dán ô mã giọng đọc, ô "Mã Gemini" trống, không có dự phòng → nghe & dịch dùng tạm mã giọng đọc số 1 (không báo "Cần dán mã")
+  "27k-chi-co-ma-giong-doc": { caiDat: { ...CD, khoa: "", khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, khongChu: true,
+      sau: async (p, kq) => { kq.goi.khoaNghe = [...(kq.goi.khoaNghe || [])]; kq.goi.khoaDoc = [...(kq.goi.khoaDoc || [])];
+        if (!kq.goi.khoaNghe.includes("MA-DOC-111111")) kq.loi ||= "Không dùng mã giọng đọc để nghe & dịch"; } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },

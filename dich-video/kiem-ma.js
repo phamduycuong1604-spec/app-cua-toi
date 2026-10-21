@@ -3,7 +3,7 @@
 // và hiện hạn mức + % còn lại (lấy số thật nếu dịch vụ cho xem, không thì đếm trên máy này)
 // =====================================================
 import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, quaMayChu, API_GEMINI, lamSachMa, maHopLe } from "./nen.js";
-import { dsKhoaDoc, hanMucGemini, hanMuc } from "./gemini.js";
+import { dsKhoaDoc, hanMucGemini, hanMuc, maNghe } from "./gemini.js";
 import { EL_API, FISH_API, VT_API, FPT_API, azApi } from "./giong-doc.js";
 import { duPhong } from "./nghe-dich.js";
 import { layTuForm, lyDoKhongMayChu } from "./cai-dat-ui.js";
@@ -19,7 +19,7 @@ const docJson = async (r) => {
 
 async function chiTietHanMuc(ten, r) {
   try {
-    if (ten === "Gemini (nghe & dịch)") return hanMucGemini(caiDat.khoa, "nghe") + (caiDat.khoaDoc ? "" : " · " + hanMucGemini(caiDat.khoa, "doc"));
+    if (ten.startsWith("Gemini (nghe & dịch")) return hanMucGemini(maNghe(), "nghe") + (caiDat.khoaDoc ? "" : " · " + hanMucGemini(maNghe(), "doc"));
     if (ten === "Gemini riêng cho giọng đọc") return hanMucGemini(dsKhoaDoc()[0], "doc");
     const soMa = /^Gemini giọng đọc – mã (\d+)$/.exec(ten);
     if (soMa) return hanMucGemini(dsKhoaDoc()[soMa[1] - 1], "doc");
@@ -51,7 +51,7 @@ function danhSachThu() {
   const gemini = (k) => () => fetch(`${API_GEMINI}/models?pageSize=1`, { headers: { "x-goog-api-key": k } });
   const maDoc = dsKhoaDoc().length ? dsKhoaDoc() : [""];
   return [
-    ["Gemini (nghe & dịch)", lamSachMa(caiDat.khoa), gemini(lamSachMa(caiDat.khoa))],
+    [lamSachMa(caiDat.khoa) || !maNghe() ? "Gemini (nghe & dịch)" : "Gemini (nghe & dịch – dùng tạm mã giọng đọc số 1)", maNghe(), gemini(maNghe())],
     ...maDoc.map((k, i) => [maDoc.length > 1 ? `Gemini giọng đọc – mã ${i + 1}` : "Gemini riêng cho giọng đọc", k, gemini(k)]),
     ["DeepSeek", caiDat.dp.ds, () => duPhong.goi("https://api.deepseek.com/user/balance", bear(caiDat.dp.ds), "DeepSeek"), async (r) => {
       if (!r.ok) return null;

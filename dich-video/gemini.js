@@ -65,7 +65,9 @@ export function quenGhiNhoGemini(caHanMuc = false) {
 // mã đang dùng hết lượt thì tự chuyển sang mã kế tiếp
 export const dsKhoaDoc = () => [...new Set(lamSachMa(caiDat.khoaDoc).split(/[\s,;]+/).filter(Boolean))].slice(0, 10);
 let soMaDoc = 0; // vị trí mã đọc đang dùng trong danh sách
-const khoaGemini = (loai) => (loai === "doc" && (dsKhoaDoc()[soMaDoc] || dsKhoaDoc()[0])) || lamSachMa(caiDat.khoa);
+// Mã nghe & dịch: ô "Mã Gemini"; để trống mà có mã giọng đọc → dùng tạm mã giọng đọc số 1 (khách hay chỉ dán ô giọng đọc)
+export const maNghe = () => lamSachMa(caiDat.khoa) || dsKhoaDoc()[0] || "";
+const khoaGemini = (loai) => (loai === "doc" && (dsKhoaDoc()[soMaDoc] || dsKhoaDoc()[0])) || maNghe();
 const tenNghi = (m, loai) => vanTayMa(khoaGemini(loai) || "") + ":" + m;
 
 // Gọi Gemini; giọng đọc có nhiều mã thì xoay vòng khi mã đang dùng hết lượt / bị giới hạn mỗi phút
