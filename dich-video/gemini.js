@@ -3,7 +3,7 @@
 // xoay vòng nhiều mã giọng đọc, ghi nhớ loại nào hết lượt hôm nay (theo từng mã)
 // loai = "nghe" (nghe & dịch) hoặc "doc" (đọc giọng)
 // =====================================================
-import { API_GEMINI, caiDat, nhat, cho, docLuu, ghiLuu, demDung, daDung, ngayMy, vanTayMa } from "./nen.js";
+import { API_GEMINI, caiDat, nhat, cho, docLuu, ghiLuu, demDung, daDung, ngayMy, vanTayMa, lamSachMa, maHopLe, LOI_MA_LA } from "./nen.js";
 
 // Mỗi loại Gemini có lượt miễn phí riêng → loại này quá tải/hết lượt thì chuyển loại khác
 const MO_HINH = {
@@ -63,9 +63,9 @@ export function quenGhiNhoGemini(caHanMuc = false) {
 // ----- Mã dùng cho từng việc -----
 // Ô "Gemini riêng cho giọng đọc" nhận tối đa 10 mã (cách nhau bằng dấu phẩy, khoảng trắng hoặc xuống dòng):
 // mã đang dùng hết lượt thì tự chuyển sang mã kế tiếp
-export const dsKhoaDoc = () => [...new Set(String(caiDat.khoaDoc || "").split(/[\s,;]+/).filter(Boolean))].slice(0, 10);
+export const dsKhoaDoc = () => [...new Set(lamSachMa(caiDat.khoaDoc).split(/[\s,;]+/).filter(Boolean))].slice(0, 10);
 let soMaDoc = 0; // vị trí mã đọc đang dùng trong danh sách
-const khoaGemini = (loai) => (loai === "doc" && (dsKhoaDoc()[soMaDoc] || dsKhoaDoc()[0])) || caiDat.khoa;
+const khoaGemini = (loai) => (loai === "doc" && (dsKhoaDoc()[soMaDoc] || dsKhoaDoc()[0])) || lamSachMa(caiDat.khoa);
 const tenNghi = (m, loai) => vanTayMa(khoaGemini(loai) || "") + ":" + m;
 
 // Gọi Gemini; giọng đọc có nhiều mã thì xoay vòng khi mã đang dùng hết lượt / bị giới hạn mỗi phút
@@ -79,10 +79,14 @@ export async function goiGemini(loai, noiDung) {
       // Chưa thử hết các mã: gặp giới hạn mỗi phút thì đổi ngay sang mã kế tiếp thay vì ngồi chờ
       return await goiMotMa(loai, noiDung, { doiMaKhiCho: daThu < ds.length - 1 });
     } catch (loi) {
-      if ((loi?.message !== "HET_NGAY" && !loi?.doiMa) || daThu >= ds.length - 1) throw loi;
+      if ((loi?.message !== "HET_NGAY" && !loi?.doiMa) || daThu >= ds.length - 1 || ds.every((k, i) => i === soMaDoc || !maHopLe(k))) throw loi;
       if (soMaDoc !== dang) continue; // luồng đọc khác vừa đổi mã rồi → dùng luôn mã mới
       const cu = soMaDoc;
-      soMaDoc = (soMaDoc + 1) % ds.length;
+      // bỏ qua luôn các mã có ký tự lạ (gửi đi chắc chắn hỏng)
+      do {
+        soMaDoc = (soMaDoc + 1) % ds.length;
+        if (!maHopLe(ds[soMaDoc]) && soMaDoc !== cu) nhat(`🔑 Bỏ qua mã Gemini đọc số ${soMaDoc + 1}/${ds.length}: mã có ký tự lạ – xoá mã này trong ⚙️ rồi chép – dán lại`);
+      } while (!maHopLe(ds[soMaDoc]) && soMaDoc !== cu);
       daBaoNghi = new Set();
       const ma = `🔑 Mã Gemini đọc số ${cu + 1}/${ds.length}`, sang = `sang mã số ${soMaDoc + 1}`;
       if (loi.message === "CHO_PHUT") nhat(`${ma} đang bị giới hạn mỗi phút (Google bảo chờ ${loi.choGiay} giây) → chuyển ngay ${sang}`);
@@ -190,13 +194,15 @@ async function goiMoHinh(moHinh, noiDung, loai, tuyChon = {}) {
     // Bình thường Gemini nghe 1 đoạn ~1,5 phút chỉ mất 5–10 giây; quá 60 giây là máy chủ Google đang nghẽn → huỷ, gửi lại
     const huy = new AbortController();
     const hen = setTimeout(() => huy.abort(), (loai === "nghe" ? 60 : 45) * 1000);
+    const khoa = khoaGemini(loai);
+    if (khoa && !maHopLe(khoa)) throw Object.assign(new Error(LOI_MA_LA), { doiMa: true, maLa: true });
     const bd = Date.now();
     const thoiGian = () => ((Date.now() - bd) / 1000).toFixed(1) + " giây";
     let r;
     try {
       r = await fetch(`${API_GEMINI}/models/${moHinh}:generateContent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": khoaGemini(loai) },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": khoa },
         body: JSON.stringify(guiDi),
         signal: huy.signal,
       });

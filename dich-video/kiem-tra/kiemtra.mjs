@@ -303,6 +303,13 @@ const KICH_BAN = {
         else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang; } },
   "27e-gemini-xoay-khi-cho-phut": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/giới hạn mỗi phút[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); } },
+  // Mã 2 có ký tự lạ (Safari báo "Type error" như mất mạng), mã 3 dính ký tự ẩn → bỏ qua mã 2, dùng mã 3; không bỏ Gemini sang giọng máy
+  "27i-gemini-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333\u200b333", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/ký tự lạ/.test(nk)) kq.loi = "Không báo mã có ký tự lạ";
+        else if (/lỗi mạng|đọc lại toàn bộ bằng/.test(nk)) kq.loi = "Vẫn coi là mất mạng / bỏ Gemini";
+        else if (!/sang mã số 3/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không đọc tiếp bằng mã 3: " + kq.docBang; } },
+  "27j-kiem-tra-ma-ky-tu-la": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-ĐỎ2222, MA-DOC-333\u200b333" }, kiemMa: true },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },

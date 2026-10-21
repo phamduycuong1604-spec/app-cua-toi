@@ -1,7 +1,7 @@
 // =====================================================
 // HỘP ⚙️ CÀI ĐẶT + các ô trên màn hình chính (giọng cho video này, chuyên môn dịch, chủ đề, thuật ngữ)
 // =====================================================
-import { $, caiDat, nhat, luuCaiDat, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu } from "./nen.js";
+import { $, caiDat, nhat, luuCaiDat, lamSachMa, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu } from "./nen.js";
 import { KENH, KENH_MAC_DINH } from "./chuyen-mon.js";
 import { quenGhiNhoGemini } from "./gemini.js";
 import { THU_TU, CAC_DV, CAU_MAU, DICH_VU, LOAI_GC, tenGiong, taiDsGiong, dvDocDung, dvHetThang, docCau } from "./giong-doc.js";
@@ -68,12 +68,12 @@ export function layTuForm() {
   caiDat.dp.cf = $("o-dp-cf").checked;
   caiDat.dp.azNghe = $("o-dp-az-nghe").checked;
   // Đổi mã Gemini → quên ghi nhớ "loại Gemini nào hết lượt hôm nay" (đó là của mã cũ), để thử ngay mã mới
-  if ($("o-khoa").value.trim() !== caiDat.khoa || $("o-khoa-doc").value.trim() !== caiDat.khoaDoc) {
+  if (lamSachMa($("o-khoa").value) !== caiDat.khoa || lamSachMa($("o-khoa-doc").value) !== caiDat.khoaDoc) {
     quenGhiNhoGemini();
     nhat("Đã đổi mã Gemini → thử lại mọi loại Gemini với mã mới");
   }
-  caiDat.khoa = $("o-khoa").value.trim();
-  caiDat.khoaDoc = $("o-khoa-doc").value.trim();
+  caiDat.khoa = lamSachMa($("o-khoa").value);
+  caiDat.khoaDoc = lamSachMa($("o-khoa-doc").value);
   ghiTrangDongBo({ mk: $("o-mk-dong-bo").value, tuDong: $("o-tu-dong-bo").checked });
   caiDat.dichBang = $("bat-deepseek").checked ? "deepseek" : "gemini";
   caiDat.giong = $("o-giong").value;

@@ -2,7 +2,7 @@
 // NÚT 🔎 KIỂM TRA CÁC MÃ: thử từng mã đã dán (chỉ hỏi danh sách/số dư, không tốn lượt đọc/dịch)
 // và hiện hạn mức + % còn lại (lấy số thật nếu dịch vụ cho xem, không thì đếm trên máy này)
 // =====================================================
-import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, quaMayChu, API_GEMINI } from "./nen.js";
+import { $, caiDat, nhat, daDung, kyTuThang, vanTayMa, quaMayChu, API_GEMINI, lamSachMa, maHopLe } from "./nen.js";
 import { dsKhoaDoc, hanMucGemini, hanMuc } from "./gemini.js";
 import { EL_API, FISH_API, VT_API, FPT_API, azApi } from "./giong-doc.js";
 import { duPhong } from "./nghe-dich.js";
@@ -51,7 +51,7 @@ function danhSachThu() {
   const gemini = (k) => () => fetch(`${API_GEMINI}/models?pageSize=1`, { headers: { "x-goog-api-key": k } });
   const maDoc = dsKhoaDoc().length ? dsKhoaDoc() : [""];
   return [
-    ["Gemini (nghe & dịch)", caiDat.khoa, gemini(caiDat.khoa)],
+    ["Gemini (nghe & dịch)", lamSachMa(caiDat.khoa), gemini(lamSachMa(caiDat.khoa))],
     ...maDoc.map((k, i) => [maDoc.length > 1 ? `Gemini giọng đọc – mã ${i + 1}` : "Gemini riêng cho giọng đọc", k, gemini(k)]),
     ["DeepSeek", caiDat.dp.ds, () => duPhong.goi("https://api.deepseek.com/user/balance", bear(caiDat.dp.ds), "DeepSeek"), async (r) => {
       if (!r.ok) return null;
@@ -99,6 +99,7 @@ function danhSachThu() {
 
 async function kiemMotMa([ten, khoa, thu, rieng]) {
   if (!khoa) return `▫️ ${ten}: chưa dán mã`;
+  if (!maHopLe(khoa)) return `❌ ${ten}: mã có ký tự lạ (chép kèm dấu/ký tự ẩn) – xoá mã này rồi chép – dán lại`;
   try {
     const r = await thu();
     const kq = rieng && (await rieng(r));

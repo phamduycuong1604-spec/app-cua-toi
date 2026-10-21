@@ -533,7 +533,7 @@ async function longTiengBang(dv) {
       return await longTiengBangThat(dv);
     } catch (loi) {
       const mh = moHinhDocDaChot();
-      if (lan >= 2 || !mh || caiDat.mhDoc || (loi?.message !== "HET_NGAY" && !loi?.doiMa)) throw loi;
+      if (lan >= 2 || !mh || caiDat.mhDoc || loi?.maLa || (loi?.message !== "HET_NGAY" && !loi?.doiMa)) throw loi;
       boMoHinhDoc(mh);
       nhat(`↻ ${mh} đã hết lượt ở mọi mã → đọc lại cả video bằng loại Gemini khác (giọng vẫn đồng nhất)`);
     }
