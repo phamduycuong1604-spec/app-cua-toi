@@ -19,7 +19,7 @@
     var link = "https://m.me/" + cfg.ten_trang_facebook + "?text=" + encodeURIComponent(d.tin_nhan);
     function nutMua(text) {
       var a = el("a", "nut", text);
-      a.href = link; a.target = "_blank"; a.rel = "noopener";
+      a.href = link;
       a.addEventListener("click", function () { try { navigator.clipboard.writeText(d.tin_nhan); } catch (e) {} });
       return a;
     }
