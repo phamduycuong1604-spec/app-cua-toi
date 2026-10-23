@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHA – Các bộ màu preset</title>
+<meta name="description" content="Danh sách bộ màu preset cho ảnh & video của PHA. Bấm vào bộ bạn thích để xem và mua.">
+<link rel="stylesheet" href="../mau.css">
+<style>
+.tim{display:block;width:100%;padding:12px 16px;border:1px solid var(--vien);border-radius:999px;background:var(--the);color:var(--chu);font:inherit;margin:14px 0}
+.ds-bo{display:grid;gap:12px;padding-bottom:40px}
+.bo{display:flex;gap:14px;align-items:center;background:var(--the);border:1px solid var(--vien);border-radius:14px;padding:10px;text-decoration:none;color:var(--chu)}
+.bo img{width:72px;height:96px;object-fit:cover;border-radius:10px;flex:none;background:var(--vien)}
+.bo div{min-width:0}
+.bo b{display:block;line-height:1.3}
+.bo span{display:block;font-size:14px;color:var(--phu)}
+.bo em{display:block;font-style:normal;font-weight:800;color:var(--chinh);margin-top:2px}
+</style>
+</head>
+<body>
+<header class="hop">
+  <h1>Các bộ màu preset</h1>
+  <p class="phu ghichu" style="font-size:15px">Chọn bộ bạn thích để xem chi tiết và nhắn mua</p>
+</header>
+<main class="hop">
+  <input class="tim" id="tim" type="search" placeholder="Tìm bộ màu…" aria-label="Tìm bộ màu">
+  <div class="ds-bo" id="ds"></div>
+</main>
+<script>
+(function () {
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var ds = document.getElementById("ds"), tim = document.getElementById("tim"), mon = [];
+  fetch("../bo-mau.json", { cache: "no-cache" }).then(function (r) { return r.json(); }).then(function (cfg) {
+    Object.keys(cfg.bo_mau).forEach(function (id) {
+      var d = cfg.bo_mau[id];
+      var a = el("a", "bo"); a.href = "../" + id + "/";
+      var img = el("img"); img.loading = "lazy"; img.alt = ""; img.width = 72; img.height = 96;
+      var anh = d.anh_nho || d.anh; img.src = /^https?:/.test(anh) ? anh : "../" + anh;
+      var t = el("div");
+      t.appendChild(el("b", null, d.ten_ngan || d.ten));
+      if (d.mo_ta_ngan) t.appendChild(el("span", null, d.mo_ta_ngan));
+      t.appendChild(el("em", null, d.gia));
+      a.appendChild(img); a.appendChild(t); ds.appendChild(a);
+      mon.push({ a: a, chu: ((d.ten_ngan || "") + " " + d.ten + " " + (d.mo_ta_ngan || "")).toLowerCase() });
+    });
+  }).catch(function () { ds.appendChild(el("p", "phu", "Trang đang tải lỗi, bạn thử lại sau nhé.")); });
+  tim.addEventListener("input", function () {
+    var q = tim.value.trim().toLowerCase();
+    mon.forEach(function (m) { m.a.hidden = q && m.chu.indexOf(q) < 0; });
+  });
+})();
+</script>
+</body>
+</html>
