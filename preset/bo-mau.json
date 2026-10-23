@@ -1,0 +1,30 @@
+{
+  "ten_trang_facebook": "TEN_TRANG_CUA_BAN",
+  "bo_mau": {
+    "kodak": {
+      "ten": "Bộ giả lập film Kodak – 63 màu cho ảnh & video",
+      "gia": "150.000đ",
+      "anh": "kodak/bia.jpg",
+      "tin_nhan": "Mình muốn mua Bộ giả lập film Kodak 63 màu",
+      "gom": [
+        ["31", "Kodak Gold 200"],
+        ["10", "Kodak Vision3"],
+        ["3", "Kodak Portra 400"],
+        ["1", "Kodak ColorPlus 200"],
+        ["9", "Fuji C200 · Pro 400H · Provia 100F"],
+        ["9", "Cinestill 50D · 400D · 800T"]
+      ],
+      "dung_duoc_tren": [
+        "Ảnh: Photoshop · Lightroom · Lightroom Mobile · Capture One · PixelCake",
+        "Video: Premiere · Final Cut Pro · DaVinci Resolve · CapCut",
+        "Định dạng: XMP · ICC · LUT",
+        "Kèm theo: ảnh tham khảo · thông số tinh chỉnh · video hướng dẫn cài đặt"
+      ],
+      "hay_hoi": [
+        ["Mua xong nhận file thế nào?", "Bạn bấm nút mua, nhắn tin cho mình. Mình gửi số tài khoản, bạn chuyển khoản xong là nhận link tải ngay."],
+        ["Dùng được trên điện thoại không?", "Được. Bộ có bản cho Lightroom Mobile và CapCut, cài trên điện thoại rất nhanh."],
+        ["Cài không được thì sao?", "Có video hướng dẫn từng bước. Vẫn vướng thì nhắn mình, mình hỗ trợ đến khi dùng được."]
+      ]
+    }
+  }
+}
