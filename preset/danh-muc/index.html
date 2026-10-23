@@ -4,49 +4,236 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pha Lab</title>
-<meta name="description" content="Pha Lab – các bộ màu preset cho ảnh & video. Bấm vào bộ bạn thích để xem và mua.">
-<link rel="stylesheet" href="../mau.css">
+<meta name="description" content="Pha Lab – bộ màu film Kodak, Fuji, Cinestill cho ảnh & video. Dùng trên điện thoại và máy tính, nhận file ngay qua Messenger.">
+<meta property="og:title" content="Pha Lab – Màu phim hơn cả kỷ niệm">
+<meta property="og:image" content="../kodak/bia.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,800&display=swap">
 <style>
-.tim{display:block;width:100%;padding:12px 16px;border:1px solid var(--vien);border-radius:999px;background:var(--the);color:var(--chu);font:inherit;margin:14px 0}
-.ds-bo{display:grid;gap:12px;padding-bottom:40px}
-.bo{display:flex;gap:14px;align-items:center;background:var(--the);border:1px solid var(--vien);border-radius:14px;padding:10px;text-decoration:none;color:var(--chu)}
-.bo img{width:72px;height:96px;object-fit:cover;border-radius:10px;flex:none;background:var(--vien)}
-.bo div{min-width:0}
-.bo b{display:block;line-height:1.3}
+/* Bố cục: dải phim tối ở đầu trang, bộ mới nhất ở giữa, lưới các bộ, rồi cách mua. Màu lấy từ poster Kodak của Pha. */
+:root{
+  --nen:#f6ecdc; --nen2:#efe1ca; --chu:#2b130b; --phu:#6f5445;
+  --chinh:#b83a22; --tren-chinh:#fff; --vang:#f2b705; --tren-vang:#2b130b;
+  --vien:#decbae; --the:#fffaf0; --phim:#1d100a; --tren-phim:#f6ead9; --phu-phim:#c9b49f;
+  --chu-hien:"Fraunces",Georgia,"Times New Roman",serif;
+  --chu-than:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --nen:#17100c; --nen2:#1e1510; --chu:#f6ead9; --phu:#b9a592;
+  --chinh:#e0583b; --tren-chinh:#1d0d06; --vien:#3a2c22; --the:#251a14; --phim:#0f0805;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --nen:#17100c; --nen2:#1e1510; --chu:#f6ead9; --phu:#b9a592;
+  --chinh:#e0583b; --tren-chinh:#1d0d06; --vien:#3a2c22; --the:#251a14; --phim:#0f0805;
+  color-scheme:dark}
+
+*{box-sizing:border-box;margin:0}
+body{font:16px/1.6 var(--chu-than);background:var(--nen);color:var(--chu);-webkit-text-size-adjust:100%}
+img{display:block;max-width:100%}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--vang);outline-offset:3px}
+.hop{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--chu-hien);line-height:1.15;text-wrap:balance}
+h2{font-size:clamp(24px,5vw,32px);font-weight:800}
+.nut{display:inline-block;background:var(--chinh);color:var(--tren-chinh);text-decoration:none;font-weight:700;padding:14px 26px;border-radius:999px;text-align:center}
+.nut.vang{background:var(--vang);color:var(--tren-vang)}
+.nut:active{transform:translateY(1px)}
+
+/* dải phim */
+.phim{background:var(--phim);color:var(--tren-phim)}
+.lo{height:18px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='18'%3E%3Crect x='7' y='4' width='12' height='10' rx='2.5' fill='%23f6ecdc' fill-opacity='.85'/%3E%3C/svg%3E") repeat-x}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px}
+.thuong-hieu{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--chu-hien);font-weight:800;font-size:22px}
+.logo{width:40px;height:40px;border-radius:50%;border:2px solid var(--vang);display:grid;place-items:center;font-size:13px;letter-spacing:.04em;color:var(--vang)}
+.nav .nut{padding:9px 18px;font-size:14px}
+.dau{padding-block:30px 44px;text-align:center}
+.dau h1{font-size:clamp(34px,9vw,60px);font-weight:800;max-width:14ch;margin:0 auto}
+.dau h1 em{font-style:italic;font-weight:600;color:var(--vang)}
+.dau p{max-width:46ch;margin:14px auto 0;color:var(--phu-phim)}
+
+/* bộ mới nhất */
+.moi{padding-block:36px 8px}
+.moi-the{display:grid;gap:22px;margin-top:-64px;position:relative}
+.moi-anh{border-radius:18px;overflow:hidden;box-shadow:0 18px 40px -18px #000a;aspect-ratio:2/3;background:var(--vien)}
+.moi-anh img{width:100%;height:100%;object-fit:cover}
+.moi-chu{align-self:center}
+.nhan{display:inline-block;background:var(--vang);color:var(--tren-vang);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:3px 12px;border-radius:999px}
+.moi-chu h2{margin:12px 0 6px}
+.moi-chu p{color:var(--phu);max-width:44ch}
+.gia{font-family:var(--chu-hien);font-weight:800;font-size:38px;color:var(--chinh);margin:14px 0 16px}
+@media (min-width:760px){
+  .moi-the{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:48px;margin-top:-84px}
+}
+
+/* cam kết */
+.cam-ket{display:grid;gap:0;margin-block:28px 8px;padding:0;border-block:1px solid var(--vien)}
+.cam-ket li{list-style:none;padding:14px 4px;font-weight:500}
+.cam-ket li+li{border-top:1px solid var(--vien)}
+@media (min-width:760px){
+  .cam-ket{grid-template-columns:repeat(3,1fr)}
+  .cam-ket li{padding:18px 16px;text-align:center}
+  .cam-ket li+li{border-top:0;border-left:1px solid var(--vien)}
+}
+
+/* lưới các bộ */
+.muc{padding-block:40px 8px}
+.muc-dau{display:flex;align-items:end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.tim{width:min(100%,280px);padding:11px 18px;border:1px solid var(--vien);border-radius:999px;background:var(--the);color:var(--chu);font:inherit}
+.luoi{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:760px){.luoi{grid-template-columns:repeat(4,minmax(0,1fr));gap:22px}}
+.bo{text-decoration:none;display:block}
+.bo-anh{position:relative;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:var(--vien)}
+.bo-anh img{width:100%;height:100%;object-fit:cover;transition:transform .35s}
+.bo:hover .bo-anh img{transform:scale(1.04)}
+.bo .gia-nho{position:absolute;left:8px;bottom:8px;background:var(--vang);color:var(--tren-vang);font-weight:700;font-size:14px;padding:2px 11px;border-radius:999px}
+.bo b{display:block;margin-top:10px;line-height:1.35;font-weight:700}
 .bo span{display:block;font-size:14px;color:var(--phu)}
-.bo em{display:block;font-style:normal;font-weight:800;color:var(--chinh);margin-top:2px}
+.sap{border:2px dashed var(--vien);border-radius:14px;aspect-ratio:2/3;display:grid;place-items:center;text-align:center;padding:16px;color:var(--phu);font-size:15px}
+.sap b{display:block;font-family:var(--chu-hien);font-size:20px;color:var(--chu);margin-bottom:4px}
+
+/* cách mua */
+.cach{background:var(--nen2);margin-top:44px;padding-block:44px}
+.cach h2{text-align:center;margin-bottom:24px}
+.buoc{display:grid;gap:14px;counter-reset:b}
+.buoc li{list-style:none;counter-increment:b;display:flex;gap:16px;align-items:flex-start}
+.buoc li::before{content:counter(b);flex:none;width:38px;height:38px;border-radius:50%;background:var(--chinh);color:var(--tren-chinh);display:grid;place-items:center;font-family:var(--chu-hien);font-weight:800;font-size:18px}
+.buoc b{display:block}
+.buoc span{color:var(--phu)}
+@media (min-width:760px){.buoc{grid-template-columns:repeat(3,1fr);gap:28px}.buoc li{flex-direction:column}}
+
+/* hay hỏi */
+.hoi{padding-block:44px 24px;max-width:700px}
+.hoi h2{text-align:center;margin-bottom:18px}
+details{background:var(--the);border:1px solid var(--vien);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:700}
+details p{margin-top:8px;color:var(--phu)}
+
+/* chân trang */
+.chan{margin-top:32px;text-align:center;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+.chan .lo{margin-bottom:36px}
+.chan h2{font-size:clamp(24px,5vw,34px)}
+.chan p{color:var(--phu-phim);margin:8px 0 22px}
+.chan small{display:block;margin-top:26px;color:var(--phu-phim)}
+.chan small a{text-decoration-color:var(--vang)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<header class="hop">
-  <h1>Pha Lab</h1>
-  <p class="phu ghichu" style="font-size:15px">Các bộ màu preset cho ảnh & video. Chọn bộ bạn thích để xem và nhắn mua</p>
-</header>
-<main class="hop">
-  <input class="tim" id="tim" type="search" placeholder="Tìm bộ màu…" aria-label="Tìm bộ màu">
-  <div class="ds-bo" id="ds"></div>
+
+<div class="phim">
+  <div class="lo" aria-hidden="true"></div>
+  <div class="hop">
+    <nav class="nav">
+      <a class="thuong-hieu" href="./"><span class="logo" aria-hidden="true">PHA</span>Pha Lab</a>
+      <a class="nut vang" id="tu-van" href="#">Nhắn tư vấn</a>
+    </nav>
+    <div class="dau">
+      <h1>Màu phim hơn cả <em>kỷ niệm</em></h1>
+      <p>Bộ màu film Kodak, Fuji, Cinestill cho ảnh và video. Cài một lần, dùng được trên điện thoại và máy tính.</p>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section class="moi hop" id="moi" hidden></section>
+
+  <div class="hop"><ul class="cam-ket" id="cam-ket"></ul></div>
+
+  <section class="muc hop" id="muc">
+    <div class="muc-dau">
+      <h2 id="muc-ten">Các bộ màu khác</h2>
+      <input class="tim" id="tim" type="search" placeholder="Tìm bộ màu…" aria-label="Tìm bộ màu" hidden>
+    </div>
+    <div class="luoi" id="luoi"></div>
+  </section>
+
+  <section class="cach">
+    <div class="hop">
+      <h2>Mua trong 3 bước</h2>
+      <ol class="buoc">
+        <li><div><b>Chọn bộ màu</b><span>Xem ảnh và nội dung từng bộ, chọn bộ hợp với phong cách của bạn.</span></div></li>
+        <li><div><b>Nhắn Messenger</b><span>Bấm nút mua, tin nhắn đã có sẵn tên bộ màu. Pha gửi thông tin thanh toán cho bạn.</span></div></li>
+        <li><div><b>Nhận file và cài</b><span>Chuyển khoản xong, bạn nhận link tải kèm video hướng dẫn cài.</span></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="hoi hop">
+    <h2>Hay hỏi</h2>
+    <details><summary>Dùng được trên điện thoại không?</summary><p>Được. Các bộ có bản cho Lightroom Mobile và CapCut, cài trên iPhone và Android đều nhanh.</p></details>
+    <details><summary>Mua xong nhận file thế nào?</summary><p>Bạn nhắn Pha qua Messenger, chuyển khoản, rồi nhận link tải ngay trong cuộc chat.</p></details>
+    <details><summary>Cài không được thì sao?</summary><p>Có video hướng dẫn từng bước. Vẫn vướng thì nhắn Pha, Pha hỗ trợ đến khi bạn dùng được.</p></details>
+  </section>
 </main>
+
+<footer class="phim chan">
+  <div class="lo" aria-hidden="true"></div>
+  <div class="hop">
+    <h2>Chưa biết chọn bộ nào?</h2>
+    <p>Gửi Pha một tấm ảnh của bạn, Pha gợi ý bộ màu hợp nhất.</p>
+    <a class="nut vang" id="tu-van-chan" href="#">Nhắn Pha trên Messenger</a>
+    <small>© Pha Lab · <a id="fb" href="#">facebook.com/PHA.chuyen.anh</a></small>
+  </div>
+</footer>
+
 <script>
 (function () {
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  var ds = document.getElementById("ds"), tim = document.getElementById("tim"), mon = [];
+  function duong(p) { return /^(https?:|data:)/.test(p) ? p : "../" + p; }
   fetch("../bo-mau.json", { cache: "no-cache" }).then(function (r) { return r.json(); }).then(function (cfg) {
-    Object.keys(cfg.bo_mau).forEach(function (id) {
+    var trang = cfg.ten_trang_facebook;
+    var m = "https://m.me/" + trang;
+    ["tu-van", "tu-van-chan"].forEach(function (i) { var a = document.getElementById(i); a.href = m; });
+    var fb = document.getElementById("fb"); fb.href = "https://www.facebook.com/" + trang; fb.textContent = "facebook.com/" + trang;
+
+    var cam = (cfg.pha_lab && cfg.pha_lab.cam_ket) || [];
+    var ul = document.getElementById("cam-ket");
+    cam.forEach(function (t) { ul.appendChild(el("li", null, t)); });
+    if (!cam.length) ul.hidden = true;
+
+    var ids = Object.keys(cfg.bo_mau);
+    var moiId = ids[ids.length - 1];
+    var cacBo = ids.filter(function (i) { return i !== moiId; });
+    var luoi = document.getElementById("luoi"), mon = [];
+
+    if (moiId) {
+      var d = cfg.bo_mau[moiId], s = document.getElementById("moi");
+      var the = el("div", "moi-the");
+      var wa = el("div", "moi-anh"), im = el("img"); im.src = duong(d.anh); im.alt = d.ten_ngan || d.ten; im.width = 800; im.height = 1200; im.fetchPriority = "high";
+      wa.appendChild(im);
+      var ch = el("div", "moi-chu");
+      ch.appendChild(el("span", "nhan", "Mới nhất"));
+      ch.appendChild(el("h2", null, d.ten));
+      if (d.mo_ta_ngan) ch.appendChild(el("p", null, d.mo_ta_ngan));
+      ch.appendChild(el("div", "gia", d.gia));
+      var b = el("a", "nut", "Xem bộ màu"); b.href = "../" + moiId + "/"; ch.appendChild(b);
+      the.appendChild(wa); the.appendChild(ch); s.appendChild(the); s.hidden = false;
+    }
+
+    cacBo.slice().reverse().forEach(function (id) {
       var d = cfg.bo_mau[id];
       var a = el("a", "bo"); a.href = "../" + id + "/";
-      var img = el("img"); img.loading = "lazy"; img.alt = ""; img.width = 72; img.height = 96;
-      var anh = d.anh_nho || d.anh; img.src = /^https?:/.test(anh) ? anh : "../" + anh;
-      var t = el("div");
-      t.appendChild(el("b", null, d.ten_ngan || d.ten));
-      if (d.mo_ta_ngan) t.appendChild(el("span", null, d.mo_ta_ngan));
-      t.appendChild(el("em", null, d.gia));
-      a.appendChild(img); a.appendChild(t); ds.appendChild(a);
+      var w = el("div", "bo-anh"), i2 = el("img"); i2.loading = "lazy"; i2.alt = ""; i2.width = 240; i2.height = 360; i2.src = duong(d.anh_nho || d.anh);
+      w.appendChild(i2); w.appendChild(el("span", "gia-nho", d.gia));
+      a.appendChild(w); a.appendChild(el("b", null, d.ten_ngan || d.ten));
+      if (d.mo_ta_ngan) a.appendChild(el("span", null, d.mo_ta_ngan));
+      luoi.appendChild(a);
       mon.push({ a: a, chu: ((d.ten_ngan || "") + " " + d.ten + " " + (d.mo_ta_ngan || "")).toLowerCase() });
     });
-  }).catch(function () { ds.appendChild(el("p", "phu", "Trang đang tải lỗi, bạn thử lại sau nhé.")); });
-  tim.addEventListener("input", function () {
-    var q = tim.value.trim().toLowerCase();
-    mon.forEach(function (m) { m.a.hidden = q && m.chu.indexOf(q) < 0; });
+    if (!cacBo.length) document.getElementById("muc-ten").textContent = "Sắp ra mắt";
+    var sap = el("div", "sap"); var sd = el("div"); sd.appendChild(el("b", null, "Sắp có thêm")); sd.appendChild(document.createTextNode("Bộ màu mới đang được pha")); sap.appendChild(sd);
+    luoi.appendChild(sap);
+
+    var tim = document.getElementById("tim");
+    if (mon.length > 4) tim.hidden = false;
+    tim.addEventListener("input", function () {
+      var q = tim.value.trim().toLowerCase();
+      mon.forEach(function (x) { x.a.hidden = !!q && x.chu.indexOf(q) < 0; });
+    });
+  }).catch(function () {
+    document.getElementById("luoi").appendChild(el("p", null, "Trang đang tải lỗi, bạn thử lại sau nhé."));
   });
 })();
 </script>
