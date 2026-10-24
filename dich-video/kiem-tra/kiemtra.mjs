@@ -393,7 +393,7 @@ const KICH_BAN = {
       sau: async (p, kq) => {
         if (kq.loiKiem) kq.loi = kq.loiKiem;
         if (!/không có mốc giờ/.test(kq.baoSai || "")) kq.loi = "Không báo lỗi khi dán sai số câu: " + kq.baoSai;
-        if (kq.cau?.slice(0, 3).join("|") !== "Xin chào anh bạn|Nhớ bấm thích và đăng ký nhé|Cảm ơn") kq.loi = "Không dùng bản dịch đã dán: " + kq.cau;
+        if (kq.cau?.join("|") !== "Xin chào anh bạn|Nhớ bấm thích và đăng ký nhé|Cảm ơn") kq.loi = "Không dùng đúng bản dịch đã dán (còn lẫn bản của app): " + kq.cau;
         if (!(await p.isHidden("#the-kiem-pd"))) kq.loi = "Ô kiểm tra phụ đề chưa ẩn"; } },
   "29o-tu-kiem-giu-ban-app": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
       trong: async (p) => { await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 }); await p.click("#nut-bo-qua-pd"); },
@@ -404,7 +404,7 @@ const KICH_BAN = {
         await p.fill("#pd-viet", "1\n00:00:01,100 --> 00:00:02,000\nXin chào\n2\n00:00:02,000 --> 00:00:02,900\nanh bạn\n3\n00:00:05,900 --> 00:00:06,900\nCảm ơn nhé\n");
         await p.click("#nut-dung-viet");
       },
-      sau: async (p, kq) => { if (kq.cau?.[0] !== "Xin chào anh bạn" || kq.cau?.[2] !== "Cảm ơn nhé") kq.loi = "Ghép theo giờ sai: " + kq.cau; } },
+      sau: async (p, kq) => { if (kq.cau?.join("|") !== "Xin chào|anh bạn|Cảm ơn nhé") kq.loi = "Không dùng đúng các câu đã dán: " + kq.cau; } },
   "29q-chuyen-mon-kenh": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, tuDien: "谢谢 = đa tạ" },
       truoc: async (p) => {
         // mặc định: Pha Chuyện Ảnh + quy tắc riêng dựng sẵn → đổi sang Pha Lab, ghi quy tắc riêng
