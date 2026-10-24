@@ -20,7 +20,7 @@ MAC_DINH = {
     "co_chu": 14, "thu_muc_luu": os.path.join(os.path.expanduser("~"), "PhaHa-ket-qua"),
     "linh_vuc": "", "cookie_trinh_duyet": "", "cookie_file": "", "sheet_link": "",
     "sheet_webhook": "", "tg_token": "", "tg_chat": "",
-    "phu_de": True, "chen_phu_de": True, "long_tieng": True, "viet_content": True,
+    "phu_de": True, "chen_phu_de": True, "bo_loi_hat": True, "long_tieng": True, "viet_content": True,
 }
 
 
@@ -105,8 +105,10 @@ class App(tk.Tk):
         self.v_chen = tk.BooleanVar(value=self.cd["chen_phu_de"])
         self.v_long = tk.BooleanVar(value=self.cd["long_tieng"])
         self.v_content = tk.BooleanVar(value=self.cd["viet_content"])
+        self.v_hat = tk.BooleanVar(value=self.cd["bo_loi_hat"])
         for chu, v in (("Phụ đề tiếng Việt", self.v_phu_de), ("Chèn chữ vào hình", self.v_chen),
-                       ("Lồng tiếng Việt", self.v_long), ("Viết 3 bản content", self.v_content)):
+                       ("Lồng tiếng Việt", self.v_long), ("Viết 3 bản content", self.v_content),
+                       ("Bỏ lời bài hát nền", self.v_hat)):
             ttk.Checkbutton(t, text=chu, variable=v).pack(side="left", padx=(0, 14))
         self.nut_dung = ttk.Button(t, text="⏹ Dừng", command=self.dung, state="disabled")
         self.nut_dung.pack(side="right")
@@ -176,6 +178,7 @@ class App(tk.Tk):
         self.cd["chen_phu_de"] = self.v_chen.get()
         self.cd["long_tieng"] = self.v_long.get()
         self.cd["viet_content"] = self.v_content.get()
+        self.cd["bo_loi_hat"] = self.v_hat.get()
         self.cd["sheet_link"] = self.o_sheet.get().strip() or self.cd.get("sheet_link", "")
 
     def luu_cai_dat(self, im_lang=False):

@@ -241,6 +241,8 @@ def nghe_va_dich(video, thu_muc, cai_dat, log, dung):
     os.makedirs(tam, exist_ok=True)
     linh_vuc = cai_dat.get("linh_vuc", "").strip()
     cau = []
+    bo_hat = cai_dat.get("bo_loi_hat", True)
+    so_hat = 0
     bd = 0.0
     while bd < dai - 0.5:
         if dung():
@@ -256,18 +258,27 @@ def nghe_va_dich(video, thu_muc, cai_dat, log, dung):
             "1) Nghe và chép lại lời nói thành các câu phụ đề ngắn (mỗi câu 1–6 giây, tối đa ~16 chữ Hán).\n"
             "2) Dịch từng câu sang tiếng Việt tự nhiên, sát nghĩa, ngắn gọn để làm phụ đề"
             + (f", dùng đúng thuật ngữ ngành {linh_vuc}" if linh_vuc else "") + ".\n"
+            "3) Phân biệt rõ 2 loại tiếng người:\n"
+            '   - "noi": lời người trong video nói/thuyết minh/đối thoại (giọng nói bình thường, có ngữ điệu nói);\n'
+            '   - "hat": lời bài hát trong nhạc nền (có giai điệu, ngân nga, vần điệu, đi kèm nhạc đệm).\n'
+            "   Lời hát lẫn sau giọng nói thì chỉ chép phần lời nói.\n"
             "Mốc giờ tính bằng giây tính từ đầu đoạn này, chính xác theo lúc người nói bắt đầu/kết thúc.\n"
-            'Trả về JSON: {"cau":[{"bd":0.0,"kt":2.5,"zh":"…","vi":"…"}]}. '
-            'Không có lời nói thì trả {"cau":[]}. Bỏ qua tiếng nhạc, tiếng động.')
+            'Trả về JSON: {"cau":[{"bd":0.0,"kt":2.5,"loai":"noi","zh":"…","vi":"…"}]}. '
+            'Không có lời nói thì trả {"cau":[]}. Bỏ qua tiếng nhạc không lời, tiếng động.')
         kq = goi_gemini(cai_dat.get("gemini"), [
             {"inline_data": {"mime_type": "audio/mp3", "data": du_lieu}}, {"text": loi_dan}], dung)
         for c in (kq.get("cau", []) if isinstance(kq, dict) else kq):
             try:
+                if bo_hat and str(c.get("loai", "noi")).strip().lower() == "hat":
+                    so_hat += 1
+                    continue
                 cau.append({"bd": float(c["bd"]) + bd, "kt": float(c["kt"]) + bd,
                             "zh": str(c.get("zh", "")).strip(), "vi": str(c.get("vi", "")).strip()})
             except (KeyError, TypeError, ValueError):
                 pass
         bd += dai_doan
+    if so_hat:
+        log(f"   Bỏ {so_hat} câu là lời bài hát nền (không dịch, không lồng tiếng).")
     return cau, dai
 
 
@@ -290,18 +301,29 @@ def kiem_tra_rut_gon(cau, cai_dat, log, dung):
     if not cau:
         return cau
     log("   Kiểm tra & rút gọn phụ đề …")
+    bo_hat = cai_dat.get("bo_loi_hat", True)
     ds = [{"i": i, "giay": round(c["kt"] - c["bd"], 1), "zh": c["zh"], "vi": c["vi"]} for i, c in enumerate(cau)]
     loi_dan = (
         "Đây là phụ đề video dịch từ tiếng Trung sang tiếng Việt. Hãy đọc cả bài để hiểu ngữ cảnh rồi sửa:\n"
         "- câu dịch sai nghĩa, xưng hô không thống nhất, tên riêng/thuật ngữ không đúng;\n"
         "- câu quá dài so với thời gian (đọc khoảng 4 từ/giây) thì rút gọn, giữ ý chính.\n"
-        'Trả về JSON: {"cau":[{"i":0,"vi":"…"}]} với đủ mọi câu.\n\n' + json.dumps(ds, ensure_ascii=False))
+        + ("- câu nào thực ra là lời bài hát nhạc nền (văn vẻ, vần điệu, lặp điệp khúc, lạc khỏi nội dung người nói)"
+           ' thì đánh dấu "hat": true.\n' if bo_hat else "")
+        + 'Trả về JSON: {"cau":[{"i":0,"vi":"…","hat":false}]} với đủ mọi câu.\n\n' + json.dumps(ds, ensure_ascii=False))
     try:
         kq = goi_gemini(cai_dat.get("gemini"), [{"text": loi_dan}], dung)
+        bo = set()
         for c in (kq.get("cau", []) if isinstance(kq, dict) else kq):
             i = int(c.get("i", -1))
-            if 0 <= i < len(cau) and str(c.get("vi", "")).strip():
+            if not 0 <= i < len(cau):
+                continue
+            if bo_hat and c.get("hat") is True:
+                bo.add(i)
+            elif str(c.get("vi", "")).strip():
                 cau[i]["vi"] = str(c["vi"]).strip()
+        if bo and len(bo) < len(cau):  # bỏ hết thì nghi AI nhầm → giữ nguyên
+            log(f"   Bỏ thêm {len(bo)} câu giống lời bài hát nền.")
+            cau = [c for i, c in enumerate(cau) if i not in bo]
     except DaDung:
         raise
     except Exception as e:
