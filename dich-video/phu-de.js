@@ -41,30 +41,27 @@ export function docSrt(chu) {
   return dong.filter(Boolean).map((d) => ({ start: NaN, end: NaN, chu: d }));
 }
 
-// Ghép bản dịch người dùng dán vào các câu: cùng số câu → theo thứ tự; khác → theo thời gian trùng nhau nhiều nhất.
-// Trả về số câu đã ghép được.
+// Dùng bản dịch người dùng dán:
+// - Có mốc giờ: dùng ĐÚNG các câu, chữ và mốc giờ trong bản dán (thay hẳn danh sách câu của app – không câu nào
+//   còn giữ bản dịch của app); lời gốc tiếng Trung lấy theo các câu trùng giờ
+// - Không có mốc giờ: cùng số câu thì ghép theo thứ tự; khác số câu thì báo lỗi
+// Trả về số câu đã dùng.
 export function ganBanDich(cacCau, ds) {
+  if (ds.every((d) => Number.isFinite(d.start) && Number.isFinite(d.end) && d.end > d.start)) {
+    const moi = ds
+      .map((d) => ({
+        start: d.start,
+        end: d.end,
+        vi: d.chu,
+        zh: cacCau.filter((c) => Math.min(c.end, d.end) - Math.max(c.start, d.start) > 0.1).map((c) => c.zh).join(" "),
+      }))
+      .sort((a, b) => a.start - b.start);
+    cacCau.splice(0, cacCau.length, ...moi);
+    return moi.length;
+  }
   const cau = cacCau.filter((c) => (c.zh || "").trim());
-  if (ds.length === cau.length) {
-    cau.forEach((c, i) => (c.vi = ds[i].chu));
-    return cau.length;
-  }
-  if (ds.some((d) => !Number.isFinite(d.start)))
+  if (ds.length !== cau.length)
     throw new Error(`Bản dán có ${ds.length} câu nhưng video có ${cau.length} câu, lại không có mốc giờ → không ghép được. Dán đủ ${cau.length} câu, hoặc dán dạng SRT có mốc giờ.`);
-  const moi = cau.map(() => []);
-  for (const d of ds) {
-    let tot = -Infinity, iTot = -1;
-    cau.forEach((c, i) => {
-      const trung = Math.min(c.end, d.end) - Math.max(c.start, d.start);
-      // trùng giờ thì điểm = độ dài trùng; không trùng thì điểm âm theo độ lệch (lệch quá 2 giây thì bỏ)
-      const diem = trung > 0 ? trung : -1000 - Math.abs((c.start + c.end) / 2 - (d.start + d.end) / 2);
-      if (diem > tot) { tot = diem; iTot = i; }
-    });
-    if (iTot >= 0 && tot > -1002) moi[iTot].push(d.chu);
-  }
-  let n = 0;
-  cau.forEach((c, i) => {
-    if (moi[i].length) { c.vi = moi[i].join(" "); n++; }
-  });
-  return n;
+  cau.forEach((c, i) => (c.vi = ds[i].chu));
+  return cau.length;
 }

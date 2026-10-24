@@ -208,7 +208,7 @@ export function choKiemPhuDe() {
         if (!ds.length) throw new Error("Chưa dán SRT tiếng Việt vào ô số 2.");
         const n = ganBanDich(S.cacCau, ds);
         if (!n) throw new Error("Không ghép được câu nào – kiểm tra lại mốc giờ trong SRT.");
-        ket(`✅ Dùng bản dịch bạn dán: ${n}/${S.cacCau.length} câu`);
+        ket(`✅ Dùng đúng bản dịch bạn dán: ${n} câu${ds[0] && Number.isFinite(ds[0].start) ? " (theo mốc giờ trong SRT của bạn)" : ""}`);
       } catch (loi) {
         $("pd-bao").textContent = "⚠️ " + loi.message;
         $("pd-bao").classList.remove("an");

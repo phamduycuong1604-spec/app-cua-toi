@@ -56,6 +56,12 @@ async function chay(ten, o) {
     if (!f) return rt.abort();
     rt.fulfill({ path: f, headers: { "Access-Control-Allow-Origin": "*", "Content-Type": f.endsWith("wasm") ? "application/wasm" : "text/javascript" } }); });
   if (o.hinhAvcPc) await p.route("**/avc-pc.mp4", (rt) => rt.fulfill({ contentType: "video/mp4", body: fs.readFileSync(`${S}/avc-pc.mp4`) }));
+  // AI tách nhạc "hỏng": trả lại nguyên tiếng gốc (giọng còn nguyên trong nhạc nền)
+  if (o.tachSot) await p.route("**/dich-video/tach-nhac.js", (rt) => rt.fulfill({ contentType: "text/javascript", body: `self.onmessage = (e) => { const wav = e.data.wav, n = (wav.byteLength - 44) >> 2, v = new DataView(wav);
+    const chu = (o, s) => [...s].forEach((k, i) => v.setUint8(o + i, k.charCodeAt(0)));
+    chu(0, "RIFF"); v.setUint32(4, 36 + n * 4, true); chu(8, "WAVE"); chu(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 2, true);
+    v.setUint32(24, 44100, true); v.setUint32(28, 176400, true); v.setUint16(32, 4, true); v.setUint16(34, 16, true); chu(36, "data"); v.setUint32(40, n * 4, true);
+    self.postMessage({ loai: "xong", wav }, [wav]); };` }));
   if (o.hinhAvcPc) await p.route("**/dich-video/lop-phu.js", async (rt) => {
     // Giả lập iPhone: bộ mã hoá trình duyệt trả hình H.264 bị ghi nhầm "dải màu đầy đủ"
     const goc = fs.readFileSync(path.join(ROOT, "dich-video/lop-phu.js"), "utf8").replace("export async function xuatHinh(", "async function xuatHinhCu(");
@@ -336,6 +342,15 @@ const KICH_BAN = {
   "27k-chi-co-ma-giong-doc": { caiDat: { ...CD, khoa: "", khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, khongChu: true,
       sau: async (p, kq) => { kq.goi.khoaNghe = [...(kq.goi.khoaNghe || [])]; kq.goi.khoaDoc = [...(kq.goi.khoaDoc || [])];
         if (!kq.goi.khoaNghe.includes("MA-DOC-111111")) kq.loi ||= "Không dùng mã giọng đọc để nghe & dịch"; } },
+  // Lời bài hát trong nhạc nền (AI đánh dấu [HÁT]) → bỏ, không lồng tiếng
+  "53-bo-loi-hat": { caiDat: { ...CD, bat: { ...DU, el: false } }, cau: CAU.map((c, i) => (i === 1 ? { ...c, vi: "[HÁT]" } : c)),
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/🎵 Bỏ 1 câu là lời bài hát/.test(nk)) kq.loi = "Không bỏ lời bài hát";
+        else if (kq.cau.some((c) => /HÁT/.test(c))) kq.loi = "Vẫn còn câu [HÁT]: " + kq.cau.join(" | "); } },
+  // AI tách nhạc bỏ sót giọng (nhạc nền = nguyên tiếng gốc) → giảm nhỏ nhạc nền ở các câu thoại
+  "54-dap-giong-sot": { caiDat: { ...CD, bat: { ...DU, el: false }, tachNhac: true }, tachSot: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        if (!/🔇 Nhạc nền còn sót giọng gốc/.test(nk)) kq.loi = "Không phát hiện giọng gốc còn sót"; } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },
@@ -378,7 +393,7 @@ const KICH_BAN = {
       sau: async (p, kq) => {
         if (kq.loiKiem) kq.loi = kq.loiKiem;
         if (!/không có mốc giờ/.test(kq.baoSai || "")) kq.loi = "Không báo lỗi khi dán sai số câu: " + kq.baoSai;
-        if (kq.cau?.slice(0, 3).join("|") !== "Xin chào anh bạn|Nhớ bấm thích và đăng ký nhé|Cảm ơn") kq.loi = "Không dùng bản dịch đã dán: " + kq.cau;
+        if (kq.cau?.join("|") !== "Xin chào anh bạn|Nhớ bấm thích và đăng ký nhé|Cảm ơn") kq.loi = "Không dùng đúng bản dịch đã dán (còn lẫn bản của app): " + kq.cau;
         if (!(await p.isHidden("#the-kiem-pd"))) kq.loi = "Ô kiểm tra phụ đề chưa ẩn"; } },
   "29o-tu-kiem-giu-ban-app": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, kiemPd: true },
       trong: async (p) => { await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 }); await p.click("#nut-bo-qua-pd"); },
@@ -389,7 +404,7 @@ const KICH_BAN = {
         await p.fill("#pd-viet", "1\n00:00:01,100 --> 00:00:02,000\nXin chào\n2\n00:00:02,000 --> 00:00:02,900\nanh bạn\n3\n00:00:05,900 --> 00:00:06,900\nCảm ơn nhé\n");
         await p.click("#nut-dung-viet");
       },
-      sau: async (p, kq) => { if (kq.cau?.[0] !== "Xin chào anh bạn" || kq.cau?.[2] !== "Cảm ơn nhé") kq.loi = "Ghép theo giờ sai: " + kq.cau; } },
+      sau: async (p, kq) => { if (kq.cau?.join("|") !== "Xin chào|anh bạn|Cảm ơn nhé") kq.loi = "Không dùng đúng các câu đã dán: " + kq.cau; } },
   "29q-chuyen-mon-kenh": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true }, tuDien: "谢谢 = đa tạ" },
       truoc: async (p) => {
         // mặc định: Pha Chuyện Ảnh + quy tắc riêng dựng sẵn → đổi sang Pha Lab, ghi quy tắc riêng
