@@ -230,56 +230,135 @@ def goi_gemini(ma, cac_phan, dung=lambda: False):
 
 # ---------------------------------------------------------------- 3A. Video processing
 
-def nghe_va_dich(video, thu_muc, cai_dat, log, dung):
-    """Tách tiếng → chia đoạn 5 phút → Gemini nghe tiếng Trung và dịch Việt."""
-    import base64
-    dai, co_tieng = thong_tin_media(video)
-    if not co_tieng:
-        log("   Video không có tiếng → bỏ qua phụ đề.")
-        return [], dai
+def tach_giong(video, thu_muc, cai_dat, log, dung):
+    """AI tách tiếng gốc thành nhạc nền + giọng người. Trả về (nhạc nền.wav, giọng.wav, độ to giọng mỗi 0,5 giây)."""
+    import numpy as np
+    import tach_nhac
+    if not tach_nhac.co_the_dung():
+        raise LoiXuLy("máy chưa cài bộ chạy AI (onnxruntime)")
     tam = os.path.join(thu_muc, "_tam")
     os.makedirs(tam, exist_ok=True)
+    tho = os.path.join(tam, "goc.f32")
+    ffmpeg("-i", video, "-vn", "-ac", "2", "-ar", str(tach_nhac.TAN_SO), "-f", "f32le", tho)
+    x = np.fromfile(tho, dtype=np.float32).reshape(-1, 2).T
+    os.remove(tho)
+    mo_hinh = tach_nhac.tai_mo_hinh(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mo-hinh"), log)
+    try:
+        nen, giong = tach_nhac.tach(x, mo_hinh, log, dung)
+    except InterruptedError:
+        raise DaDung()
+
+    def ghi_wav(duong_dan, am):
+        with wave.open(duong_dan, "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(tach_nhac.TAN_SO)
+            w.writeframes((np.clip(am.T, -1, 1) * 32767).astype("<i2").tobytes())
+
+    f_nen, f_giong = os.path.join(tam, "nhac_nen.wav"), os.path.join(tam, "giong_goc.wav")
+    ghi_wav(f_nen, nen)
+    ghi_wav(f_giong, giong)
+    o = tach_nhac.TAN_SO // 2
+    mono = giong.mean(axis=0)
+    n = len(mono) // o
+    nang_luong = np.sqrt((mono[:n * o].reshape(n, o) ** 2).mean(axis=1)) if n else np.zeros(0)
+    return f_nen, f_giong, nang_luong
+
+
+def _nghe_doan(nguon, bd, dai_doan, tam, cai_dat, log, dung, nhac_them=""):
+    """Gửi 1 đoạn âm thanh cho Gemini → (câu giữ lại, câu là lời hát đã bỏ). Mốc giờ tính từ đầu video."""
+    import base64
+    f = os.path.join(tam, f"tieng_{int(bd * 10)}.mp3")
+    ffmpeg("-ss", str(bd), "-t", str(dai_doan), "-i", nguon, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", f)
+    with open(f, "rb") as fh:
+        du_lieu = base64.b64encode(fh.read()).decode()
     linh_vuc = cai_dat.get("linh_vuc", "").strip()
-    cau = []
-    bo_hat = cai_dat.get("bo_loi_hat", True)
-    so_hat = 0
+    loi_dan = (
+        f"Đây là đoạn âm thanh dài {dai_doan:.1f} giây, người nói tiếng Trung.\n" + nhac_them +
+        "1) Nghe và chép lại TOÀN BỘ lời nói, không bỏ sót câu nào, thành các câu phụ đề ngắn"
+        " (mỗi câu 1–6 giây, tối đa ~16 chữ Hán).\n"
+        "2) Dịch từng câu sang tiếng Việt tự nhiên, sát nghĩa, ngắn gọn để làm phụ đề"
+        + (f", dùng đúng thuật ngữ ngành {linh_vuc}" if linh_vuc else "") + ".\n"
+        "3) Phân biệt rõ 2 loại tiếng người:\n"
+        '   - "noi": lời người trong video nói/thuyết minh/đối thoại (giọng nói bình thường, có ngữ điệu nói);\n'
+        '   - "hat": lời bài hát trong nhạc nền (có giai điệu, ngân nga, vần điệu, đi kèm nhạc đệm).\n'
+        "   Lời hát lẫn sau giọng nói thì chỉ chép phần lời nói.\n"
+        "Mốc giờ tính bằng giây tính từ đầu đoạn này, chính xác theo lúc người nói bắt đầu/kết thúc.\n"
+        'Trả về JSON: {"cau":[{"bd":0.0,"kt":2.5,"loai":"noi","zh":"…","vi":"…"}]}. '
+        'Không có lời nói thì trả {"cau":[]}. Bỏ qua tiếng nhạc không lời, tiếng động.')
+    kq = goi_gemini(cai_dat.get("gemini"), [
+        {"inline_data": {"mime_type": "audio/mp3", "data": du_lieu}}, {"text": loi_dan}], dung)
+    giu, bo = [], []
+    for c in (kq.get("cau", []) if isinstance(kq, dict) else kq):
+        try:
+            cau = {"bd": min(float(c["bd"]), dai_doan) + bd, "kt": min(float(c["kt"]), dai_doan) + bd,
+                   "zh": str(c.get("zh", "")).strip(), "vi": str(c.get("vi", "")).strip()}
+        except (KeyError, TypeError, ValueError):
+            continue
+        if cai_dat.get("bo_loi_hat", True) and str(c.get("loai", "noi")).strip().lower() == "hat":
+            bo.append(cau)
+        else:
+            giu.append(cau)
+    return giu, bo
+
+
+def doan_bi_sot(nang_luong, cau, dai):
+    """Tìm đoạn AI tách giọng thấy có tiếng người mà chưa có phụ đề (Gemini nghe sót)."""
+    if nang_luong is None or len(nang_luong) == 0:
+        return []
+    import numpy as np
+    nguong = max(0.01, 0.2 * float(np.percentile(nang_luong, 95)))
+    co_tieng = nang_luong > nguong
+    da_phu = np.zeros(len(co_tieng), dtype=bool)
+    for c in cau:
+        da_phu[max(0, int((c["bd"] - 1) * 2)):int((c["kt"] + 1) * 2) + 1] = True
+    sot = co_tieng & ~da_phu
+    doan, i = [], 0
+    while i < len(sot):
+        if not sot[i]:
+            i += 1
+            continue
+        j, so_o = i, 0
+        while j < len(sot) and (sot[j] or sot[j:j + 6].any()):  # gộp chỗ ngắt dưới 3 giây
+            so_o += int(sot[j])
+            j += 1
+        if so_o >= 8:  # có tiếng người ít nhất 4 giây
+            doan.append((max(0.0, i / 2 - 0.5), min(dai, j / 2 + 0.5)))
+        i = j
+    return doan
+
+
+def nghe_va_dich(nguon, thu_muc, cai_dat, log, dung, nang_luong=None):
+    """Chia đoạn 5 phút → Gemini nghe tiếng Trung và dịch Việt → nghe lại chỗ bị sót.
+    Trả về (câu, độ dài, câu lời hát đã bỏ)."""
+    dai, co_tieng = thong_tin_media(nguon)
+    if not co_tieng:
+        log("   Video không có tiếng → bỏ qua phụ đề.")
+        return [], dai, []
+    tam = os.path.join(thu_muc, "_tam")
+    os.makedirs(tam, exist_ok=True)
+    cau, da_bo = [], []
     bd = 0.0
     while bd < dai - 0.5:
         if dung():
             raise DaDung()
         dai_doan = min(DOAN_GIAY, dai - bd)
-        f = os.path.join(tam, f"tieng_{int(bd)}.mp3")
-        ffmpeg("-ss", str(bd), "-t", str(dai_doan), "-i", video, "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", f)
         log(f"   Đang nghe & dịch đoạn {int(bd // 60)}:{int(bd % 60):02d} …")
-        with open(f, "rb") as fh:
-            du_lieu = base64.b64encode(fh.read()).decode()
-        loi_dan = (
-            f"Đây là đoạn âm thanh dài {dai_doan:.1f} giây, người nói tiếng Trung.\n"
-            "1) Nghe và chép lại lời nói thành các câu phụ đề ngắn (mỗi câu 1–6 giây, tối đa ~16 chữ Hán).\n"
-            "2) Dịch từng câu sang tiếng Việt tự nhiên, sát nghĩa, ngắn gọn để làm phụ đề"
-            + (f", dùng đúng thuật ngữ ngành {linh_vuc}" if linh_vuc else "") + ".\n"
-            "3) Phân biệt rõ 2 loại tiếng người:\n"
-            '   - "noi": lời người trong video nói/thuyết minh/đối thoại (giọng nói bình thường, có ngữ điệu nói);\n'
-            '   - "hat": lời bài hát trong nhạc nền (có giai điệu, ngân nga, vần điệu, đi kèm nhạc đệm).\n'
-            "   Lời hát lẫn sau giọng nói thì chỉ chép phần lời nói.\n"
-            "Mốc giờ tính bằng giây tính từ đầu đoạn này, chính xác theo lúc người nói bắt đầu/kết thúc.\n"
-            'Trả về JSON: {"cau":[{"bd":0.0,"kt":2.5,"loai":"noi","zh":"…","vi":"…"}]}. '
-            'Không có lời nói thì trả {"cau":[]}. Bỏ qua tiếng nhạc không lời, tiếng động.')
-        kq = goi_gemini(cai_dat.get("gemini"), [
-            {"inline_data": {"mime_type": "audio/mp3", "data": du_lieu}}, {"text": loi_dan}], dung)
-        for c in (kq.get("cau", []) if isinstance(kq, dict) else kq):
-            try:
-                if bo_hat and str(c.get("loai", "noi")).strip().lower() == "hat":
-                    so_hat += 1
-                    continue
-                cau.append({"bd": float(c["bd"]) + bd, "kt": float(c["kt"]) + bd,
-                            "zh": str(c.get("zh", "")).strip(), "vi": str(c.get("vi", "")).strip()})
-            except (KeyError, TypeError, ValueError):
-                pass
+        giu, bo = _nghe_doan(nguon, bd, dai_doan, tam, cai_dat, log, dung)
+        cau += giu
+        da_bo += bo
         bd += dai_doan
-    if so_hat:
-        log(f"   Bỏ {so_hat} câu là lời bài hát nền (không dịch, không lồng tiếng).")
-    return cau, dai
+    for d0, d1 in doan_bi_sot(nang_luong, cau + da_bo, dai)[:8]:
+        if dung():
+            raise DaDung()
+        log(f"   Nghe lại chỗ bị sót {int(d0 // 60)}:{int(d0 % 60):02d}–{int(d1 // 60)}:{int(d1 % 60):02d} …")
+        giu, bo = _nghe_doan(nguon, d0, d1 - d0, tam, cai_dat, log, dung,
+                             "Đoạn này chắc chắn có tiếng người (đã lọc bỏ nhạc), lần trước bị nghe sót.\n")
+        cau += [c for c in giu if not any(c["bd"] < x["kt"] and x["bd"] < c["kt"] for x in cau)]
+        da_bo += bo
+    if da_bo:
+        log(f"   Bỏ {len(da_bo)} câu là lời bài hát nền (không dịch, không lồng tiếng).")
+    return cau, dai, da_bo
 
 
 def chuan_hoa_moc_gio(cau, dai):
@@ -296,7 +375,7 @@ def chuan_hoa_moc_gio(cau, dai):
 
 # ---------------------------------------------------------------- 3B. Translate & subtitle
 
-def kiem_tra_rut_gon(cau, cai_dat, log, dung):
+def kiem_tra_rut_gon(cau, cai_dat, log, dung, da_bo=None):
     """QC: Gemini đọc lại cả bài, sửa câu dịch sai/dài cho vừa thời gian."""
     if not cau:
         return cau
@@ -323,6 +402,8 @@ def kiem_tra_rut_gon(cau, cai_dat, log, dung):
                 cau[i]["vi"] = str(c["vi"]).strip()
         if bo and len(bo) < len(cau):  # bỏ hết thì nghi AI nhầm → giữ nguyên
             log(f"   Bỏ thêm {len(bo)} câu giống lời bài hát nền.")
+            if da_bo is not None:
+                da_bo += [c for i, c in enumerate(cau) if i in bo]
             cau = [c for i, c in enumerate(cau) if i not in bo]
     except DaDung:
         raise
@@ -407,22 +488,29 @@ KIEU_CHU = ("FontName=Arial,FontSize={co},PrimaryColour=&H00FFFFFF,OutlineColour
             "BorderStyle=1,Outline=1.6,Shadow=0,Bold=1,MarginV=28,Alignment=2")
 
 
-def dung_video(video, srt, giong_wav, ra, cai_dat, log):
+def dung_video(video, srt, giong_wav, ra, cai_dat, log, nen_wav=None):
     """Add subtitle & audio → 02_video_vietnamese.mp4"""
     _, co_tieng = thong_tin_media(video)
     thu_muc = os.path.dirname(ra)
     goc = max(0.0, min(float(cai_dat.get("am_luong_goc", 0.15)), 1.0))
+    nhac = max(0.0, min(float(cai_dat.get("am_luong_nhac", 0.8)), 2.0))
+    nen = nen_wav if giong_wav else None
 
     def lenh(chen_chu):
         ts = ["-i", video]
         if giong_wav:
             ts += ["-i", giong_wav]
+        if nen:
+            ts += ["-i", nen_wav]
         if srt and not chen_chu:
             ts += ["-i", srt]
-        loc = []
-        if giong_wav and co_tieng:
-            loc.append(f"[0:a]volume={goc}[a0];[a0][1:a]amix=inputs=2:duration=first:normalize=0[a]")
-            ts += ["-filter_complex", ";".join(loc), "-map", "0:v:0", "-map", "[a]"]
+        so_srt = 1 + bool(giong_wav) + bool(nen)
+        if nen:
+            ts += ["-filter_complex", f"[2:a]volume={nhac}[a0];[a0][1:a]amix=inputs=2:duration=first:normalize=0[a]",
+                   "-map", "0:v:0", "-map", "[a]"]
+        elif giong_wav and co_tieng:
+            ts += ["-filter_complex", f"[0:a]volume={goc}[a0];[a0][1:a]amix=inputs=2:duration=first:normalize=0[a]",
+                   "-map", "0:v:0", "-map", "[a]"]
         elif giong_wav:
             ts += ["-map", "0:v:0", "-map", "1:a", "-shortest"]
         else:
@@ -434,7 +522,7 @@ def dung_video(video, srt, giong_wav, ra, cai_dat, log):
         else:
             ts += ["-c:v", "copy"]
         if srt and not chen_chu:
-            ts += ["-map", f"{2 if giong_wav else 1}:s", "-c:s", "mov_text", "-metadata:s:s:0", "language=vie"]
+            ts += ["-map", f"{so_srt}:s", "-c:s", "mov_text", "-metadata:s:s:0", "language=vie"]
         ts += ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", os.path.basename(ra)]
         return ts
 
@@ -524,10 +612,23 @@ def xu_ly_mot(viec, cai_dat, log, dung=lambda: False):
         if dung():
             raise DaDung()
 
+        nguon_nghe, nen_wav, nang_luong = video, None, None
+        if cai_dat.get("tach_giong", True) and cai_dat.get("long_tieng", True):
+            log("🎚️  AI tách giọng gốc khỏi nhạc nền (máy chạy, có thể mất vài phút) …")
+            try:
+                nen_wav, nguon_nghe, nang_luong = tach_giong(video, thu_muc, cai_dat, log, dung)
+                meta["buoc"].append("tach_giong")
+            except DaDung:
+                raise
+            except Exception as e:
+                log(f"   ⚠️ Không tách được giọng ({e}) → dùng tiếng gốc vặn nhỏ như cũ.")
+
         log("🎧 Nghe tiếng Trung & dịch …")
-        cau, dai = nghe_va_dich(video, thu_muc, cai_dat, log, dung)
+        cau, dai, da_bo = nghe_va_dich(nguon_nghe, thu_muc, cai_dat, log, dung, nang_luong)
         cau = chuan_hoa_moc_gio(cau, dai)
-        cau = kiem_tra_rut_gon(cau, cai_dat, log, dung)
+        cau = kiem_tra_rut_gon(cau, cai_dat, log, dung, da_bo)
+        if da_bo:
+            ghi(thu_muc, "03_loi_hat_da_bo.json", json.dumps(da_bo, ensure_ascii=False, indent=1))
         srt = None
         if cau:
             srt = os.path.join(thu_muc, "03_subtitle_vi.srt")
@@ -546,7 +647,7 @@ def xu_ly_mot(viec, cai_dat, log, dung=lambda: False):
         if srt or giong:
             log("🎬 Dựng video tiếng Việt …")
             dung_video(video, srt if cai_dat.get("phu_de", True) else None, giong,
-                       os.path.join(thu_muc, "02_video_vietnamese.mp4"), cai_dat, log)
+                       os.path.join(thu_muc, "02_video_vietnamese.mp4"), cai_dat, log, nen_wav)
             meta["buoc"].append("dung_video")
 
         if cai_dat.get("viet_content", True):

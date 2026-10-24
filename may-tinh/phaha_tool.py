@@ -20,7 +20,7 @@ MAC_DINH = {
     "co_chu": 14, "thu_muc_luu": os.path.join(os.path.expanduser("~"), "PhaHa-ket-qua"),
     "linh_vuc": "", "cookie_trinh_duyet": "", "cookie_file": "", "sheet_link": "",
     "sheet_webhook": "", "tg_token": "", "tg_chat": "",
-    "phu_de": True, "chen_phu_de": True, "bo_loi_hat": True, "long_tieng": True, "viet_content": True,
+    "phu_de": True, "chen_phu_de": True, "bo_loi_hat": True, "tach_giong": True, "am_luong_nhac": 0.8, "long_tieng": True, "viet_content": True,
 }
 
 
@@ -106,10 +106,15 @@ class App(tk.Tk):
         self.v_long = tk.BooleanVar(value=self.cd["long_tieng"])
         self.v_content = tk.BooleanVar(value=self.cd["viet_content"])
         self.v_hat = tk.BooleanVar(value=self.cd["bo_loi_hat"])
+        self.v_tach = tk.BooleanVar(value=self.cd["tach_giong"])
+        o_tick = ttk.Frame(t)
+        o_tick.pack(side="left")
+        so = 0
         for chu, v in (("Phụ đề tiếng Việt", self.v_phu_de), ("Chèn chữ vào hình", self.v_chen),
                        ("Lồng tiếng Việt", self.v_long), ("Viết 3 bản content", self.v_content),
-                       ("Bỏ lời bài hát nền", self.v_hat)):
-            ttk.Checkbutton(t, text=chu, variable=v).pack(side="left", padx=(0, 14))
+                       ("Bỏ lời bài hát nền", self.v_hat), ("AI tách giọng gốc", self.v_tach)):
+            ttk.Checkbutton(o_tick, text=chu, variable=v).grid(row=so // 3, column=so % 3, sticky="w", padx=(0, 18))
+            so += 1
         self.nut_dung = ttk.Button(t, text="⏹ Dừng", command=self.dung, state="disabled")
         self.nut_dung.pack(side="right")
         self.nut_chay = ttk.Button(t, text="▶ Bắt đầu", command=self.bat_dau)
@@ -151,7 +156,8 @@ class App(tk.Tk):
         ttk.Button(f, text="🔊 Nghe thử", command=self.nghe_thu).grid(row=hang[0], column=2, padx=4)
         hang[0] += 1
         dong("Tốc độ đọc", "toc_do", "Ví dụ +10% (nhanh hơn), -10% (chậm hơn), +0% (bình thường)")
-        dong("Âm lượng tiếng gốc", "am_luong_goc", "0 = tắt hẳn tiếng Trung, 0.15 = giữ nhạc nền nhỏ, 1 = giữ nguyên")
+        dong("Âm lượng nhạc nền", "am_luong_nhac", "Khi bật AI tách giọng: 0.8 = nhạc nền hơi nhỏ hơn gốc, 1 = to như gốc, 0 = tắt nhạc")
+        dong("Âm lượng tiếng gốc", "am_luong_goc", "Khi KHÔNG tách giọng: 0 = tắt hẳn tiếng Trung, 0.15 = giữ nhỏ, 1 = giữ nguyên")
         dong("Cỡ chữ phụ đề", "co_chu", "Mặc định 14")
         dong("Ngành / chủ đề", "linh_vuc", "Ví dụ: mỹ phẩm, đồ gia dụng, nấu ăn… để dịch đúng thuật ngữ")
         dong("Thư mục lưu kết quả", "thu_muc_luu",
@@ -168,7 +174,7 @@ class App(tk.Tk):
     def _lay_cai_dat_tu_o(self):
         for k, e in self.o.items():
             self.cd[k] = e.get().strip()
-        for k, kieu in (("am_luong_goc", float), ("co_chu", int)):
+        for k, kieu in (("am_luong_goc", float), ("am_luong_nhac", float), ("co_chu", int)):
             try:
                 self.cd[k] = kieu(self.cd[k])
             except ValueError:
@@ -179,6 +185,7 @@ class App(tk.Tk):
         self.cd["long_tieng"] = self.v_long.get()
         self.cd["viet_content"] = self.v_content.get()
         self.cd["bo_loi_hat"] = self.v_hat.get()
+        self.cd["tach_giong"] = self.v_tach.get()
         self.cd["sheet_link"] = self.o_sheet.get().strip() or self.cd.get("sheet_link", "")
 
     def luu_cai_dat(self, im_lang=False):

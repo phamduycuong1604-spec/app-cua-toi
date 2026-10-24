@@ -27,6 +27,7 @@ PhaHa-ket-qua/2026-10-09/Video_001/
   02_video_vietnamese.mp4      video đã có phụ đề + giọng Việt
   03_subtitle_vi.srt           phụ đề tiếng Việt
   03_subtitle_song_ngu.json    phụ đề song ngữ Trung–Việt
+  03_loi_hat_da_bo.json        các câu AI coi là lời bài hát nền nên đã bỏ (để kiểm tra)
   04_content_original.txt      nội dung gốc tiếng Trung
   04b_content_vi.txt           bản dịch sát nghĩa
   05_content_vi_tiktok.txt     bản TikTok (ngắn gọn)
@@ -43,8 +44,17 @@ PhaHa-ket-qua/2026-10-09/Video_001/
 |---|---|---|
 | Tải video | yt-dlp (Douyin, TikTok, YouTube, Bilibili…) | miễn phí |
 | Nghe tiếng Trung + dịch + viết content | Gemini | miễn phí trong hạn mức |
+| Tách giọng gốc khỏi nhạc nền | AI MDX-Net (Ultimate Vocal Remover), chạy trên máy, tải 1 lần ~56MB | miễn phí |
 | Giọng đọc Việt | Microsoft Edge (Hoài My / Nam Minh) | miễn phí, cần mạng |
 | Ghép phụ đề, giọng, dựng video | ffmpeg (tự cài kèm) | miễn phí, chạy trên máy |
+
+## Tách giọng gốc & lời bài hát
+
+- **AI tách giọng gốc** (bật sẵn): AI tách tiếng gốc thành *nhạc nền* và *giọng người*. Video cuối chỉ giữ nhạc nền + giọng Việt,
+  nên không còn nghe giọng Trung. Mất thêm khoảng 1 phút cho mỗi phút video (tuỳ máy). Chỉnh độ to nhạc nền ở ⚙️ “Âm lượng nhạc nền”.
+- AI cũng dò chỗ **có tiếng người mà chưa có phụ đề** (Gemini nghe sót) và tự nghe lại chỗ đó.
+- **Bỏ lời bài hát nền** (bật sẵn): câu nào là lời hát thì không dịch, không lồng tiếng. Xem lại các câu đã bỏ trong `03_loi_hat_da_bo.json`.
+  Nếu AI bỏ nhầm lời nói thật → bỏ tick ô này rồi làm lại video đó.
 
 ## Khi gặp lỗi
 
@@ -93,6 +103,8 @@ function doPost(e) {
 |---|---|
 | `phaha_tool.py` | Cửa sổ tool: danh sách video, nút bấm, cài đặt |
 | `xu_ly.py` | Bộ não: từng bước của quy trình |
+| `tach_nhac.py` | AI tách nhạc nền khỏi giọng người (cùng mô hình với app điện thoại) |
+| `mo-hinh/` | Mô hình AI tách giọng (tự tải lần đầu) |
 | `CHAY-WINDOWS.bat` / `CHAY-MAC.command` | Bấm đúp để cài & mở tool |
 | `requirements.txt` | Danh sách thư viện tool cần |
 | `cai-dat.json` | Cài đặt của bạn (tự tạo, chứa mã bí mật, không đưa lên GitHub) |

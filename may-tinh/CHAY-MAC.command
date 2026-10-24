@@ -6,4 +6,5 @@ fi
 [ -x .venv/bin/python ] || { echo "Lần đầu: đang cài đặt, chờ 1-2 phút…"; python3 -m venv .venv; }
 .venv/bin/python -m pip install -q --upgrade pip
 .venv/bin/python -m pip install -q --upgrade -r requirements.txt
+.venv/bin/python -m pip install -q --upgrade onnxruntime || echo "(Không cài được AI tách giọng — app vẫn chạy, chỉ không tách giọng gốc)"
 .venv/bin/python phaha_tool.py

@@ -19,4 +19,5 @@ if not exist ".venv\Scripts\python.exe" (
 )
 ".venv\Scripts\python.exe" -m pip install -q --upgrade pip
 ".venv\Scripts\python.exe" -m pip install -q --upgrade -r requirements.txt
+".venv\Scripts\python.exe" -m pip install -q --upgrade onnxruntime || echo (Khong cai duoc AI tach giong - app van chay, chi khong tach giong goc)
 start "" ".venv\Scripts\pythonw.exe" phaha_tool.py
