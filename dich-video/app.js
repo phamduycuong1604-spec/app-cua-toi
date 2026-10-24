@@ -20,7 +20,7 @@ import { KENH } from "./chuyen-mon.js";
 import { batDauLanMoiGemini, maNghe } from "./gemini.js";
 import { ngheVaDich, duPhong, dungDeepSeek, batDauLanMoiNghe } from "./nghe-dich.js";
 import { longTieng, dvDocDung, DICH_VU, tenGiong } from "./giong-doc.js";
-import { taiFfmpeg, tatFfmpeg, ffDangBat, ganVideo, tachTieng, tachNhacNen, dungTachNhac, xuatVideo } from "./video.js";
+import { taiFfmpeg, tatFfmpeg, ffDangBat, ganVideo, tachTieng, tachNhacNen, dungTachNhac, xuatVideo, ghiDoToGoc } from "./video.js";
 import { khoiDongGiaoDien, veLoiThoai, choKiemPhuDe, hienKetQua } from "./giao-dien.js";
 import { khoiDongCaiDat, moCaiDat } from "./cai-dat-ui.js";
 import { khoiDongDongBo } from "./dong-bo-ui.js";
@@ -116,6 +116,7 @@ async function quyTrinh(lamTuDau, viec) {
     buoc("tach", "dang");
     if (!thongTin.coTieng) throw new Error("Video này không có tiếng.");
     const pcm = await tachTieng();
+    ghiDoToGoc(pcm); // để sau này tìm chỗ nhạc nền còn sót giọng gốc
     buoc("tach", "xong", `${dongHo(S.thoiLuong)} âm thanh`);
     // Tách nhạc chạy trên máy, nghe & dịch chủ yếu chờ mạng → bắt đầu tách nhạc NGAY, chạy song song cho nhanh.
     // Trừ khi đọc bằng Giọng máy: nó cần nhiều bộ nhớ lúc khởi động → phải đọc TRƯỚC khi tách nhạc (iPhone báo "Out of memory")

@@ -109,6 +109,7 @@ export const S = {
   cacCau: [], // [{start, end, zh, vi}]
   videoKetQua: null, // Blob
   dangChay: false,
+  doToGoc: null, // { tep, r } độ to tiếng gốc từng 0,25 giây
   nhacNen: null, // { tep, loai, wav } nhạc nền đã tách, để làm lại không phải tách lại
   anhLogo: null,
   // Các việc nặng đang chạy – Giọng máy phải chờ chúng xong (tránh tràn bộ nhớ iPhone)

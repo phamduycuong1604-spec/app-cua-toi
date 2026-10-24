@@ -192,6 +192,61 @@ function tachMotLan(viec) {
   });
 }
 
+// ----- DẬP GIỌNG GỐC CÒN SÓT trong nhạc nền đã tách -----
+// AI tách nhạc đôi khi bỏ sót cả một khúc giọng (giọng lẫn trong nhạc to, giọng qua hiệu ứng…).
+// So độ to từng ô 0,25 giây: tiếng gốc (lấy lúc tách tiếng) và nhạc nền đã tách. Trong câu thoại mà nhạc nền
+// vẫn to gần bằng tiếng gốc → AI chưa bỏ được giọng → giảm nhỏ nhạc nền ở câu đó (lời Việt đè lên nghe rõ, không lẫn giọng Trung)
+const O_DO_TO = 0.25;
+export function ghiDoToGoc(pcm) {
+  const n = Math.round(TAN_SO_NGHE * O_DO_TO), so = Math.floor(pcm.length / n), r = new Float32Array(so);
+  for (let o = 0; o < so; o++) {
+    let e = 0;
+    for (let k = o * n; k < (o + 1) * n; k += 2) e += (pcm[k] / 32768) ** 2;
+    r[o] = e / (n / 2);
+  }
+  S.doToGoc = { tep: S.tepVideo, r };
+}
+function dapGiongSot(wav) {
+  const goc = S.doToGoc?.tep === S.tepVideo ? S.doToGoc.r : null;
+  if (!goc || wav.byteLength < 44 + 4 * 44100) return;
+  const pcm = new Int16Array(wav.buffer, wav.byteOffset + 44, (wav.byteLength - 44) >> 1);
+  const n = Math.round(44100 * O_DO_TO), so = Math.min(goc.length, Math.floor(pcm.length / 2 / n));
+  const nen = new Float32Array(so);
+  for (let o = 0; o < so; o++) {
+    let e = 0;
+    for (let k = o * n; k < (o + 1) * n; k += 2) e += ((pcm[2 * k] + pcm[2 * k + 1]) / 65536) ** 2;
+    nen[o] = e / (n / 2);
+  }
+  // các khúc có lời Việt (gộp câu sát nhau)
+  const doan = [];
+  for (const c of S.cacCau) {
+    if (!String(c.vi || "").trim()) continue;
+    const a = Math.max(0, c.start - 0.15), b = c.end + 0.15, cuoi = doan[doan.length - 1];
+    if (cuoi && a <= cuoi[1] + 0.3) cuoi[1] = Math.max(cuoi[1], b);
+    else doan.push([a, b]);
+  }
+  const sot = [];
+  for (const [a, b] of doan) {
+    const oa = Math.floor(a / O_DO_TO), ob = Math.min(so, Math.ceil(b / O_DO_TO));
+    let eg = 0, en = 0;
+    for (let o = oa; o < ob; o++) { eg += goc[o]; en += nen[o]; }
+    if (ob > oa && eg > 1e-5 * (ob - oa) && en / eg > 0.65) sot.push([a, b]);
+  }
+  if (!sot.length) return;
+  const GIAM = 0.15, mo = Math.round(0.1 * 44100);
+  for (const [a, b] of sot) {
+    const ia = Math.round(a * 44100), ib = Math.min(pcm.length / 2, Math.round(b * 44100));
+    for (let i = Math.max(0, ia - mo); i < Math.min(pcm.length / 2, ib + mo); i++) {
+      const vao = Math.min(1, Math.max(0, (i - (ia - mo)) / mo)), ra = Math.min(1, Math.max(0, (ib + mo - i) / mo));
+      const g = 1 - (1 - GIAM) * Math.min(vao, ra);
+      pcm[2 * i] *= g;
+      pcm[2 * i + 1] *= g;
+    }
+  }
+  const giay = sot.reduce((t, [a, b]) => t + b - a, 0);
+  nhat(`🔇 Nhạc nền còn sót giọng gốc ở ${sot.length} khúc (${giay.toFixed(0)} giây, vd ${sot.slice(0, 3).map(([a, b]) => `${dongHo(a)}–${dongHo(b)}`).join(", ")}) → giảm nhỏ nhạc nền ở các khúc đó`);
+}
+
 // Âm lượng tiếng gốc theo thời gian (khi không tách được nhạc): gần như tắt trong các câu thoại, bình thường ở chỗ khác
 function bieuThucGiam() {
   const doan = [];
@@ -222,8 +277,13 @@ export async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
     if (wavNen.byteLength > 60 * 1048576) {
       S.nhacNen = null;
       nhat(`Nhạc nền ${(wavNen.byteLength / 1048576).toFixed(0)}MB → không giữ bản sao để đỡ tốn bộ nhớ`);
+      dapGiongSot(wavNen);
       await ff.writeFile(tepNen, wavNen);
-    } else await ff.writeFile(tepNen, wavNen.slice());
+    } else {
+      const ban = wavNen.slice();
+      dapGiongSot(ban);
+      await ff.writeFile(tepNen, ban);
+    }
     thamSo.push("-i", tepNen, "-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
     chonAm = "[am]";
     soVao++;

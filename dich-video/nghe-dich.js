@@ -45,7 +45,7 @@ export async function ngheVaDich(pcm) {
   } finally {
     clearInterval(dongHoCho);
   }
-  return ketQua.sort((a, b) => a.start - b.start);
+  return boLoiHat(ketQua).sort((a, b) => a.start - b.start);
 }
 
 // Chia đoạn ~DOAN_NGHE giây, cắt ở chỗ yên lặng nhất trong 20 giây trước ranh giới để không cắt ngang câu nói
@@ -204,10 +204,20 @@ async function ngheGemini(duLieu, dai, batDau) {
   return ra;
 }
 
+// Lời bài hát trong nhạc nền (AI dịch đánh dấu [HÁT]) → bỏ, không dịch, không lồng tiếng; ghi lại để bạn biết
+const LA_HAT = /^\s*\[?\s*(HÁT|HAT)\s*\]?\s*\.?\s*$|♪/i;
+function boLoiHat(cau) {
+  const hat = cau.filter((c) => LA_HAT.test(c.vi || ""));
+  if (!hat.length) return cau;
+  nhat(`🎵 Bỏ ${hat.length} câu là lời bài hát của nhạc nền (không dịch, không lồng tiếng): ${hat.slice(0, 4).map((c) => `${dongHo(c.start)} «${c.zh.slice(0, 20)}»`).join(", ")}${hat.length > 4 ? "…" : ""}`);
+  return cau.filter((c) => !hat.includes(c));
+}
+
 function loiNhacDich(dai) {
   const them = loiDanThem(caiDat); // chuyên môn kênh, quy tắc riêng, chủ đề, thuật ngữ
   return `Đây là ${dai.toFixed(1)} giây âm thanh lấy từ một video tiếng Trung.
 Hãy nghe kỹ TOÀN BỘ phần LỜI NÓI từ đầu đến cuối (bỏ qua nhạc nền, tiếng động) và chia thành từng câu ngắn, mỗi câu tối đa khoảng 8 giây.
+KHÔNG lấy LỜI BÀI HÁT trong nhạc nền (giọng đang hát) – đó là nhạc, không phải lời nói, không dịch và không lồng tiếng.
 KHÔNG được bỏ sót câu nào – kể cả câu nói nhỏ, nói nhanh, nói chen, lời thuyết minh trên nền nhạc, lời ở đầu và cuối đoạn.
 Với mỗi câu trả về:
 - start, end: thời điểm bắt đầu và kết thúc, tính bằng GIÂY (số thập phân) kể từ đầu đoạn âm thanh này, thật chính xác.
