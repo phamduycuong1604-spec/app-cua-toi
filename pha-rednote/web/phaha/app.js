@@ -18,7 +18,7 @@
 // (PHADownload, sự kiện pha-video-loaded / pha-video-reset). Không có cửa đăng nhập: trang là của riêng chủ app.
 // =====================================================
 import "./ket-noi.js";
-import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo } from "./nen.js";
+import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo,assertRunning,setRunSignal } from "./nen.js";
 import { canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { KENH } from "./chuyen-mon.js";
 import { batDauLanMoiGemini } from "./gemini.js";
@@ -36,6 +36,12 @@ import { loiDeHieu } from "./loi.js";
 const docSongSong = () => { try { return localStorage.getItem("phaha-song-song"); } catch { return null; } };
 const giuManHinh = async () => { try { return await navigator.wakeLock?.request("screen"); } catch { return null; } };
 const canTachNhacLai = () => S.nhacNen?.tep !== S.tepVideo || S.nhacNen.loai !== caiDat.mhTach;
+let runController=null;
+function stopRun(){
+  if(!runController)return;
+  runController.abort(new DOMException('Đã dừng xử lý.','AbortError'));
+  tatFfmpeg();dungTachNhac(runController.signal.reason);
+}
 
 function ghiCaiDatVaoNhat(lamTuDau) {
   const l = caiDat.lop;
@@ -66,6 +72,8 @@ async function chay(lamTuDau) {
     return;
   }
   S.dangChay = true;
+  runController=new AbortController();setRunSignal(runController.signal);
+  $("nut-dung").classList.remove('an');
   globalThis.PHADownload?.lock?.(true); // khoá phần tải video ở trên trong lúc dịch
   layKenhTuTren(); // chuyên môn + quy tắc bổ sung đang chọn ở phần trên
   batDauLanMoiGemini();
@@ -91,14 +99,18 @@ async function chay(lamTuDau) {
     // Lỗi giữa chừng mà tách nhạc (chạy song song) vẫn đang làm → dừng hẳn để lần sau chạy lại sạch sẽ
     if (viec.huaNhacSom && S.dangTachNhac) dungTachNhac();
     S.dangChay = false;
+    $("nut-dung").classList.add('an');setRunSignal(null);runController=null;
     globalThis.PHADownload?.lock?.(false);
     ghiDangChay(null);
     S.dangTachNhac = null;
     dongChoVeHinh();
     ["nut-bat-dau", "nut-lam-lai"].forEach((id) => ($(id).disabled = false));
     khoaMan?.release?.().catch(() => {});
+    const temporary=viec.ketQuaTam?.hinh?.blob;
+    if(temporary&&temporary!==S.videoKetQua)releaseResult(temporary);
   }
 }
+function releaseResult(file){try{Promise.resolve(globalThis.PHAVideoDownload?.release?.(file)).catch(error=>nhat('Dọn file tạm: '+error.message));}catch(error){nhat('Dọn file tạm: '+error.message);}}
 
 let xongVeHinh = () => {}; // báo "chèn chữ/logo đã xong" cho Giọng máy đang chờ
 function moChoVeHinh(coVe) {
@@ -113,8 +125,10 @@ function dongChoVeHinh() {
 async function quyTrinh(lamTuDau, viec) {
   buoc("tai", "dang");
   await taiFfmpeg();
+  assertRunning();
   buoc("tai", "xong");
   let thongTin = await ganVideo();
+  assertRunning();
 
   // 1. Tách tiếng + nghe & dịch (bỏ qua khi "Làm lại" với lời thoại đã sửa)
   if (lamTuDau) {
@@ -122,6 +136,7 @@ async function quyTrinh(lamTuDau, viec) {
     buoc("tach", "dang");
     if (!thongTin.coTieng) throw new Error("Video này không có tiếng.");
     const pcm = await tachTieng();
+    assertRunning();
     buoc("tach", "xong", `${dongHo(S.thoiLuong)} âm thanh`);
     // Tách nhạc chạy trên máy, nghe & dịch chủ yếu chờ mạng → bắt đầu tách nhạc NGAY, chạy song song cho nhanh.
     // Trừ khi đọc bằng Giọng máy: nó cần nhiều bộ nhớ lúc khởi động → phải đọc TRƯỚC khi tách nhạc (iPhone báo "Out of memory")
@@ -135,6 +150,7 @@ async function quyTrinh(lamTuDau, viec) {
     viec.buocDang = "dich";
     buoc("dich", "dang");
     S.cacCau = await ngheVaDich(pcm);
+    assertRunning();
     if (!S.cacCau.length) throw new Error("Không nghe thấy lời nói tiếng Trung nào trong video.");
     buoc("dich", "xong", `${S.cacCau.length} câu`);
     veLoiThoai();
@@ -150,7 +166,9 @@ async function quyTrinh(lamTuDau, viec) {
   huaLong.catch(() => {});
   // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
   // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
-  const giongChon = await Promise.race([daChonGiong, huaLong.then(() => "", () => ""), new Promise((x) => setTimeout(() => x(""), 90000))]);
+  let henGiong,giongChon;
+  try{giongChon=await Promise.race([daChonGiong,huaLong.then(()=>'',()=>''),new Promise(x=>{henGiong=setTimeout(()=>x(''),90000)})]);}finally{clearTimeout(henGiong);}
+  assertRunning();
   if (giongChon === "may") {
     viec.buocDang = "long";
     await huaLong; // Giọng máy hỏng thì báo luôn, khỏi tách nhạc/chèn chữ vô ích
@@ -159,6 +177,7 @@ async function quyTrinh(lamTuDau, viec) {
 
   // 3. Tách nhạc nền + chèn chữ/logo
   const kq = { wavNen: null, giamTheoLoi: false, hinh: null, qua1080: thongTin.qua1080 };
+  viec.ketQuaTam=kq;
   const songSong = caiDat.tachNhac && thongTin.coTieng && caiDat.mhTach !== "giam" && coVe && docSongSong() === "bat";
   if (songSong) {
     viec.buocDang = "ve";
@@ -181,12 +200,16 @@ async function quyTrinh(lamTuDau, viec) {
   // 4. Xuất video
   viec.buocDang = "long";
   const tiengViet = await huaLong;
+  assertRunning();
   if (huaFf) { viec.buocDang = "xuat"; thongTin = await huaFf; }
   // Bộ xử lý video có thể vừa bị tắt để nhường bộ nhớ cho giọng máy → bật lại trước khi xuất
   if (!ffDangBat()) { viec.buocDang = "xuat"; await taiFfmpeg(); thongTin = await ganVideo(); }
   viec.buocDang = "xuat";
   buoc("xuat", "dang");
-  S.videoKetQua = await xuatVideo(tiengViet, thongTin, kq.wavNen, kq.hinh, kq.giamTheoLoi);
+  const result=await xuatVideo(tiengViet, thongTin, kq.wavNen, kq.hinh, kq.giamTheoLoi);
+  try{assertRunning();}catch(error){releaseResult(result);throw error;}
+  const previous=S.videoKetQua;S.videoKetQua=result;
+  if(previous&&previous!==result)releaseResult(previous);
   buoc("xuat", "xong", `${(S.videoKetQua.size / 1048576).toFixed(1)}MB`);
   nhat(`🎉 HOÀN TẤT · tổng ${giayDaChay().toFixed(0)} giây · ${(S.videoKetQua.size / 1048576).toFixed(1)}MB`);
   hienKetQua();
@@ -210,6 +233,7 @@ async function buocTachNhac(thongTin, viec, kq) {
       kq.wavNen = S.nhacNen.wav;
       buoc("nhac", "xong");
     } catch (loi) {
+      assertRunning();
       S.nhacNen = null;
       nhat("Tách nhạc hỏng: " + (loi?.message || loi));
       kq.giamTheoLoi = true;
@@ -244,6 +268,7 @@ async function buocVeHinh(kq) {
     try {
       kq.hinh = await lamVe();
     } catch (loi) {
+      assertRunning();
       if (loi.khongHoTro || loi.khongHinh) throw loi;
       nhat(`⚠️ ${loi.treo ? loi.message : "Chèn chữ/logo bị lỗi: " + loi.message} → làm lại chèn chữ/logo (lần 2)`);
       ghiChu("ve", "Bị lỗi, đang làm lại…");
@@ -282,3 +307,4 @@ globalThis.addEventListener("pha-video-reset", boVideo);
 layVideoTren();
 $("nut-bat-dau").addEventListener("click", () => chay(true));
 $("nut-lam-lai").addEventListener("click", () => chay(false));
+$("nut-dung").addEventListener('click',stopRun);

@@ -20,7 +20,7 @@ async function actualPageContext(fetch){
   return elements.get(id);
  };
  const dispatched=[];
- const context=vm.createContext({document:{getElementById:get},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},URL,File,Event,AbortSignal,AbortController,setTimeout,clearTimeout,navigator:{userAgent:'iPhone Safari'},dispatchEvent:e=>dispatched.push(e.type),PHAVideo1080:{normalise:async file=>({file,width:1080,height:1920,sourceWidth:1080,sourceHeight:1920,converted:false})},fetch});
+ const context=vm.createContext({document:{getElementById:get},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},URL,URLSearchParams,File,Event,AbortSignal,AbortController,setTimeout,clearTimeout,navigator:{userAgent:'iPhone Safari'},dispatchEvent:e=>dispatched.push(e.type),PHAVideo1080:{normalise:async file=>({file,width:1080,height:1920,sourceWidth:1080,sourceHeight:1920,converted:false})},fetch});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
  return {context,get,dispatched};
 }
@@ -51,7 +51,7 @@ test('Actual download submit reaches file loading, preserves the video on captio
  assert.equal(context.PHADownload.getVideoFile().size,bytes.length);assert.equal(get('original').value,'主光');
  assert.deepEqual(dispatched,['pha-video-reset','pha-video-loaded']);assert.equal(context.PHADownload.isBusy(),false);
  assert.equal(get('extractBtn').disabled,false);assert.equal(get('chooseFile').disabled,false);
- assert.equal(get('resultTag').textContent,'VIDEO SẴN SÀNG');assert.match(get('status').textContent,/Video \(bản (gốc|1080p của Rednote)\) đã sẵn sàng/);
+ assert.equal(get('resultTag').textContent,'VIDEO SẴN SÀNG');assert.match(get('status').textContent,/Video gốc đã sẵn sàng/);
  URL.revokeObjectURL(get('video').src);
 });
 
@@ -66,7 +66,7 @@ test('Actual failed download releases the busy state',async()=>{
 test('Uses the official rednote domain when Xiaohongshu requires login and preserves signed access',async()=>{
  const originalFetch=globalThis.fetch,originalWarn=console.warn;console.warn=()=>{};
  const id='abcdefabcdefabcdefabcdef',requests=[];
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'original note',desc:'original caption',video:{consumer:{originVideoKey:'pre_post/original'}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'original note',desc:'original caption',video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/original'}}}}}})+'</script>';
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
  globalThis.fetch=async(url)=>{
   requests.push(url);const u=new URL(url);
@@ -84,7 +84,7 @@ test('Uses the official rednote domain when Xiaohongshu requires login and prese
 test('Preserves the public share token when Rednote redirects a short link to login',async()=>{
  const originalFetch=globalThis.fetch,originalWarn=console.warn;console.warn=()=>{};
  const id='abcdefabcdefabcdefabcdef',requests=[];
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'public note',desc:'caption',video:{consumer:{originVideoKey:'pre_post/original'}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'public note',desc:'caption',video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/original'}}}}}})+'</script>';
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
  globalThis.fetch=async(url)=>{
   requests.push(url);const u=new URL(url);
@@ -164,27 +164,27 @@ test('Failed download navigation returns recovery controls instead of raw JSON',
   const page=await result.text();assert.match(page,/Thử tải lại/);assert.match(page,/Mở video trực tiếp để lưu/);assert.match(page,/Quay về PHA Rednote/);
  }finally{globalThis.fetch=originalFetch}
 });
-test('POST file flow falls back to desktop and returns verified bytes with title/caption',async()=>{
- const originalFetch=globalThis.fetch;let desktop=false,requests=0;
+test('POST file flow recovers with the legacy mobile-share profile and returns verified bytes with title/caption',async()=>{
+ const originalFetch=globalThis.fetch;let mobile=false,requests=0;
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'测试标题',desc:'主光 ISO 100',user:{nickName:'作者'},video:{consumer:{originVideoKey:'pre_post/source'},media:{stream:{h264:[{masterUrl:'http://sns-video-bd.xhscdn.com/test.mp4'}]}}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({noteData:{data:{noteData:{title:'测试标题',desc:'主光 ISO 100',user:{nickName:'作者'},video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/source'},media:{stream:{h264:[{masterUrl:'http://sns-video-bd.xhscdn.com/test.mp4'}]}}}}}}})+'</script>';
  globalThis.fetch=async (url,options)=>{
-  if(url.includes('xiaohongshu.com')){requests++;if(requests===1)return new Response('Login',{status:403});desktop=options.headers['user-agent'].includes('Windows');return new Response(html)}
+  if(url.includes('xiaohongshu.com')){requests++;if(requests===1)return new Response('Login',{status:403});mobile=options.headers['user-agent'].includes('iPhone');return new Response(html)}
   return new Response(bytes,{headers:{'content-length':String(bytes.length),'content-type':'application/octet-stream'}});
  };
  try{
   const request=new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'分享 http://www.xiaohongshu.com/explore/abcdefabcdefabcdefabcdef',preferOriginal:false})});
-  const response=await worker.fetch(request,{});assert.equal(response.status,200);assert.equal(desktop,true);assert.equal(response.headers.get('content-type'),'video/mp4');
+  const response=await worker.fetch(request,{});assert.equal(response.status,200);assert.equal(mobile,true);assert.equal(response.headers.get('content-type'),'video/mp4');
   assert.match(decodeURIComponent(response.headers.get('x-video-name')),/测试标题\.mp4/);assert.match(decodeURIComponent(response.headers.get('x-rednote-caption')),/主光 ISO 100/);assert.deepEqual([...new Uint8Array(await response.arrayBuffer())],[...bytes]);
  }finally{globalThis.fetch=originalFetch}
 });
 test('File flow rejects HTML disguised as a video response',async()=>{
  const originalFetch=globalThis.fetch;
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'test',desc:'test',video:{consumer:{originVideoKey:'pre_post/test'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/test.mp4'}]}}}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'test',desc:'test',video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/test'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/test.mp4'}]}}}}}}}})+'</script>';
  globalThis.fetch=async url=>url.includes('xiaohongshu.com')?new Response(html):new Response('<html>login</html>',{headers:{'content-type':'video/mp4'}});
  try{
   const response=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test',preferOriginal:false})}),{});
-  assert.equal(response.status,502);assert.match((await response.json()).error,/không phải MP4/);
+  assert.equal(response.status,422);assert.match((await response.json()).error,/không phải MP4/);
  }finally{globalThis.fetch=originalFetch}
 });
 test('Original mode never silently falls back to a shared stream',async()=>{
@@ -193,17 +193,17 @@ test('Original mode never silently falls back to a shared stream',async()=>{
  globalThis.fetch=async url=>{if(url.includes('shared.mp4'))videoRequested=true;return new Response(html)};
  try{
   const response=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test'})}),{});
-  assert.equal(response.status,422);assert.equal(videoRequested,false);assert.match((await response.json()).error,/Không tìm được bản gốc/);
+  assert.equal(response.status,422);assert.equal(videoRequested,false);assert.match((await response.json()).error,/Không tìm được link gốc/);
  }finally{globalThis.fetch=originalFetch}
 });
-test('Large originals return a server download attachment without buffering or replacing them',async()=>{
+test('Originals between 256 MB and 600 MB return a disk attachment without buffering or replacement',async()=>{
  const originalFetch=globalThis.fetch;const requests=[];
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'original',desc:'caption',video:{consumer:{originVideoKey:'spectrum/original'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/shared.mp4'}]}}}}}}}})+'</script>';
- globalThis.fetch=async (url,options)=>{requests.push(url);if(url.includes('xiaohongshu.com'))return new Response(html);assert.equal(options.headers.range,'bytes=0-65535');return new Response(bytes,{status:206,headers:{'content-range':'bytes 0-15/1900000000','content-length':'16'}})};
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'original',desc:'caption',video:{consumer:{hasWatermark:false,originVideoKey:'spectrum/original'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/shared.mp4'}]}}}}}}}})+'</script>';
+ globalThis.fetch=async (url,options)=>{requests.push(url);if(url.includes('xiaohongshu.com'))return new Response(html);assert.equal(options.headers.range,'bytes=0-65535');return new Response(bytes,{status:206,headers:{'content-range':'bytes 0-15/590000000','content-length':'16'}})};
  try{
   const response=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test'})}),{});
-  assert.equal(response.status,200);const result=await response.json();assert.equal(result.delivery,'attachment');assert.equal(result.size,1900000000);assert.equal(result.mode,'original');assert.match(result.downloadUrl,/kind=original/);assert.equal(requests.some(url=>url.includes('shared.mp4')),false);
+  assert.equal(response.status,200);const result=await response.json();assert.equal(result.delivery,'attachment');assert.equal(result.size,590000000);assert.equal(result.mode,'original');assert.match(result.downloadUrl,/kind=original/);assert.equal(requests.some(url=>url.includes('shared.mp4')),false);
  }finally{globalThis.fetch=originalFetch}
 });
 
@@ -213,15 +213,15 @@ test('Starting a new failed Rednote download resets the video studio instead of 
  const context=vm.createContext({document:{getElementById:get},localStorage:{getItem:()=>null,setItem(){}},URL,AbortSignal,AbortController,Event,dispatchEvent:e=>dispatched.push(e.type),setTimeout,clearTimeout,fetch:async()=>new Response(JSON.stringify({error:'Rednote login'}),{status:502})});
  vm.runInContext(script,context);vm.runInContext("videoFile={name:'old.mp4'};",context);await get('extractForm').events.submit({preventDefault(){}});assert.equal(vm.runInContext('videoFile',context),null);assert.deepEqual(dispatched,['pha-video-reset']);assert.match(get('status').textContent,/Rednote login/);
 });
-test('Even an explicit shared-stream request downloads only the original source',async()=>{
+test('Even an explicit shared-stream request keeps an original below 600 MB',async()=>{
  const oldFetch=globalThis.fetch,requests=[];
  const media='https://sns-video-bd.xhscdn.com/spectrum/original';
- const page='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Shared',desc:'Caption',video:{consumer:{originVideoKey:'spectrum/original'},media:{stream:{h264:[{masterUrl:media}]}}}}}}}})+'</script>';
+ const page='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Shared',desc:'Caption',video:{consumer:{hasWatermark:false,originVideoKey:'spectrum/original'},media:{stream:{h264:[{masterUrl:media}]}}}}}}}})+'</script>';
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
- globalThis.fetch=async(url,init)=>{requests.push([url,init?.headers?.range]);if(url.includes('xiaohongshu.com'))return new Response(page);assert.equal(url,media);return new Response(bytes,{status:206,headers:{'content-range':'bytes 0-15/800000000','content-length':'16'}})};
+ globalThis.fetch=async(url,init)=>{requests.push([url,init?.headers?.range]);if(url.includes('xiaohongshu.com'))return new Response(page);assert.equal(url,media);return new Response(bytes,{status:206,headers:{'content-range':'bytes 0-15/500000000','content-length':'16'}})};
  try{
   const r=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test',preferOriginal:false})}),{});
-  assert.equal(r.status,200);const data=await r.json();assert.equal(data.delivery,'attachment');assert.equal(data.mode,'original');assert.equal(data.size,800000000);
+  assert.equal(r.status,200);const data=await r.json();assert.equal(data.delivery,'attachment');assert.equal(data.mode,'original');assert.equal(data.size,500000000);
   const download=new URL(data.downloadUrl,'https://site.test');assert.equal(download.searchParams.get('url'),media);assert.equal(download.searchParams.get('kind'),'original');
   assert.deepEqual(requests.filter(([url])=>url===media).map(([,range])=>range),['bytes=0-65535']);
  }finally{globalThis.fetch=oldFetch}
@@ -229,9 +229,9 @@ test('Even an explicit shared-stream request downloads only the original source'
 
 test('An oversized HTML response cannot become a video attachment',async()=>{
  const oldFetch=globalThis.fetch;
- const page='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Invalid',video:{consumer:{originVideoKey:'pre_post/test'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/shared.mp4'}]}}}}}}}})+'</script>';
+ const page='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Invalid',video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/test'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/shared.mp4'}]}}}}}}}})+'</script>';
  globalThis.fetch=async url=>url.includes('xiaohongshu.com')?new Response(page):new Response('<html>login required</html>',{headers:{'content-length':'800000000'}});
- try{const r=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test',preferOriginal:false})}),{});assert.equal(r.status,502);assert.match((await r.json()).error,/không phải MP4/)}finally{globalThis.fetch=oldFetch}
+ try{const r=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test',preferOriginal:false})}),{});assert.equal(r.status,422);assert.match((await r.json()).error,/không phải MP4/)}finally{globalThis.fetch=oldFetch}
 });
 
 test('Actual phone UI receives a large shared attachment, keeps caption and unlocks without buffering a Blob',async()=>{
@@ -306,7 +306,7 @@ test('Studio link box uses the main download path and keeps caption, author and 
 test('A phone that can write to app storage gets every original, even small ones, as a disk download instead of RAM bytes',async()=>{
  const originalFetch=globalThis.fetch;const requests=[];
  const bytes=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'small',desc:'caption',user:{nickname:'作者'},video:{consumer:{originVideoKey:'spectrum/small'}}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'small',desc:'caption',user:{nickname:'作者'},video:{consumer:{hasWatermark:false,originVideoKey:'spectrum/small'}}}}}}})+'</script>';
  globalThis.fetch=async(url,options)=>{requests.push([url,options?.headers?.range]);if(url.includes('xiaohongshu.com'))return new Response(html);if(options?.headers?.range==='bytes=0-')return new Response(bytes,{headers:{'content-length':'16'}});return new Response(bytes,{status:206,headers:{'content-range':'bytes 0-15/30000000','content-length':'16'}})};
  try{
   const disk=await worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/test',preferOriginal:true,delivery:'attachment'})}),{});
@@ -335,15 +335,16 @@ test('Phone page asks for a disk download when app storage works, and falls back
  }
 });
 
-test('The subtitle font comes from a fixed GitHub version, and notes no longer carry the unused candidate list',async()=>{
+test('The subtitle font is bundled without a network request, and notes no longer carry the unused candidate list',async()=>{
  const originalFetch=globalThis.fetch;let requested;
  globalThis.fetch=async url=>{requested=url;return new Response(new Uint8Array([0,1,0,0]))};
  try{
   const r=await worker.fetch(new Request('https://site.test/dub/remote/NotoSans.ttf'),{});
   assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'font/ttf');
-  assert.match(requested,/\/notofonts\/noto-fonts\/ffebf8c1ee449e544955a7e813c54f9b73848eac\/hinted\/ttf\/NotoSans\/NotoSans-Regular\.ttf$/);assert.doesNotMatch(requested,/\/main\//);
+  assert.equal(requested,undefined);const font=new Uint8Array(await r.arrayBuffer());
+  assert.ok(font.length>100000);assert.deepEqual(Array.from(font.slice(0,4)),[0,1,0,0]);
  }finally{globalThis.fetch=originalFetch}
- const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'t',desc:'d',video:{consumer:{originVideoKey:'pre_post/x'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/a.mp4'}]}}}}}}}})+'</script>';
+ const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'t',desc:'d',video:{consumer:{hasWatermark:false,originVideoKey:'pre_post/x'},media:{stream:{h264:[{masterUrl:'https://sns-video-bd.xhscdn.com/a.mp4'}]}}}}}}}})+'</script>';
  const note=extractNote(html,'https://www.xiaohongshu.com/explore/abcdefabcdefabcdefabcdef');
  assert.equal('videoCandidates' in note,false);assert.equal(note.originalVideoUrl,'https://sns-video-bd.xhscdn.com/pre_post/x');assert.equal(note.videoUrl,'https://sns-video-bd.xhscdn.com/a.mp4');
 });
@@ -392,9 +393,9 @@ test('When saving into the app fails, an original still gets a button to downloa
  }
 });
 
-// ---- Phần 10: ưu tiên bản ≤1080p Rednote khi nhẹ hơn bản gốc (xử lý trên điện thoại nhanh hơn) ----
+// ---- Nguồn gốc xác nhận sạch trước (kể cả >400 MB), rồi 1080p sạch ----
 const P10_MP4=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
-function p10Page({originKey='spectrum/goc15phut',stream={}}={}){return '<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Video 15 phút',desc:'Caption gốc',user:{nickname:'作者'},video:{consumer:{originVideoKey:originKey},media:{stream}}}}}}})+'</script>';}
+function p10Page({originKey='spectrum/goc15phut',stream={},originalClean=false}={}){return '<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{a:{note:{title:'Video 15 phút',desc:'Caption gốc',user:{nickname:'作者'},video:{consumer:{...(originalClean?{hasWatermark:false}:{}),originVideoKey:originKey},media:{stream}}}}}}})+'</script>';}
 const P10_ORIGIN='https://sns-video-bd.xhscdn.com/spectrum/goc15phut',P10_1080='https://sns-video-bd.xhscdn.com/stream/1080.mp4',P10_4K='https://sns-video-bd.xhscdn.com/stream/4k.mp4',P10_H265='https://sns-video-bd.xhscdn.com/stream/1080-h265.mp4',P10_BACKUP='https://sns-video-hw.xhscdn.com/stream/1080-backup.mp4';
 // Giả lập Rednote: trang bài + CDN video trả đúng tổng dung lượng cho từng link
 function p10Fetch(page,sizes,{blocked=[]}={}){
@@ -411,48 +412,38 @@ function p10Fetch(page,sizes,{blocked=[]}={}){
  fn.requests=requests;return fn;
 }
 async function p10Post(body){return worker.fetch(new Request('https://site.test/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:'https://www.xiaohongshu.com/explore/abcdefabcdefabcdefabcdef',preferOriginal:true,...body})}),{});}
-const p10Streams={h264:[{masterUrl:P10_4K,width:2160,height:3840,avgBitrate:20000000},{masterUrl:P10_1080,width:1080,height:1920,avgBitrate:4000000}],h265:[{masterUrl:P10_H265,width:1080,height:1920,avgBitrate:3000000}]};
+const p10Streams={h264:[{hasWatermark:false,masterUrl:P10_4K,width:2160,height:3840,avgBitrate:20000000},{hasWatermark:false,masterUrl:P10_1080,width:1080,height:1920,avgBitrate:4000000}],h265:[{hasWatermark:false,masterUrl:P10_H265,width:1080,height:1920,avgBitrate:3000000}]};
 
-test('A 15-minute original of 3.5 GB is swapped for Rednote\'s own 1080p H.264 copy, so the phone downloads about 400 MB',async()=>{
- const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:3500000000,[P10_1080]:420000000,[P10_4K]:3400000000,[P10_H265]:300000000});
- try{
-  const r=await p10Post({delivery:'attachment'});assert.equal(r.status,200);const d=await r.json();
-  assert.equal(d.delivery,'attachment');assert.equal(d.mode,'p1080');assert.equal(d.size,420000000);assert.equal(d.originalSize,3500000000);
-  assert.equal(d.width,1080);assert.equal(d.height,1920);assert.equal(d.codec,'h264');assert.match(d.reason,/Bản gốc 3500 MB/);
-  const dl=new URL(d.downloadUrl,'https://site.test');assert.equal(dl.searchParams.get('url'),P10_1080);assert.equal(dl.searchParams.get('kind'),'p1080');
-  assert.equal(d.caption,'Video 15 phút\n\nCaption gốc');
-  const media=globalThis.fetch.requests.filter(([u])=>u.includes('xhscdn'));assert.deepEqual(media.map(([u,r])=>[u,r]),[[P10_ORIGIN,'bytes=0-65535'],[P10_1080,'bytes=0-65535']]);
- }finally{globalThis.fetch=old}
+test('A 3.5 GB original switches to a clean 1080p attachment',async()=>{
+ const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams,originalClean:true}),{[P10_ORIGIN]:3500000000,[P10_1080]:420000000});
+ try{const r=await p10Post({delivery:'attachment'}),d=await r.json();assert.equal(r.status,200);assert.equal(d.mode,'p1080');assert.equal(d.size,420000000);assert.equal(d.originalSize,3500000000);assert.match(d.reason,/> 600 MB/);assert.equal(new URL(d.downloadUrl,'https://site.test').searchParams.get('url'),P10_1080);}finally{globalThis.fetch=old}
 });
-test('A 1-minute 4K original of 80 MB also switches to the lighter 20 MB 1080p copy',async()=>{
- const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:80000000,[P10_1080]:20000000});
- try{
-  const d=await(await p10Post({delivery:'attachment'})).json();
-  assert.equal(d.mode,'p1080');assert.equal(d.size,20000000);assert.equal(d.originalSize,80000000);assert.match(d.reason,/Bản gốc 80 MB/);
- }finally{globalThis.fetch=old}
+test('A small clean original is preferred before the verified 1080p copy',async()=>{
+ const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams,originalClean:true}),{[P10_ORIGIN]:80000000,[P10_1080]:20000000});
+ try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'original');assert.equal(d.size,80000000);assert.match(d.reason,/≤ 600 MB/);assert.equal(globalThis.fetch.requests.some(([u])=>u===P10_1080),false);}finally{globalThis.fetch=old}
 });
-test('The original is kept when it is not heavier than the 1080p copy (equal or lighter)',async()=>{
- for(const [size,mode] of [[20000000,'original'],[15000000,'original'],[20000001,'p1080']]){
-  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:p10Streams}),{[P10_ORIGIN]:size,[P10_1080]:20000000});
-  try{assert.equal((await(await p10Post({delivery:'attachment'})).json()).mode,mode,String(size))}finally{globalThis.fetch=old}
+test('Originals through exactly 600 MB remain original',async()=>{
+ for(const size of [399999999,400000000,400000001,600000000]){
+  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({originalClean:true}),{[P10_ORIGIN]:size});
+  try{const r=await p10Post({delivery:'attachment'}),d=await r.json();assert.equal(r.status,200);assert.equal(d.mode,'original');assert.equal(d.size,size);assert.match(d.reason,/≤ 600 MB/);}finally{globalThis.fetch=old}
  }
 });
-test('A heavy original with no copy at 1080p or below keeps the original and says why',async()=>{
+test('An unverified original with no verified clean 1080p copy stops with a clear download error',async()=>{
  const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_4K,width:2160,height:3840}]}}),{[P10_ORIGIN]:900000000,[P10_4K]:850000000});
- try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'original');assert.equal(d.size,900000000);assert.match(d.reason,/Không có bản 1080p/);}finally{globalThis.fetch=old}
+ try{const r=await p10Post({delivery:'attachment'}),d=await r.json();assert.equal(r.status,422);assert.match(d.error,/1080p hoặc 720p/);}finally{globalThis.fetch=old}
 });
 test('A 1428×1088 Rednote copy counts as 1080p, and a refused copy is named in the log reason',async()=>{
- let old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,width:1428,height:1088}]}}),{[P10_ORIGIN]:77000000,[P10_1080]:30000000});
+ let old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{hasWatermark:false,masterUrl:P10_1080,width:1428,height:1088}]}}),{[P10_ORIGIN]:900000000,[P10_1080]:30000000});
  try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'p1080');assert.equal(d.width,1428);}finally{globalThis.fetch=old}
- old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,width:1080,height:1920}],av1:[{masterUrl:P10_H265,width:1080,height:1920}]}}),{[P10_ORIGIN]:900000000,[P10_1080]:300000000},{blocked:[P10_1080]});
- try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'original');assert.match(d.reason,/h264 1080×1920: Nguồn không cho tải/);assert.match(d.reason,/av1 1080×1920: iPhone khó đọc/);}finally{globalThis.fetch=old}
+ old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{hasWatermark:false,masterUrl:P10_1080,width:1080,height:1920}],av1:[{masterUrl:P10_H265,width:1080,height:1920}]}}),{[P10_ORIGIN]:900000000,[P10_1080]:300000000},{blocked:[P10_1080]});
+ try{const r=await p10Post({delivery:'attachment'}),d=await r.json();assert.equal(r.status,422);assert.match(d.error,/h264 1080×1920: Nguồn không cho tải/);assert.match(d.error,/av1 1080×1920: iPhone khó đọc/);}finally{globalThis.fetch=old}
 });
 test('If the main 1080p link is refused, its backup link from Rednote is used',async()=>{
- const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_1080,backupUrls:[P10_BACKUP],width:1080,height:1920}]}}),{[P10_ORIGIN]:2000000000,[P10_1080]:400000000,[P10_BACKUP]:400000000},{blocked:[P10_1080]});
+ const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{hasWatermark:false,masterUrl:P10_1080,backupUrls:[P10_BACKUP],width:1080,height:1920}]}}),{[P10_ORIGIN]:2000000000,[P10_1080]:400000000,[P10_BACKUP]:400000000},{blocked:[P10_1080]});
  try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'p1080');assert.equal(new URL(d.downloadUrl,'https://site.test').searchParams.get('url'),P10_BACKUP);}finally{globalThis.fetch=old}
 });
 test('When the only 1080p copy is H.265, it is used instead of the 4K H.264 copy',async()=>{
- const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_4K,width:2160,height:3840}],h265:[{masterUrl:P10_H265,width:1080,height:1920}]}}),{[P10_ORIGIN]:2000000000,[P10_4K]:1900000000,[P10_H265]:300000000});
+ const old=globalThis.fetch;globalThis.fetch=p10Fetch(p10Page({stream:{h264:[{masterUrl:P10_4K,width:2160,height:3840}],h265:[{hasWatermark:false,masterUrl:P10_H265,width:1080,height:1920}]}}),{[P10_ORIGIN]:2000000000,[P10_4K]:1900000000,[P10_H265]:300000000});
  try{const d=await(await p10Post({delivery:'attachment'})).json();assert.equal(d.mode,'p1080');assert.equal(d.codec,'h265');assert.equal(new URL(d.downloadUrl,'https://site.test').searchParams.get('url'),P10_H265);}finally{globalThis.fetch=old}
 });
 test('A browser without app storage still gets the small 1080p copy as direct bytes, labelled as 1080p',async()=>{
@@ -479,6 +470,17 @@ test('On the phone, a 1080p copy goes straight into the dubbing section and the 
  assert.ok(logs.some(l=>/Bản 1080p 420000000 byte/.test(l)));assert.ok(logs.some(l=>/đưa bản 1080p sang Dịch/.test(l)));
  URL.revokeObjectURL(get('video').src);
 });
+test('On the phone, a 720p copy goes straight into the dubbing section and the log says why',async()=>{
+ const logs=[],stored=new File([P10_MP4],'Video 15 phút.mp4',{type:'video/mp4'});let attached;
+ const {context,get,dispatched}=await actualPageContext(async()=>Response.json({delivery:'attachment',title:'Video 15 phút',caption:'Video 15 phút\n\nCaption gốc',author:'作者',sourceUrl:'https://xhslink.com/o/x',size:420000000,mode:'p720',originalSize:3500000000,width:720,height:1280,codec:'h264',reason:'Bản gốc 3500 MB quá nặng',downloadUrl:'/api/download?kind=p720'}));
+ context.PHARunLog={add:(s,m)=>logs.push(s+' · '+m)};context.PHAVideoDownload={canUseDisk:async()=>true,attachment:async d=>{attached=d;return stored},release:async()=>{},CONCURRENCY:4};
+ get('url').value='https://xhslink.com/o/x';await get('extractForm').events.submit({preventDefault(){}});
+ assert.equal(attached.mode,'p720');assert.equal(context.PHADownload.getVideoFile(),stored);assert.deepEqual(dispatched,['pha-video-reset','pha-video-loaded']);
+ assert.match(get('videoMessage').textContent,/bản 720p của Rednote/);assert.equal(get('original').value,'Video 15 phút\n\nCaption gốc');assert.equal(context.PHADownload.isBusy(),false);
+ assert.ok(logs.some(l=>/Bản gốc 3500 MB quá nặng → dùng bản 720p của Rednote \(720×1280 · h264\)/.test(l)),logs.join('\n'));
+ assert.ok(logs.some(l=>/Bản 720p 420000000 byte/.test(l)));assert.ok(logs.some(l=>/đưa bản 720p sang Dịch/.test(l)));
+ URL.revokeObjectURL(get('video').src);
+});
 test('If saving the 1080p copy into the app fails, the phone offers to download that 1080p copy to Files',async()=>{
  const {context,get}=await actualPageContext(async()=>Response.json({delivery:'attachment',title:'t',caption:'c',size:420000000,mode:'p1080',reason:'Bản gốc 3500 MB quá nặng',width:1080,height:1920,downloadUrl:'/api/download?kind=p1080'}));
  context.PHAVideoDownload={canUseDisk:async()=>true,attachment:async()=>{throw Error('Video lưu chưa đủ dung lượng (đã lưu 1 / 2 byte · cách ghi: writable).')},release:async()=>{},CONCURRENCY:4};
@@ -493,4 +495,64 @@ test('The phone log shows how many stalled parts were downloaded again',async()=
  await get('extractForm').events.submit({preventDefault(){}});
  assert.ok(logs.some(l=>/6 luồng · đã tải lại 2 phần bị đứng\/lỗi/.test(l)),logs.join('\n'));
  URL.revokeObjectURL(get('video').src);
+});
+
+test('Phone journal records desktop source, the actual final CDN URL and the selection reason',async()=>{
+ const logs=[],chosen='https://sns-video-bd.xhscdn.com/clean/final.mp4';
+ const {context,get}=await actualPageContext(async()=>Response.json({delivery:'attachment',title:'t',caption:'caption',size:16,mode:'p1080',sourceUserAgent:'desktop',selectedVideoUrl:chosen,reason:'Ưu tiên bản 1080p có cờ không watermark',width:1080,height:1920,codec:'h264',downloadUrl:'/api/download?kind=p1080'}));
+ context.PHARunLog={add:(s,m)=>logs.push(s+' · '+m)};context.PHAVideoDownload={CONCURRENCY:6,release:async()=>{},attachment:async()=>new File([new Uint8Array(16)],'t.mp4',{type:'video/mp4'})};
+ await get('extractForm').events.submit({preventDefault(){}});assert.ok(logs.some(l=>l.includes('Đã dùng User-Agent Chrome desktop')));assert.ok(logs.some(l=>l.includes('Link video cuối cùng được chọn: '+chosen)));assert.ok(logs.some(l=>l.includes('Ưu tiên bản 1080p có cờ không watermark')));assert.equal(context.PHADownload.isBusy(),false);URL.revokeObjectURL(get('video').src);
+});
+
+test('Phone retry journal includes exact bytes, phase and retry budget',async()=>{
+ const file=new File([P10_MP4],'a.mp4',{type:'video/mp4'}),logs=[];
+ const {context,get}=await actualPageContext(async()=>Response.json({delivery:'attachment',title:'Nguồn sạch',caption:'c',mode:'original',size:16,downloadUrl:'/api/download?kind=original'}));
+ context.PHARunLog={add:(stage,message)=>logs.push(stage+' · '+message)};
+ context.PHAVideoDownload={CONCURRENCY:4,release:async()=>{},attachment:async(_d,options)=>{options.onRetry({start:8388608,end:16777215,retry:2,maxRetries:3,phase:'body',name:'TimeoutError',reason:'Không nhận thêm dữ liệu sau 35 giây.'});return file}};
+ await get('extractForm').events.submit({preventDefault(){}});assert.ok(logs.some(l=>/Byte 8388608–16777215.*đọc dữ liệu.*lần 2\/3.*35 giây/.test(l)),logs.join('\n'));URL.revokeObjectURL(get('video').src);
+});
+test('Small video memory fallback retries truncated bytes then preserves the successful video',async()=>{
+ let retries=0;const bytes=P10_MP4,initial=new Response(bytes.slice(0,8),{headers:{'content-length':'16'}});
+ const {context}=await actualPageContext(async url=>{assert.equal(url,'/api/download?kind=original');retries++;return new Response(bytes,{headers:{'content-length':'16'}})});
+ const parts=await context.receiveSmallVideo(initial,16,'/api/download?kind=original',new AbortController().signal);assert.equal(retries,1);assert.deepEqual(new Uint8Array(await new Blob(parts).arrayBuffer()),bytes);
+});
+test('A small video that repeatedly fails memory loading offers the verified source as a Files download',async()=>{
+ let calls=0;const logs=[];
+ const {context,get}=await actualPageContext(async()=>{calls++;return new Response(new ReadableStream({start(c){c.error(Error('Load failed'))}}),{headers:{'content-type':'video/mp4','content-length':'16','x-video-mode':'original','x-video-final-url':encodeURIComponent(P10_ORIGIN),'x-rednote-source':encodeURIComponent('https://xhslink.com/o/source'),'x-rednote-caption':encodeURIComponent('Giữ caption gốc')}})});
+ context.PHARunLog={add:(stage,message)=>logs.push(stage+' · '+message)};
+ await get('extractForm').events.submit({preventDefault(){}});assert.equal(calls,4);assert.equal(get('download').classList.contains('hidden'),false);assert.match(get('download').textContent,/về Tệp/);assert.match(get('download').href,/^\/api\/download\?/);assert.equal(get('original').value,'Giữ caption gốc');assert.equal(context.PHADownload.isBusy(),false);assert.ok(logs.some(l=>/lần 3\/3/.test(l)));
+});
+test('A stalled small-video body is cancelled after 35 seconds even without OPFS or a cooperative reader',{timeout:2000},async()=>{
+ const {context}=await actualPageContext(()=>assert.fail('No retry without a verified fallback link'));
+ context.setTimeout=(fn,ms)=>setTimeout(fn,ms===35000?15:ms);let cancelled=0;
+ const initial=new Response(new ReadableStream({pull(){return new Promise(()=>{})},cancel(){cancelled++;return new Promise(()=>{})}}));
+ await assert.rejects(context.receiveSmallVideo(initial,16,null,new AbortController().signal),/35 giây/);assert.equal(cancelled,1);
+});
+
+test('Large original button waits for a click, submits opt-in, and keeps Files fallback clickable',async()=>{
+ const bodies=[];
+ const {context,get}=await actualPageContext(async(_url,init)=>{
+  const body=JSON.parse(init.body);bodies.push(body);
+  if(body.allowLargeOriginal!==true)return Response.json({code:'LARGE_ORIGINAL_AVAILABLE',error:'Không có bản nhỏ sạch',largeOriginal:{size:1270570159}},{status:422});
+  return Response.json({delivery:'attachment',mode:'original',size:1270570159,title:'Large',caption:'caption',sourceUrl:body.url,downloadUrl:'/api/download?kind=original&largeOriginal=1'});
+ });
+ context.PHAVideoDownload={canUseDisk:async()=>false,release(){},attachment:async()=>{throw Error('Bộ nhớ không đủ')}};
+ get('url').value='https://xhslink.com/o/large';
+ await get('extractForm').events.submit({preventDefault(){}});
+ assert.equal(bodies.length,1);assert.equal(bodies[0].allowLargeOriginal,false);assert.equal(get('largeOriginalOffer').classList.contains('hidden'),false);assert.match(get('largeOriginalInfo').textContent,/1.27 GB/);assert.equal(context.PHADownload.isBusy(),false);
+ await get('largeOriginalBtn').onclick();assert.equal(bodies.length,2);assert.equal(bodies[1].allowLargeOriginal,true);assert.equal(get('largeOriginalOffer').classList.contains('hidden'),true);
+ let prevented=false;await get('download').events.click({preventDefault(){prevented=true}});assert.equal(prevented,false);assert.match(get('download').href,/largeOriginal=1/);
+});
+test('Large original button cannot apply an old offer to a changed source',async()=>{
+ let requests=0;const {get}=await actualPageContext(async()=>{requests++;return Response.json({code:'LARGE_ORIGINAL_AVAILABLE',error:'No clean copy',largeOriginal:{size:700000000}},{status:422})});
+ get('url').value='https://xhslink.com/o/first';await get('extractForm').events.submit({preventDefault(){}});get('url').value='https://xhslink.com/o/second';await get('largeOriginalBtn').onclick();assert.equal(requests,1);assert.equal(get('largeOriginalOffer').classList.contains('hidden'),true);
+});
+
+test('Phone journal exposes adaptive lane decisions and measured transfer speed',async()=>{
+ const logs=[],file=new File([new Uint8Array(16)],'t.mp4',{type:'video/mp4'});
+ const {context,get}=await actualPageContext(async()=>Response.json({delivery:'attachment',title:'t',caption:'c',mode:'original',size:16,downloadUrl:'/api/download?kind=original'}));
+ context.PHARunLog={add:(stage,message)=>logs.push(stage+' · '+message)};
+ context.PHAVideoDownload={release:async()=>{},attachment:async(_,{onTune})=>{onTune({from:4,to:6,reason:'Thử 6 luồng',bytesPerSecond:5e6});onTune({from:6,to:4,reason:'Thêm luồng không nhanh hơn',bytesPerSecond:4e6});return file}};
+ await get('extractForm').events.submit({preventDefault(){}});
+ assert.ok(logs.some(l=>/Điều chỉnh tốc độ.*4 → 6 luồng.*5.0 MB\/s/.test(l)));assert.ok(logs.some(l=>/6 → 4 luồng.*không nhanh hơn.*4.0 MB\/s/.test(l)));URL.revokeObjectURL(get('video').src);
 });

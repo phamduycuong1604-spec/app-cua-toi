@@ -10,7 +10,7 @@ export function assertRunning(){activeSignal?.throwIfAborted();}
 export function runSignal(){return activeSignal;}
 export function onRunAbort(fn){const signal=activeSignal;if(!signal)return()=>{};signal.addEventListener('abort',fn,{once:true});return()=>signal.removeEventListener('abort',fn);}
 const providers=new Set(['generativelanguage.googleapis.com','texttospeech.googleapis.com','api.groq.com','api.deepseek.com','openrouter.ai','api.fish.audio','api.elevenlabs.io','api.fpt.ai','viettelai.vn','api.cognitive.microsofttranslator.com']);
-let geminiQuaMayChu=false;
+let geminiQuaMayChu=0;
 export async function siteFetch(input,init={}){
  const raw=input instanceof Request?input.url:String(input),url=new URL(raw,location.href);
  const api=providers.has(url.hostname)||/^[a-z0-9-]+\.(?:api\.cognitive\.microsoft\.com|tts\.speech\.microsoft\.com)$/.test(url.hostname)||/^file\d*\.fpt\.ai$/.test(url.hostname);
@@ -18,7 +18,9 @@ export async function siteFetch(input,init={}){
  if(!api){if(url.origin===location.origin&&url.pathname==='/ai/chuyen'){const headers=new Headers(init.headers);if(headers.has('Authorization')){headers.set('X-Provider-Authorization',headers.get('Authorization'));headers.delete('Authorization');}return nativeFetch(input,{...init,headers,signal});}return nativeFetch(input,{...init,signal});}
  // Gemini chặn theo vị trí của nơi gửi: đi qua máy chủ Site thì Google thấy vị trí máy chủ (có thể bị chặn dù điện thoại ở Việt Nam).
  // → gọi thẳng từ điện thoại trước; trình duyệt chặn kiểu gọi này (lỗi mạng) thì quay về đi qua máy chủ như cũ.
- if(url.hostname==='generativelanguage.googleapis.com'&&!geminiQuaMayChu){try{return await nativeFetch(input,{...init,signal});}catch(error){if(signal?.aborted||error?.name==='AbortError'||error?.name==='TimeoutError')throw error;geminiQuaMayChu=true;}}
+ // Một lần mất mạng không ép mọi lần gọi sau đi qua máy chủ (Google có thể chặn vị trí máy chủ).
+ // Sau 30 giây thử lại đường gọi từ điện thoại; không đổi đường khi người dùng chủ động dừng.
+ if(url.hostname==='generativelanguage.googleapis.com'&&Date.now()>=geminiQuaMayChu){try{return await nativeFetch(input,{...init,signal});}catch(error){if(signal?.aborted||error?.name==='AbortError'||error?.name==='TimeoutError')throw error;geminiQuaMayChu=Date.now()+30000;}}
  const headers=new Headers(init.headers);headers.set('X-Dich-Den',url.href);
  if(headers.has('Authorization')){headers.set('X-Provider-Authorization',headers.get('Authorization'));headers.delete('Authorization');}
  return nativeFetch('/ai/chuyen',{...init,headers,signal});

@@ -1,17 +1,18 @@
 // =====================================================
 // ĐỌC TIẾNG VIỆT & LỒNG TIẾNG CẢ VIDEO
 // Thứ tự giọng (người dùng chọn): Gemini → ElevenLabs → Viettel → Google Cloud → FPT → Fish → Azure → Edge → Giọng máy
-// Giọng trên hết lượt/lỗi thì đọc lại TOÀN BỘ video bằng giọng kế tiếp (không trộn 2 giọng trong 1 video)
+// Gemini hết lượt/lỗi: giữ các gói đã có audio, giọng kế tiếp chỉ đọc phần còn thiếu.
 // =====================================================
 import {
-  $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
+  $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,assertRunning,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { goiGemini, moHinhDocDaChot, chotMoHinhDoc, boMoHinhDoc, moHinhDocBiBo, conLuotGeminiDoc } from "./gemini.js";
+import { goiGemini, moHinhDocDaChot, chotMoHinhDoc } from "./gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
 import { loiDeHieu } from "./loi.js";
+import {audioCacheId,readAudio,saveAudio} from "./tts-audio-cache.js";
 
 // Thứ tự dùng giọng (theo yêu cầu người dùng: Gemini có xoay vòng nhiều mã đọc trước tiên)
 export const THU_TU = ["gemini", "el", "vt", "gc", "fpt", "fish", "az", "edge", "may"];
@@ -30,6 +31,7 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
     try {
       r = await fetch(diaChi, tuyChon);
     } catch (loiMang) {
+      assertRunning();
       nhat(`⚠️ ${DICH_VU[dv].ten}: lỗi mạng (${loiMang?.message || loiMang})`);
       if (lan < 3) { await cho(3); continue; }
       throw Object.assign(new Error(`Không gọi được ${DICH_VU[dv].ten}. Kiểm tra mạng` + (dv === "az" ? " và tên Vùng." : ".")), { dv });
@@ -64,23 +66,25 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
 // ----- Gemini -----
 async function docGemini(chu, lan = 0) {
   const tl = await goiGemini("doc", {
-    // Chỉ gửi đúng câu cần đọc. Không kèm lời dặn kiểu "Đọc bằng tiếng Việt…" vì các mẫu Gemini đọc giọng
-    // mới (3.x) đọc to luôn cả lời dặn vào video. Tốc độ đã có app tự chỉnh khi xếp giọng vào video.
+    // Lần đầu kèm lời dặn; Gemini trả lời không kèm tiếng (OTHER) thì lần sau chỉ gửi đúng câu cần đọc
     contents: [{ parts: [{ text: chu }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
     },
   });
-  if (tl.moHinh) (globalThis.__phahaMhDoc ||= []).push(tl.moHinh); // để bộ kiểm tra xem cả video có cùng 1 loại không
-  const phan = tl.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+  const phan = tl.candidates?.flatMap(c=>c.content?.parts||[]).find((p) => p.inlineData?.data);
   if (!phan) {
-    // Gemini thỉnh thoảng trả lời mà không kèm tiếng (lỗi ngẫu nhiên) → gửi lại câu đó
-    if (lan < 2) { nhat(`Gemini đọc thiếu tiếng (${tl.candidates?.[0]?.finishReason || "?"}) → gửi lại câu này`); return docGemini(chu, lan + 1); }
     throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
   }
   const byte = tuBase64(phan.inlineData.data);
+  const mime=phan.inlineData.mimeType||'';
+  if(!byte.length)throw Error('Gemini trả âm thanh rỗng.');
+  nhat('GEMINI-R2 · nhận âm thanh · '+byte.length+' byte · '+(mime||'PCM 24000 Hz'));
+  if(/wav/i.test(phan.inlineData.mimeType||""))return {...docWav(byte),moHinh:tl.moHinh};
+  if(byte.length%2||mime&&!/^audio\/(?:L16|pcm)(?:;|$)/i.test(mime))throw Error('Gemini trả định dạng âm thanh chưa hỗ trợ: '+(mime||'?')+'.');
   return {
+    moHinh: tl.moHinh,
     pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
     tanSo: Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || TAN_SO_DOC,
   };
@@ -340,13 +344,13 @@ async function docEdge(chu) {
 let thoDocMay = null, soYeuCauMay = 0;
 const choDocMay = new Map();
 // iPhone hay báo "Out of memory" khi vừa chạy xong các bước nặng (bộ nhớ của bước trước chưa kịp trả lại)
-// → tắt bộ đọc, chờ vài giây cho máy dọn bộ nhớ rồi thử lại (tối đa 4 lần)
+// → tắt bộ đọc, chờ vài giây cho máy dọn bộ nhớ rồi thử lại (tối đa 3 lần)
 async function docMay(chu) {
   for (let lan = 0; ; lan++) {
     try {
       return await docMayMotLan(chu);
     } catch (loi) {
-      if (lan >= 3 || !/out of memory|no available backend/i.test(loi.message)) throw loi;
+      if (lan >= 2 || !/out of memory|no available backend/i.test(loi.message)) throw loi;
       nhat(`Giọng máy thiếu bộ nhớ → chờ ${5 * (lan + 1)} giây cho điện thoại dọn bộ nhớ rồi thử lại (lần ${lan + 2})`);
       tatGiongMay();
       await new Promise((x) => setTimeout(x, 5000 * (lan + 1)));
@@ -384,7 +388,7 @@ function docMayMotLan(chu) {
 // =====================================================
 export const DICH_VU = {
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven, cungLuc: 2 },
-  gemini: { ten: "Gemini", doc: docGemini, cungLuc: 3 },
+  gemini: { ten: "Gemini", doc: docGemini, cungLuc: 1 },
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
   az: { ten: "Azure", mienPhi: 500000, taiGiong: layGiongAz, doc: docAzure, cungLuc: 3 },
   gc: { ten: "Google Cloud", mienPhi: 1000000, taiGiong: layGiongGc, doc: docGoogleCloud, cungLuc: 4 },
@@ -449,17 +453,21 @@ export async function docCau(chu, dv) {
   if (!chu) return new Float32Array(0);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
-  // Giọng Gemini đã đọc ở lần trước: chỉ dùng lại nếu cùng loại Gemini với cả video (giọng khỏi lệch)
-  const daCo = khoGiong.get(khoa);
-  if (daCo && (dv !== "gemini" || (!moHinhDocBiBo(daCo.mh) && (!moHinhDocDaChot() || daCo.mh === moHinhDocDaChot())))) {
-    if (dv === "gemini" && !moHinhDocDaChot()) chotMoHinhDoc(daCo.mh);
+  const id=dv==='gemini'?await audioCacheId(khoa):null;
+  const daCo=khoGiong.get(khoa)||(id?await readAudio(id):null);
+  assertRunning();
+  if(daCo){
+    if(dv==='gemini'){chotMoHinhDoc(daCo.mh);nhat('GEMINI-TTS · dùng audio đã lưu · '+daCo.mh+' · không gọi lại');}
     return daCo.mau;
   }
   const kq = await DICH_VU[dv].doc(chu);
   let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
-  khoGiong.set(khoa, { mau, mh: dv === "gemini" ? moHinhDocDaChot() : "" });
+  if(!mau.length)throw Error('Giọng đọc không có mẫu âm thanh, không lưu vào cache.');
+  const saved={mau,mh:dv==='gemini'?(kq.moHinh||moHinhDocDaChot()):'',provider:dv};
+  khoGiong.set(khoa,saved);
+  if(id)await saveAudio(id,saved);
   return mau;
 }
 
@@ -468,9 +476,17 @@ export async function docCau(chu, dv) {
 function chiaNhom(cau, dv) {
   if (dv !== "gemini") return cau.map((c) => ({ start: c.start, end: c.end, vi: c.vi.trim() }));
   const nhom = [];
-  for (const c of cau) {
+  const tungCau=cau.flatMap(c=>{
+    const words=c.vi.trim().split(/\s+/),count=Math.min(words.length,Math.ceil((c.end-c.start)/40));
+    if(count<=1)return[c];
+    return Array.from({length:count},(_,i)=>({
+      start:c.start+(c.end-c.start)*i/count,end:c.start+(c.end-c.start)*(i+1)/count,
+      vi:words.slice(Math.floor(words.length*i/count),Math.floor(words.length*(i+1)/count)).join(' '),
+    }));
+  });
+  for (const c of tungCau) {
     const cuoi = nhom[nhom.length - 1];
-    if (cuoi && c.start - cuoi.end < 0.8 && c.end - cuoi.start <= 40) {
+    if (cuoi && c.start - cuoi.end < 1.2 && c.end - cuoi.start <= 40) {
       cuoi.end = Math.max(cuoi.end, c.end);
       cuoi.vi += " " + c.vi.trim();
     } else {
@@ -495,6 +511,19 @@ export async function longTieng() {
 async function longTiengThu() {
   let loiCuoi;
   const ds = dvDocDung();
+  // All providers use the same grouped timeline when Gemini participates, so
+  // fallback and rerun can retain each successful packet exactly as it was.
+  const groups=ds.includes('gemini')?chiaNhom(cauDocDuoc(),'gemini'):null;
+  let progress=null;
+  if(groups){
+    const plan=JSON.stringify(ds.map(dv=>[dv,dv==='gemini'?caiDat.giong:caiDat.dv[dv]?.giong||'',dv==='el'?caiDat.dv[dv]?.mh||'':'']));
+    const ids=await Promise.all(groups.map(c=>audioCacheId('tts-progress-v1|'+plan+'|'+chuanHoaDoc(c.vi))));
+    const records=await Promise.all(ids.map(id=>readAudio(id)));
+    const cachedModel=records.find(r=>r?.provider==='gemini'&&r.mh)?.mh;if(cachedModel)chotMoHinhDoc(cachedModel);
+    progress={audio:records.map(r=>r?.mau),save:async(i,mau,meta)=>saveAudio(ids[i],{mau,...meta})};
+    const ready=records.filter(Boolean).length;
+    nhat(`GEMINI-TTS · ${groups.length} gói ≤40s · tái dùng ${ready} gói · chỉ đọc ${groups.length-ready} gói còn thiếu`);
+  }
   for (let i = 0; i < ds.length; i++) {
     const dv = ds[i], ke = DICH_VU[ds[i + 1]]?.ten;
     try {
@@ -504,53 +533,31 @@ async function longTiengThu() {
         await taiDsGiong(dv);
         nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
       }
-      // Gemini đọc bằng mã miễn phí: ~15 lượt/ngày → video dài sẽ hết lượt giữa chừng sau vài phút chờ.
-      // Tính trước số lượt cần; không đủ lượt hôm nay thì bỏ qua luôn. Đủ lượt thì vẫn dùng (chậm hơn nhưng giọng tốt).
-      if (dv === "gemini" && ke) {
-        const can = chiaNhom(cauDocDuoc(), "gemini").length, con = conLuotGeminiDoc();
-        if (con !== null && can > con) {
-          nhat(`⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mã miễn phí chỉ còn ~${con} lượt hôm nay → đọc thẳng bằng ${ke}`);
-          loiCuoi = new Error("HET_NGAY");
-          continue;
-        }
-      }
-      return await longTiengBang(dv);
+      return await longTiengBang(dv,groups,progress);
     } catch (loi) {
+      if (loi.name === "AbortError") throw loi;
+      assertRunning();
       loiCuoi = loi;
       if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
-      if (ke) nhat(`↪️ Đọc bằng ${DICH_VU[dv].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${ke}`);
+      if (ke) nhat(`↪️ Đọc bằng ${DICH_VU[dv].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → ${ke} chỉ đọc các gói chưa có audio`);
     }
   }
   throw loiCuoi;
 }
 
-async function longTiengBang(dv) {
-  if (dv !== "gemini") return longTiengBangThat(dv);
-  // Giữ 1 loại Gemini cho cả video; loại đó hết lượt ở mọi mã (vd 2.5 hết mà 3.1 còn) → bỏ loại đó,
-  // đọc lại CẢ video bằng loại khác (giọng vẫn đồng nhất) thay vì bỏ Gemini chuyển sang giọng máy
-  for (let lan = 0; ; lan++) {
-    try {
-      return await longTiengBangThat(dv);
-    } catch (loi) {
-      const mh = moHinhDocDaChot();
-      if (lan >= 2 || !mh || caiDat.mhDoc || (loi?.message !== "HET_NGAY" && !loi?.doiMa)) throw loi;
-      boMoHinhDoc(mh);
-      nhat(`↻ ${mh} đã hết lượt ở mọi mã → đọc lại cả video bằng loại Gemini khác (giọng vẫn đồng nhất)`);
-    }
-  }
-}
-async function longTiengBangThat(dv) {
-  if (dv === "gemini") chotMoHinhDoc(null); // mỗi lần lồng tiếng chốt lại 1 loại Gemini cho cả video
-  const cau = chiaNhom(cauDocDuoc(), dv);
+async function longTiengBang(dv, groups=null, progress=null) {
+  // Model đã thành công được ưu tiên; cache không bị bỏ khi chuyển model.
+  const cau = groups||chiaNhom(cauDocDuoc(), dv);
   const boQua = S.cacCau.length - cauDocDuoc().length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;
   if (dv === "may") await nhuongBoNhoChoGiongMay();
   const bd = Date.now();
-  const cacGiong = await docTatCa(cau, dv, donVi);
+  const reused=progress?.audio.filter(a=>a?.length).length||0;
+  const cacGiong = await docTatCa(cau, dv, donVi, progress);
   if (dv === "may") tatGiongMay(); // đọc xong → tắt bộ đọc để trả bộ nhớ cho bước xuất video
-  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
+  nhat(`Lồng tiếng: ${reused} gói dùng audio đã lưu · ${cau.length-reused} gói đọc thêm bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   return taoWav(xepGiongVaoVideo(cau, cacGiong), TAN_SO_DOC);
 }
 
@@ -570,19 +577,23 @@ async function nhuongBoNhoChoGiongMay() {
 // Đọc mọi câu, nhiều câu cùng lúc cho nhanh (ElevenLabs/Fish miễn phí chỉ cho 2 cùng lúc)
 // Edge (miễn phí, không chính thức) thỉnh thoảng ngắt kết nối ở vài câu → bỏ trống vài câu đó
 // thay vì đổi giọng cả video; lỗi quá nhiều câu thì mới chuyển dịch vụ khác
-async function docTatCa(cau, dv, donVi) {
-  const hang = cau.map((_, i) => i), cacGiong = new Array(cau.length);
+async function docTatCa(cau, dv, donVi, progress=null) {
+  const cacGiong=progress?.audio||new Array(cau.length);
+  const hang=cau.map((_,i)=>i).filter(i=>!cacGiong[i]?.length);
   const loiEdge = [], toiDaLoiEdge = Math.max(3, Math.ceil(cau.length * 0.1));
   if (dv === "edge") edgeLoi = edgeXong = 0;
   let xong = 0, hong = false, edgeHongLienTiep = 0;
-  await Promise.all(Array.from({ length: DICH_VU[dv].cungLuc }, async () => {
+  const ketQua = await Promise.allSettled(Array.from({ length: DICH_VU[dv].cungLuc }, async () => {
     while (hang.length && !hong) {
+      assertRunning();
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
+        await progress?.save(i,cacGiong[i],{provider:dv,mh:dv==='gemini'?moHinhDocDaChot():''});
         if (dv !== "may") S.baoChonGiong("khac");
         edgeHongLienTiep = 0;
       } catch (loi) {
+        if (loi.name === "AbortError") { hong = true; throw loi; }
         // Edge hỏng 3 câu liền (hoặc ngay câu đầu tiên chưa đọc được câu nào) → Microsoft đang chặn, bỏ Edge luôn
         if (dv === "edge" && !loi.edgeYeu && (++edgeHongLienTiep >= 3 || (xong === 0 && edgeHongLienTiep >= 2)))
           loi = Object.assign(new Error(`Edge hỏng ${edgeHongLienTiep} câu liền`), { status: loi.status, dv, edgeYeu: true });
@@ -598,6 +609,10 @@ async function docTatCa(cau, dv, donVi) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  // Chờ các yêu cầu đã gửi kết thúc trước khi chuyển giọng, tránh hai dịch vụ
+  // còn chạy cùng lúc hoặc ghi kết quả vào lần xử lý kế tiếp.
+  const thatBai = ketQua.find((r) => r.status === "rejected");
+  if (thatBai) throw thatBai.reason;
   if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   return cacGiong;
 }

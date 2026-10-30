@@ -2,7 +2,47 @@
 // XỬ LÝ VIDEO (ffmpeg chạy ngay trong trình duyệt): đọc video, tách tiếng, tách nhạc nền (AI), xuất video
 // =====================================================
 import { FFmpeg } from "/dub/ffmpeg/index.js";
-import { caiDat, S, nhat, ghiChu, dongHo, TEN_BUOC, TAN_SO_NGHE } from "./nen.js";
+import { assertRunning, runSignal, caiDat, S, nhat, ghiChu, dongHo, TEN_BUOC, TAN_SO_NGHE } from "./nen.js";
+
+let loadMuxer=()=>import('/dub/lop-phu.js');
+// Chỉ giữ tiếng trong RAM; hình được ghép theo gói và ghi từng phần xuống OPFS.
+async function tronTieng(wav, tt, wavNen, giamTheoLoi) {
+  const viet='/long-tieng.wav',nen='/nhac-nen.wav',ra='/tieng-ket-qua.m4a';
+  const canGoc=!wavNen&&(giamTheoLoi||(tt.coTieng&&caiDat.amGoc>0));
+  const args=['-hide_banner','-y'];
+  if(canGoc)args.push('-i',tt.duong);
+  args.push('-i',viet);
+  let map=canGoc?'1:a':'0:a';
+  try{
+    await ff.writeFile(viet,wav.slice());
+    if(wavNen){
+      await ff.writeFile(nen,wavNen.slice());
+      args.push('-i',nen,'-filter_complex',`[1:a]volume=${caiDat.amNen/100}[nen];[nen][0:a]amix=inputs=2:duration=first:normalize=0[am]`);map='[am]';
+    }else if(giamTheoLoi){
+      args.push('-filter_complex',`[0:a:0]volume='${bieuThucGiam()}':eval=frame[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);map='[am]';
+    }else if(canGoc){
+      args.push('-filter_complex',`[0:a:0]volume=${caiDat.amGoc/100}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0[am]`);map='[am]';
+    }
+    args.push('-map',map,'-t',String(S.thoiLuong),'-c:a','aac','-b:a','160k',ra);
+    const {ma,log}=await lenh(args,'xuat');
+    if(ma!==0)throw new Error('Trộn tiếng bị lỗi.\n'+log.split('\n').slice(-5).join('\n'));
+    return new Blob([await ff.readFile(ra)],{type:'audio/mp4'});
+  }finally{
+    for(const p of [viet,nen,ra])await ff.deleteFile(p).catch(()=>{});
+  }
+}
+
+export async function xuatVideo(wav,tt,wavNen,hinh,giamTheoLoi){
+  if(await globalThis.PHAVideoDownload?.canUseDisk?.()){
+    const am=await tronTieng(wav,tt,wavNen,giamTheoLoi);
+    try{
+      const {ghepVideo}=await loadMuxer();
+      const result=await ghepVideo(hinh?hinh.blob:S.tepVideo,am,'PHA-ket-qua.mp4',runSignal(),nhat,p=>ghiChu('xuat',Math.round(p*100)+'%'));
+      if(result)return result;
+    }catch(error){assertRunning();if(error.name==='AbortError')throw error;nhat('Ghép vào bộ lưu trữ chưa được: '+error.message+' → dùng ffmpeg dự phòng');}
+  }
+  return xuatVideoFfmpeg(wav,tt,wavNen,hinh,giamTheoLoi);
+}
 
 // Bộ xử lý video tải từ mạng, lần sau trình duyệt tự giữ lại
 const LOI_FFMPEG = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
@@ -126,8 +166,8 @@ export async function tachTieng() {
 // =====================================================
 // TÁCH NHẠC NỀN khỏi giọng gốc (AI chạy ngầm trong tach-nhac.js)
 // =====================================================
-let thoTach = null;
-export function dungTachNhac() { thoTach?.terminate(); thoTach = null; }
+let thoTach = null,huyTach=null;
+export function dungTachNhac(reason) { thoTach?.terminate(); thoTach = null;if(reason)huyTach?.(reason);huyTach=null; }
 
 export async function tachNhacNen() {
   const ra = "/nen.pcm";
@@ -168,6 +208,7 @@ function tachMotLan(viec) {
   thoTach ||= new Worker(new URL("./tach-nhac.js", import.meta.url), { type: "module" });
   let mocPhanTram = -1;
   return new Promise((xong, hong) => {
+    huyTach=hong;
     thoTach.onmessage = ({ data: d }) => {
       if (d.loai === "tien-do") {
         ghiChu("nhac", d.chu);
@@ -212,7 +253,7 @@ function bieuThucGiam() {
 // =====================================================
 // XUẤT VIDEO: ghép hình (gốc hoặc đã chèn chữ/logo) với tiếng Việt (+ nhạc nền / tiếng gốc nhỏ)
 // =====================================================
-export async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
+async function xuatVideoFfmpeg(wav, tt, wavNen, hinh, giamTheoLoi) {
   const tiengLong = "/long-tieng.wav", tepNen = "/nhac-nen.wav", ra = "/ket-qua.mp4";
   await ff.writeFile(tiengLong, wav);
   const thamSo = ["-hide_banner", "-y", "-i", tt.duong, "-i", tiengLong];

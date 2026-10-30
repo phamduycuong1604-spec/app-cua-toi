@@ -152,6 +152,7 @@
         <li data-buoc="xuat"><span class="dau">○</span> Xuất video<em></em></li>
       </ol>
       <p class="loi an" id="loi"></p>
+      <button id="nut-dung" type="button" class="nut-phu an">Dừng xử lý</button>
       <p class="goi-y">Giữ màn hình mở, đừng chuyển sang app khác khi đang chạy.</p>
     </section>
 
@@ -177,6 +178,8 @@
       <h2>🎉 Video đã lồng tiếng</h2>
       <video id="xem-ket-qua" class="khung-video" controls playsinline></video>
       <button id="nut-luu" class="nut-chinh">💾 Lưu video</button>
+      <a id="nut-tai-tep" class="nut-phu an">↓ Tải về Tệp</a>
+      <p id="tt-luu-video" class="goi-y an" role="status"></p>
       <button id="nut-phu-de" class="nut-phu">📝 Tải phụ đề tiếng Việt (.srt)</button>
     </section>
 
@@ -505,7 +508,7 @@
         <label class="nhan">Mô hình nghe & dịch</label>
         <input id="o-mh-nghe" placeholder="gemini-flash-latest">
         <label class="nhan">Mô hình đọc (Gemini)</label>
-        <input id="o-mh-doc" placeholder="gemini-2.5-flash-preview-tts">
+        <input id="o-mh-doc" placeholder="gemini-3.8-flash-tts">
         <p class="goi-y">Để trống là app tự chọn.</p>
       </details>
 

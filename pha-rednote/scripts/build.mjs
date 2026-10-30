@@ -4,12 +4,12 @@ import {APP_RELEASE_LABEL,APP_RELEASE} from '../web/release-info.js';
 const root=new URL('../',import.meta.url),assets={};
 assets['/dub/remote/NotoSans.ttf']=Buffer.from(await readFile(new URL('worker/vendor/NotoSans-Regular.ttf',root))).toString('base64');
 for(const name of ['dub-core.js','device-test.html','run-journal.js','video-download.js']) assets['/dub/'+name]=await readFile(new URL('web/'+name,root),'utf8');
-// Phần dịch video = quy trình của app PhaHa (web/phaha/, chép từ dich-video/ – bỏ cửa đăng nhập)
 for(const name of ['dub.html','dub.css']) assets['/dub/'+name]=await readFile(new URL('web/phaha/'+name,root),'utf8');
 assets['/dub/dub.html']=assets['/dub/dub.html'].replace('<!-- PHA_APP_RELEASE -->',`<p class="goi-y" data-app-release="${APP_RELEASE.version}">${APP_RELEASE_LABEL}</p>`);
 for(const entry of [['web/video-1080.js','/dub/video-1080.js'],['web/phaha/app.js','/dub/app.js'],['web/lop-phu.js','/dub/lop-phu.js'],['web/site-bridge.js','/dub/site-bridge.js'],['web/separation.js','/dub/separation.js'],['web/local-voice.js','/dub/local-voice.js'],['web/vad.js','/dub/vad.js']]){
  const r=await build({entryPoints:[new URL(entry[0],root).pathname],bundle:true,format:'esm',platform:'browser',target:'safari17',write:false,minify:true,external:['/dub/*','onnxruntime-web','onnxruntime-web/wasm','fs','path']});assets[entry[1]]=r.outputFiles[0].text;
 }
+const renderWorker=await build({entryPoints:[new URL('web/render-worker.js',root).pathname],bundle:true,format:'esm',platform:'browser',target:'safari17',write:false,minify:true});assets['/dub/render-worker.js']=renderWorker.outputFiles[0].text;
 for(const name of ['doc-may.js','tach-nhac.js'])assets['/dub/'+name]=await readFile(new URL('web/'+name,root),'utf8');
 const diagnostic=await build({entryPoints:[new URL('web/device-test.js',root).pathname],bundle:true,format:'esm',platform:'browser',target:'safari17',write:false,minify:true,external:['/dub/*']});assets['/dub/device-test.js']=diagnostic.outputFiles[0].text;
 const ffdir=new URL('node_modules/@ffmpeg/ffmpeg/dist/esm/',root);

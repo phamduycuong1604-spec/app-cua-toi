@@ -1,16 +1,21 @@
 import dubAssets from './assets.generated.js';
 import {handleSource} from './source.js';
+import {videoCandidates} from './rednote-media.js';
 import {APP_RELEASE,APP_RELEASES} from '../web/release-info.js';
 import {handleDub} from './dub.js';
 import {handleVideoSource} from './video-server.js';
 const PAGE_HOSTS = ['xiaohongshu.com','xhslink.com','rednote.com'];
 const MEDIA_HOSTS = ['xhscdn.com','xhsimg.com','xiaohongshu.com'];
-const DESKTOP_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36';
+const DESKTOP_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const DESKTOP_HEADERS={'user-agent':DESKTOP_UA,'accept':'text/html','accept-language':'zh-CN,zh;q=0.9,en;q=0.8','referer':'https://www.rednote.com/'};
+const MOBILE_SHARE_HEADERS={'user-agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1','accept':'text/html','accept-language':'zh-CN,zh;q=0.9','referer':'https://www.xiaohongshu.com/'};
+const SOURCE_PROFILES={desktop:DESKTOP_HEADERS,'mobile-share':MOBILE_SHARE_HEADERS};
 const MAX_FILE_BYTES=256*1024*1024;
-const ORIGINAL_LIGHT_BYTES=700*1024*1024;// (không còn dùng: nay luôn ưu tiên bản 1080p khi nhẹ hơn bản gốc)// Bản gốc nhẹ hơn mức này thì lấy bản gốc; nặng hơn thì lấy bản 1080p Rednote có sẵn, để video 1–15 phút đều vào app được.
-const SOURCE_BUDGET_MS=60000;// Đọc bài Rednote tối đa 60 giây: app chỉ chờ 90 giây, chừa thời gian cho bước kiểm tra video.
-const UA='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1';
+const ORIGINAL_LIGHT_BYTES=600000000;// 600 MB thập phân; đúng 600 MB vẫn lấy bản gốc.
+const MAX_APP_VIDEO_BYTES=2*1024*1024*1024;
+const SOURCE_BUDGET_MS=55000;// Tổng lấy thông tin + chọn nguồn tối đa 55 giây, trước timeout phản hồi đầu 60 giây của client.
 const headers={'cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer'};
+function cancelBody(body){try{void body?.cancel().catch(()=>{})}catch{}}
 class AppError extends Error {constructor(message,status=422){super(message);this.status=status}}
 export function validUrl(value,hosts=PAGE_HOSTS){
  let u;try{u=new URL(value)}catch{throw new AppError('Link không hợp lệ. Hãy dán link chia sẻ Rednote.',400)}
@@ -24,16 +29,18 @@ async function fetchAllowed(value,hosts,init={},timeoutMs=20000,deadline=Infinit
   if(/\/(?:explore|item)\/[a-f0-9]{24}/i.test(new URL(url).pathname))publicNoteUrl=url;
   const wait=Math.min(timeoutMs,deadline-Date.now());if(wait<=0)throw new AppError('Rednote phản hồi quá chậm. Hãy thử lại sau ít phút.',504);
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),wait);
-  let response;try{response=await fetch(url,{...init,redirect:'manual',signal:controller.signal})}finally{clearTimeout(timeout)}
-  if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');if(!location)throw new AppError('Nguồn trả về chuyển hướng không hợp lệ.');url=validUrl(new URL(location,url).href,hosts).href;await response.body?.cancel();continue}
+  const hopHeaders=Object.fromEntries(new Headers(init.headers));delete hopHeaders.cookie;delete hopHeaders.authorization;
+  let response;try{response=await fetch(url,{...init,headers:hopHeaders,credentials:'omit',redirect:'manual',signal:controller.signal})}finally{clearTimeout(timeout)}
+  if([301,302,303,307,308].includes(response.status)){const location=response.headers.get('location');if(!location)throw new AppError('Nguồn trả về chuyển hướng không hợp lệ.');url=validUrl(new URL(location,url).href,hosts).href;cancelBody(response.body);continue}
   return {response,url,publicNoteUrl};
  }
  throw new AppError('Link chuyển hướng quá nhiều lần.');
 }
-async function limitedText(response,max=4_000_000){
+async function limitedText(response,max=4_000_000,deadline=Infinity){
  if(Number(response.headers.get('content-length'))>max)throw new AppError('Nội dung nguồn quá lớn.');
- const reader=response.body.getReader();let size=0;const chunks=[];
- try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>max){await reader.cancel();throw new AppError('Nội dung nguồn quá lớn.')}chunks.push(value)}}finally{reader.releaseLock()}
+ const reader=response.body.getReader();let size=0;const chunks=[];let timer;
+ const timeout=Number.isFinite(deadline)?new Promise((_,reject)=>{timer=setTimeout(()=>{void reader.cancel().catch(()=>{});reject(new AppError('Rednote phản hồi quá chậm. Hãy thử lại.',504))},Math.max(1,deadline-Date.now()))}):null;
+ try{for(;;){const {done,value}=await (timeout?Promise.race([reader.read(),timeout]):reader.read());if(done)break;size+=value.length;if(size>max){await reader.cancel();throw new AppError('Nội dung nguồn quá lớn.')}chunks.push(value)}}finally{clearTimeout(timer);reader.releaseLock()}
  const all=new Uint8Array(size);let offset=0;for(const c of chunks){all.set(c,offset);offset+=c.length}return new TextDecoder().decode(all);
 }
 // Rednote embeds JSON with bare undefined; replace only outside quoted strings.
@@ -54,19 +61,16 @@ export function extractNote(html,url){
  const id=new URL(url).pathname.match(/(?:explore|item)\/([a-f0-9]{24})/i)?.[1];
  const entry=map[id]||Object.values(map).find(x=>x?.note);const note=entry?.note||state?.noteData?.data?.noteData;
  const title=note?.title||meta(html,'og:title');const caption=note?.desc||meta(html,'description')||meta(html,'og:description');
- const streams=note?.video?.media?.stream||{};const videos=[];
- for(const type of ['h264','h265','av1'])for(const stream of streams[type]||[]){const src=stream.masterUrl||stream.master_url||stream.backupUrls?.[0];if(src)videos.push({url:src,backups:stream.backupUrls||stream.backup_urls||[],width:stream.width||0,height:stream.height||0,bitrate:stream.avgBitrate||0,size:stream.size||null,codec:type})}
- videos.sort((a,b)=>((b.codec==='h264')-(a.codec==='h264'))||b.width*b.height-a.width*a.height||b.bitrate-a.bitrate);
- let video=videos[0]?.url||note?.video?.url||meta(html,'og:video')||meta(html,'og:video:url');
+ const media=videoCandidates({...note?.video,mediaV2:note?.video?.mediaV2||note?.mediaV2},v=>validUrl(v,MEDIA_HOSTS));
+ const variants=media.variants,originals=media.originals;
+ let video=variants[0]?.urls[0]||originals[0]?.urls[0]||meta(html,'og:video')||meta(html,'og:video:url');
  if(video?.startsWith('//'))video='https:'+video;
  if(video?.startsWith('http:'))video=video.replace(/^http:/,'https:');
  if(video){try{video=validUrl(video,MEDIA_HOSTS).href}catch{video=null}}
  if(!note&&!caption&&!video)throw new AppError('Rednote chưa cho đọc bài này. Hãy mở bài trong Rednote, chọn Chia sẻ → Sao chép liên kết rồi thử lại. Bạn cũng có thể nhập caption gốc để giữ lại.');
  if(!note&&!video&&/登录|验证|访问|安全|小红书.*生活指南/.test(title+' '+caption))throw new AppError('Rednote đang yêu cầu đăng nhập hoặc xác minh. Hãy thử link chia sẻ đầy đủ; caption đã nhập vẫn được giữ nguyên.');
- const originKey=note?.video?.consumer?.originVideoKey;
- const originalVideoUrl=originKey&&/^[a-zA-Z0-9/_-]+$/.test(originKey)?'https://sns-video-bd.xhscdn.com/'+originKey:null;
- const variants=videos.map(v=>({codec:v.codec,width:v.width,height:v.height,bitrate:v.bitrate,urls:[v.url,...v.backups].map(u=>{try{return validUrl(String(u).replace(/^\/\//,'https://').replace(/^http:/,'https:'),MEDIA_HOSTS).href}catch{return null}}).filter((u,i,a)=>u&&a.indexOf(u)===i)})).filter(s=>s.urls.length);
- return {originalVideoUrl,variants,streamSize:videos[0]?.size||null,id:note?.noteId||id||'rednote',title:title||'Video Rednote',caption:caption||'',author:note?.user?.nickname||note?.user?.nickName||'',cover:note?.imageList?.[0]?.urlDefault||meta(html,'og:image'),videoUrl:video||null,sourceUrl:url,width:videos[0]?.width||null,height:videos[0]?.height||null};
+ const originalVideoUrl=originals[0]?.urls[0]||null,originalWatermark=originals[0]?.watermark||'unknown';
+ return {originalVideoUrl,originalWatermark,originals,variants,streamSize:variants[0]?.size||null,id:note?.noteId||id||'rednote',title:title||'Video Rednote',caption:caption||'',author:note?.user?.nickname||note?.user?.nickName||'',cover:note?.imageList?.[0]?.urlDefault||meta(html,'og:image'),videoUrl:video||null,sourceUrl:url,width:variants[0]?.width||null,height:variants[0]?.height||null};
 }
 const GLOSSARY={
  general:{'感光度':'độ nhạy sáng ISO','光圈':'khẩu độ','快门速度':'tốc độ màn trập','焦距':'tiêu cự'},
@@ -100,101 +104,184 @@ export function translationProfile(domain){
  const id=Object.hasOwn(CHANNEL_PROFILES,domain)?domain:'general';const profile=CHANNEL_PROFILES[id];
  return {...profile,id,glossary:Object.assign({},...profile.glossaries.map(name=>GLOSSARY[name]))};
 }
-async function readSourceNote(source,{requireVideo=true}={}){
- const shared=shareUrl(source),deadline=Date.now()+SOURCE_BUDGET_MS;let last,resolved;
- const attempts=[{url:shared,agent:UA},{url:shared,agent:DESKTOP_UA}];
+// Detect an explicit login gate, not the login UI module present on many public pages.
+function loginGate(url,response,html=''){
+ const state=parseState(html),note=state?.note;
+ const hasNote=!!(state?.noteData?.data?.noteData||Object.values(note?.noteDetailMap||{}).some(v=>v?.note));
+ return /\/(?:login|website-login)(?:\/|$)/i.test(new URL(url).pathname)||response.status===401||
+  (!hasNote&&/登录|登入|login/i.test(html)&&!!state?.login);
+}
+async function readSourceNote(source,{requireVideo=true,deadline=Date.now()+SOURCE_BUDGET_MS}={}){
+ const shared=shareUrl(source);let last,resolved,loginSeen=false,shareTargetMissing=false;
+ const attempts=[{url:shared,profile:'desktop'},{url:shared,profile:'mobile-share'}];
+ console.info('rednote_source_desktop',JSON.stringify({userAgent:DESKTOP_UA,acceptLanguage:DESKTOP_HEADERS['accept-language'],referer:DESKTOP_HEADERS.referer,authentication:'anonymous'}));
  for(let index=0;index<attempts.length;index++){
-  const attempt=attempts[index];
-  if(index>0&&Date.now()>=deadline)break;// Hết giờ: báo lỗi của lần thử gần nhất thay vì để app tự hết giờ.
+  if(index>0&&Date.now()>=deadline)break;
+  const attempt=attempts[index],started=Date.now();
+  console.info('rednote_source_attempt',JSON.stringify({attempt:index+1,profile:attempt.profile,authentication:'anonymous'}));
   try{
-   const {response,url,publicNoteUrl}=await fetchAllowed(attempt.url,PAGE_HOSTS,{headers:{'user-agent':attempt.agent,'accept':'text/html','accept-language':'zh-CN,zh;q=0.9','referer':'https://www.xiaohongshu.com/'}},20000,deadline);
+   const {response,url,publicNoteUrl}=await fetchAllowed(attempt.url,PAGE_HOSTS,{headers:SOURCE_PROFILES[attempt.profile]},20000,deadline);
    resolved=publicNoteUrl||resolved||url;
-   if(!response.ok){await response.body?.cancel();throw new AppError('Rednote chưa cho đọc bài ('+response.status+'). Hãy thử link chia sẻ mới.',502)}
-   const html=await limitedText(response);let note;
-   try{note=extractNote(html,url)}catch(error){
-    error.sourceDetails={host:new URL(url).hostname,path:new URL(url).pathname,status:response.status,bytes:html.length,title:html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.slice(0,120)||'',stateKeys:Object.keys(parseState(html)||{}),hasState:html.includes('window.__INITIAL_STATE__')};
-    if(/\/(?:login|website-login)(?:\/|$)/i.test(new URL(url).pathname)||error.sourceDetails.stateKeys.includes('login')){error.message='Rednote yêu cầu máy chủ app đăng nhập để đọc bài này. App chưa lấy được video gốc. Bạn có thể thử link chia sẻ mới hoặc chọn video từ máy.';error.code='REDNOTE_LOGIN_REQUIRED'}
-    console.warn('rednote_source_unreadable',JSON.stringify(error.sourceDetails));
-    throw error;
+   const html=response.ok?await limitedText(response,4_000_000,deadline):'';
+   if(!response.ok)cancelBody(response.body);
+   // A short link redirected to the home feed did not identify a note. Do not
+   // mistake the feed's login UI (or an unrelated recommended video) for it.
+   if(new URL(shared).hostname.endsWith('xhslink.com')&&!publicNoteUrl&&
+      /^\/(?:explore\/?)?$/.test(new URL(url).pathname)&&
+      /(?:^|\.)(?:xiaohongshu|rednote)\.com$/.test(new URL(url).hostname)){
+    shareTargetMissing=true;
+    const e=new AppError('Link chia sẻ chuyển về trang chủ Rednote, không tới bài video. Hãy mở đúng bài, sao chép link chia sẻ mới hoặc chọn video từ máy.',422);
+    e.code='REDNOTE_SHARE_TARGET_MISSING';throw e;
    }
-   if(requireVideo&&!note.videoUrl&&!note.originalVideoUrl)throw new AppError('Bài này không có video công khai; có thể là bài ảnh hoặc đang bị khóa.',422);
-   return note;
-  }catch(e){last=e}
+   if(loginGate(url,response,html)){
+    loginSeen=true;
+    const e=new AppError('Rednote yêu cầu đăng nhập hoặc xác minh. Hãy dùng link bài công khai hoặc chọn video từ máy.',422);e.code='REDNOTE_LOGIN_REQUIRED';throw e;
+   }
+   if(!response.ok)throw new AppError('Rednote chưa cho đọc bài ('+response.status+'). Hãy thử link chia sẻ mới hoặc chọn video từ máy.',502);
+   let note;
+   try{note=extractNote(html,url)}catch(error){
+    error.sourceDetails={host:new URL(url).hostname,status:response.status,bytes:html.length,authentication:'anonymous'};
+    console.warn('rednote_source_unreadable',JSON.stringify(error.sourceDetails));throw error;
+   }
+   if(requireVideo&&!note.videoUrl&&!note.originalVideoUrl&&!note.originals?.length&&!note.variants?.length)throw new AppError('Bài này không có video công khai; có thể là bài ảnh hoặc đang bị khóa. Bạn vẫn có thể chọn video từ máy.',422);
+   console.info('rednote_source_read',JSON.stringify({profile:attempt.profile,status:response.status,elapsedMs:Date.now()-started,originals:note.originals.length,variants:note.variants.map(v=>({codec:v.codec,width:v.width,height:v.height,watermark:v.watermark,source:v.source}))}));
+   return {...note,sourceUserAgent:attempt.profile};
+  }catch(e){last=e;console.warn('rednote_source_attempt_failed',JSON.stringify({profile:attempt.profile,code:e.code||'SOURCE_UNAVAILABLE',elapsedMs:Date.now()-started}));}
   if(index===1&&resolved){
-   const full=new URL(resolved);const id=full.pathname.match(/(?:explore|item)\/([a-f0-9]{24})/i)?.[1];
-   if(id){
-    // Both official domains serve public note pages. Preserve signed access parameters;
-    // remove app-specific presentation flags from canonical page requests.
-    for(const host of ['www.rednote.com','www.xiaohongshu.com'])for(const path of ['/discovery/item/'+id,'/explore/'+id]){
-     const alternate=new URL(full);alternate.hostname=host;alternate.pathname=path;
-     for(const name of [...alternate.searchParams.keys()])if(!name.startsWith('xsec_'))alternate.searchParams.delete(name);
-     for(const agent of [UA,DESKTOP_UA])if(!attempts.some(a=>a.url===alternate.href&&a.agent===agent))attempts.push({url:alternate.href,agent});
-    }
+   const full=new URL(resolved),id=full.pathname.match(/(?:explore|item)\/([a-f0-9]{24})/i)?.[1];
+   if(id)for(const host of ['www.rednote.com','www.xiaohongshu.com'])for(const path of ['/discovery/item/'+id,'/explore/'+id]){
+    const alternate=new URL(full);alternate.hostname=host;alternate.pathname=path;
+    for(const name of [...alternate.searchParams.keys()])if(!name.startsWith('xsec_'))alternate.searchParams.delete(name);
+    for(const profile of ['mobile-share','desktop'])if(!attempts.some(a=>a.url===alternate.href&&a.profile===profile))attempts.push({url:alternate.href,profile});
    }
   }
  }
- throw last?.name==='AbortError'?new AppError('Rednote phản hồi quá chậm. Hãy thử lại sau ít phút.',504):last;
+ if(shareTargetMissing&&!/\/(?:explore|item)\/[a-f0-9]{24}/i.test(new URL(resolved||shared).pathname)){
+  const e=new AppError('Link chia sẻ chuyển về trang chủ Rednote, không tới bài video. Hãy mở đúng bài, sao chép link chia sẻ mới hoặc chọn video từ máy.',422);e.code='REDNOTE_SHARE_TARGET_MISSING';throw e;
+ }
+ if(loginSeen){const e=new AppError('Rednote yêu cầu đăng nhập hoặc xác minh nên app không lấy được bài này. Hãy dùng link bài công khai hoặc chọn video từ máy.',422);e.code='REDNOTE_LOGIN_REQUIRED';throw e;}
+ throw last instanceof AppError?last:new AppError('Rednote phản hồi quá chậm hoặc lỗi mạng. Hãy thử lại; bạn vẫn có thể chọn video từ máy.',504);
 }
 export function sniffVideo(bytes){
  if(bytes.length>=12&&String.fromCharCode(...bytes.slice(4,8))==='ftyp')return 'video/mp4';
  if(bytes.length>=4&&bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3)return 'video/webm';
  return null;
 }
-async function verifiedVideo(media,{probeOnly=false}={}){
- const {response}=await fetchAllowed(media,MEDIA_HOSTS,{headers:{'user-agent':UA,'referer':'https://www.xiaohongshu.com/','range':probeOnly?'bytes=0-65535':'bytes=0-'}},25000);
- if(!response.ok){await response.body?.cancel();throw new AppError('Nguồn không cho tải file video ('+response.status+').',502)}
+async function verifiedVideo(media,{probeOnly=false,deadline=Date.now()+25000,sourceProfile='desktop'}={}){
+ const {response,url}=await fetchAllowed(media,MEDIA_HOSTS,{headers:{...(SOURCE_PROFILES[sourceProfile]||DESKTOP_HEADERS),accept:'*/*','range':probeOnly?'bytes=0-65535':'bytes=0-'}},probeOnly?8000:25000,deadline);
+ if(!response.ok){cancelBody(response.body);throw new AppError('Nguồn không cho tải file video ('+response.status+').',502)}
  const range=response.headers.get('content-range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
  const size=Number(range?.[3])||Number(response.headers.get('content-length'))||0;
- if(size>MAX_FILE_BYTES&&!probeOnly){await response.body?.cancel();throw new AppError('File vượt 256 MB nên chưa thể nhận vào bộ nhớ app trên điện thoại. Hãy dùng bản MP4 nhỏ hơn.',413)}
- if(range&&!probeOnly&&(Number(range[1])!==0||Number(range[2])+1!==Number(range[3]))){await response.body?.cancel();throw new AppError('Nguồn trả về video chưa đầy đủ. Hãy thử lại.',502)}
- const reader=response.body.getReader();const beginning=[];let bytes=0;
+ if(size>MAX_FILE_BYTES&&!probeOnly){cancelBody(response.body);throw new AppError('File vượt 256 MB nên chưa thể nhận vào bộ nhớ app trên điện thoại. Hãy dùng bản MP4 nhỏ hơn.',413)}
+ if(range&&!probeOnly&&(Number(range[1])!==0||Number(range[2])+1!==Number(range[3]))){cancelBody(response.body);throw new AppError('Nguồn trả về video chưa đầy đủ. Hãy thử lại.',502)}
+ const reader=response.body.getReader();const beginning=[];let bytes=0,timer;
+ const firstBytesTimeout=new Promise((_,reject)=>{timer=setTimeout(()=>{reject(new AppError('Nguồn video không gửi dữ liệu đầu kịp thời.',504));void reader.cancel().catch(()=>{})},Math.max(1,Math.min(8000,deadline-Date.now())))});
  try{
-  while(bytes<12){const part=await reader.read();if(part.done)break;beginning.push(part.value);bytes+=part.value.length}
+  while(bytes<12){const part=await Promise.race([reader.read(),firstBytesTimeout]);if(part.done)break;beginning.push(part.value);bytes+=part.value.length}
   const first=new Uint8Array(Math.min(bytes,12));let offset=0;for(const part of beginning){const take=part.slice(0,12-offset);first.set(take,offset);offset+=take.length;if(offset>=12)break}
-  const type=sniffVideo(first);if(!type){await reader.cancel();throw new AppError('Nguồn trả về trang web hoặc file khác, không phải MP4 / WebM.',502)}
+  clearTimeout(timer);const type=sniffVideo(first);if(!type){void reader.cancel().catch(()=>{});throw new AppError('Nguồn trả về trang web hoặc file khác, không phải MP4 / WebM.',502)}
   let sent=bytes;
   const stream=new ReadableStream({start(controller){for(const part of beginning)controller.enqueue(part)},async pull(controller){try{const part=await reader.read();if(part.done){controller.close();return}sent+=part.value.length;if(sent>MAX_FILE_BYTES&&!probeOnly){await reader.cancel();controller.error(new Error('Video quá lớn'));return}controller.enqueue(part.value)}catch(error){controller.error(error)}},cancel(reason){return reader.cancel(reason)}});
-  return {stream,size,type};
- }catch(error){try{await reader.cancel()}catch{}throw error}
+  return {stream,size,type,url};
+ }catch(error){clearTimeout(timer);try{void reader.cancel().catch(()=>{})}catch{}throw error}
 }
-// Bản nhẹ cho video nặng: bản Rednote ≤1080p phát trên web (không phải bản "lưu video" có logo); cho lệch tới 1088 (vd. 1428×1088).
-// H.264 trước (iPhone đọc tốt nhất), rồi H.265. Trả kèm ghi chú từng bản để nhật ký cho biết vì sao không dùng được.
-async function pick1080(note){
- const rank={h264:0,h265:1},sized=s=>s.width>0&&s.height>0,fits=s=>sized(s)&&Math.min(s.width,s.height)<=1088;
+function watermarkUrl(value){
+ const u=new URL(value);
+ return [...u.searchParams].some(([k,v])=>/^(?:wm|watermark|watermark_type)$/i.test(k)&&!['0','false','none'].includes(v.toLowerCase()))||/(?:^|[\/_-])(?:watermark|wm)(?:[\/_.-]|$)/i.test(u.pathname)||[...u.searchParams.values()].some(v=>/(?:^|\/)watermark(?:[,\/]|$)/i.test(v));
+}
+// Only a source metadata flag can verify a web copy. Try 1080p before 720p,
+// then H.264 before H.265 within the same resolution. Never guess from its URL.
+async function pickVariant(note,resolution,deadline=Date.now()+25000){
+ const rank={h264:0,h265:1},maxLong=resolution===1080?1920:1280;
+ const sized=s=>s.width>0&&s.height>0, fits=s=>sized(s)&&Math.min(s.width,s.height)>=resolution&&Math.min(s.width,s.height)<=resolution+8&&Math.max(s.width,s.height)<=maxLong;
  const name=s=>s.codec+' '+(sized(s)?s.width+'×'+s.height:'chưa rõ cỡ');
  const notes=[],all=note.variants||[];
- for(const s of all)if(!Object.hasOwn(rank,s.codec))notes.push(name(s)+': iPhone khó đọc');else if(!fits(s))notes.push(name(s)+(sized(s)?': lớn hơn 1080p':''));
- const list=all.filter(s=>Object.hasOwn(rank,s.codec)&&fits(s)).sort((a,b)=>rank[a.codec]-rank[b.codec]||b.width*b.height-a.width*a.height||b.bitrate-a.bitrate);
+ for(const s of all)if(!Object.hasOwn(rank,s.codec))notes.push(name(s)+': iPhone khó đọc');else if(!fits(s))notes.push(name(s)+': không phải bản '+resolution+'p');
+ for(const s of all)if(Object.hasOwn(rank,s.codec)&&fits(s)&&s.watermark!=='none')notes.push(name(s)+(s.watermark==='present'?': có watermark':': chưa xác minh không watermark'));
+ const list=all.filter(s=>Object.hasOwn(rank,s.codec)&&fits(s)&&s.watermark==='none').sort((a,b)=>rank[a.codec]-rank[b.codec]||b.width*b.height-a.width*a.height||b.bitrate-a.bitrate);
  let tries=0;
  for(const s of list)for(const url of s.urls){
-  if(++tries>4){notes.push('đã thử 4 link, dừng');return {notes}}
-  try{const probe=await verifiedVideo(url,{probeOnly:true});await probe.stream.cancel();if(probe.size>0)return {url,size:probe.size,width:s.width,height:s.height,codec:s.codec,notes};notes.push(name(s)+': không đọc được dung lượng')}
-  catch(error){notes.push(name(s)+': '+String(error?.message||error).replace(/\.$/,''))}
+  if(watermarkUrl(url)){notes.push(name(s)+': bỏ link watermark');continue;}
+  if(++tries>4||Date.now()>=deadline)return {notes:[...notes,'Đã hết lượt hoặc thời gian kiểm tra '+resolution+'p']};
+  try{
+   const probe=await verifiedVideo(url,{probeOnly:true,deadline,sourceProfile:note.sourceUserAgent});cancelBody(probe.stream);
+   if(watermarkUrl(probe.url)){notes.push(name(s)+': link cuối có watermark');continue;}
+   if(probe.type!=='video/mp4'){notes.push(name(s)+': không phải MP4');continue;}
+   if(Number.isSafeInteger(probe.size)&&probe.size>0&&probe.size<=MAX_APP_VIDEO_BYTES)return {url:probe.url,size:probe.size,width:s.width,height:s.height,codec:s.codec,notes,mode:resolution===1080?'p1080':'p720'};
+   notes.push(name(s)+': không đọc được dung lượng hoặc vượt 2 GB');
+  }catch(error){notes.push(name(s)+': '+String(error?.message||error).replace(/\.$/,''))}
  }
- if(!all.length)notes.push('Rednote không gửi kèm bản phát trên web');
+ if(!all.length)notes.push('Không tìm thấy danh sách bản nhỏ trong dữ liệu bài nhận được');
  return {notes};
 }
 function videoAttachment(note,media,size,mode,extra={}){
- const downloadUrl='/api/download?url='+encodeURIComponent(media)+'&id='+encodeURIComponent(note.id)+'&kind='+mode+'&source='+encodeURIComponent(note.sourceUrl);
+ const downloadUrl='/api/download?url='+encodeURIComponent(media)+'&id='+encodeURIComponent(note.id)+'&kind='+mode+'&source='+encodeURIComponent(note.sourceUrl)+(note.sourceUserAgent==='mobile-share'?'&profile=mobile-share':'')+(extra.allowLargeOriginal?'&largeOriginal=1':'');
  return json({delivery:'attachment',title:note.title,caption:[note.title,note.caption].filter(Boolean).join('\n\n'),author:note.author,sourceUrl:note.sourceUrl,size,downloadUrl,previewUrl:downloadUrl+'&inline=1',mode,...extra});
 }
-async function fetchVideoFile(body){
- const note=await readSourceNote(body.url||body.text);let file,mode;
- if(!note.originalVideoUrl)throw new AppError('Không tìm được bản gốc cho bài này. App không tự thay bằng bản chia sẻ có thể dính logo Rednote.',422);
- const probe=await verifiedVideo(note.originalVideoUrl,{probeOnly:true});await probe.stream.cancel();
- // Điện thoại báo ghi được xuống bộ nhớ app → mọi video (kể cả dưới 256 MB) đều tải từng phần xuống đó, không giữ trong RAM.
- let media=note.originalVideoUrl,size=probe.size,extra={};mode='original';
- // Luôn ưu tiên bản ≤1080p Rednote phát trên web (không phải bản "lưu video" có logo) khi nó nhẹ hơn bản gốc:
- // video vốn được xuất tối đa 1080p, nên điện thoại khỏi tải và thu nhỏ bản 2K/4K (nhanh hơn nhiều).
- const lite=await pick1080(note),MB=n=>Math.round(n/1e6),seen=lite.notes.length?' ('+lite.notes.join('; ')+')':'';
- if(lite.url&&(!(size>0)||lite.size<size)){extra={originalSize:size||null,width:lite.width,height:lite.height,codec:lite.codec,reason:size?'Bản gốc '+MB(size)+' MB, bản Rednote '+MB(lite.size)+' MB nhẹ hơn':'Không đọc được dung lượng bản gốc'};media=lite.url;size=lite.size;mode='p1080';}
- else if(lite.url)extra={reason:'Bản Rednote '+lite.codec+' '+lite.width+'×'+lite.height+' nặng '+MB(lite.size)+' MB, không nhẹ hơn bản gốc '+MB(size)+' MB, dùng bản gốc'};
- else extra={reason:'Không có bản 1080p của Rednote dùng được, dùng bản gốc'+seen};
+async function pickOriginal(note,deadline=Date.now()+25000){
+ const notes=[],all=[...(note.originals||[])].sort((a,b)=>(b.watermark==='none')-(a.watermark==='none'));let tries=0;
+ if(!all.length)notes.push('Không tìm được link gốc origin/master_url/mediaV2');
+ for(const candidate of all){
+  if(candidate.watermark==='present'){notes.push(candidate.source+': có watermark');continue;}
+  for(const url of candidate.urls){
+   if(watermarkUrl(url)){notes.push(candidate.source+': bỏ link watermark');continue;}
+   if(tries++>=4||Date.now()>=deadline)return {notes:[...notes,'Đã hết lượt hoặc thời gian kiểm tra link gốc']};
+   try{
+    const probe=await verifiedVideo(url,{probeOnly:true,deadline,sourceProfile:note.sourceUserAgent});cancelBody(probe.stream);
+    if(watermarkUrl(probe.url)){notes.push(candidate.source+': link cuối có watermark');continue;}
+    if(!Number.isSafeInteger(probe.size)||probe.size<=0){notes.push(candidate.source+': Không đọc được dung lượng bản gốc');continue;}
+    return {...candidate,url:probe.url,size:probe.size,notes};
+   }catch(error){notes.push(candidate.source+': '+error.message)}
+  }
+ }
+ return {notes};
+}
+async function selectVideo(note,deadline,allowLargeOriginal=false){
+ console.info('rednote_video_candidates',JSON.stringify({policy:'original-600MB-clean-1080-720',originals:(note.originals||[]).map(v=>({source:v.source,watermark:v.watermark})),variants:(note.variants||[]).length}));
+ const original=await pickOriginal(note,Math.min(deadline,Date.now()+16000));
+ if(original.url&&original.size<=ORIGINAL_LIGHT_BYTES)return {...original,mode:'original',originalSize:original.size,
+  reason:'Bản gốc '+original.size+' byte ≤ 600 MB (600000000 byte), lấy bản gốc từ '+original.source+(original.watermark==='none'?' · có cờ không watermark':' · nguồn gốc từ metadata; chưa có cờ watermark')};
+ const why=original.url?'Bản gốc '+original.size+' byte > 600 MB':'Bản gốc không dùng được ('+original.notes.join('; ')+')';
+ const notes=[];
+ for(const resolution of [1080,720]){
+  const budget=resolution===1080?Math.min(deadline,Date.now()+20000):deadline;
+  const lite=await pickVariant(note,resolution,budget);notes.push(...lite.notes);
+  if(lite.url)return {...lite,originalSize:original.size||null,reason:why+'; dùng bản '+resolution+'p có cờ không watermark từ Rednote · '+lite.codec+' '+lite.width+'×'+lite.height};
+ }
+ if(original.url&&original.size>ORIGINAL_LIGHT_BYTES&&allowLargeOriginal)return {...original,mode:'original',originalSize:original.size,allowLargeOriginal:true,reason:'Bạn đã chọn tải bản gốc dung lượng lớn · '+original.size+' byte · bản gốc không bảo đảm không có logo.'};
+ const error=new AppError(why+'. Không có bản 1080p hoặc 720p xác định không có watermark dùng được. '+[...new Set(notes)].join('; ')+'. Đã dừng tải; không tự lấy bản có thể dính logo. Bạn vẫn có thể chọn video từ máy.',422);
+ if(original.url&&original.size>ORIGINAL_LIGHT_BYTES){error.code='LARGE_ORIGINAL_AVAILABLE';error.largeOriginal={size:original.size};}
+ throw error;
+}
+// Public desktop page, then the original mobile-share profile. No cookie or yt-dlp dependency.
+async function resolveVideoSource(source,env,deadline,{preferKind,allowCaptionOnly=false,allowLargeOriginal=false}={}){
+ const started=Date.now(),shared=shareUrl(source);let note;
+ try{
+  note=await readSourceNote(shared,{env,deadline,requireVideo:!allowCaptionOnly});let chosen;
+  if(preferKind){
+   chosen=preferKind==='original'?await pickOriginal(note,deadline):await pickVariant(note,preferKind==='p720'?720:1080,deadline);
+   if(!chosen.url||preferKind==='original'&&chosen.size>ORIGINAL_LIGHT_BYTES&&!allowLargeOriginal)throw new AppError('Link video hết hạn; không còn đúng bản '+preferKind+' theo quy tắc 600 MB hoặc không có watermark. Hãy lấy lại link bài để chọn nguồn mới.',422);
+   chosen={...chosen,mode:preferKind,allowLargeOriginal:preferKind==='original'&&allowLargeOriginal,reason:'Làm mới đúng bản '+preferKind+' theo quy tắc 600 MB; không đổi độ phân giải giữa lúc tải'};
+  }else chosen=await selectVideo(note,deadline,allowLargeOriginal);
+  chosen.sourceResolver=note.sourceUserAgent;console.info('rednote_source_selected',JSON.stringify({resolver:chosen.sourceResolver,elapsedMs:Date.now()-started,mode:chosen.mode,size:chosen.size,url:chosen.url,reason:chosen.reason}));
+  return {note,chosen};
+ }catch(error){
+  if(allowCaptionOnly&&note)return {note,chosen:null,selectionError:error.message};
+  throw error;
+ }
+}
+async function fetchVideoFile(body,env){
+ const deadline=Date.now()+SOURCE_BUDGET_MS;
+ const {note,chosen}=await resolveVideoSource(body.url||body.text,env,deadline,{allowLargeOriginal:body.allowLargeOriginal===true});
+ const {mode,reason}=chosen;let file;
+ const media=chosen.url,size=chosen.size;
+ const extra={allowLargeOriginal:chosen.allowLargeOriginal===true,sourceUserAgent:note.sourceUserAgent,sourceResolver:chosen.sourceResolver,selectedVideoUrl:media,originalSize:chosen.originalSize??(mode==='original'?size:null),width:chosen.width||null,height:chosen.height||null,codec:chosen.codec||null,reason};
+ console.info('rednote_video_selected',JSON.stringify({userAgent:note.sourceUserAgent,mode,url:media,size,reason}));
  if(size>MAX_FILE_BYTES||body.delivery==='attachment'&&size>0)return videoAttachment(note,media,size,mode,extra);
- file=await verifiedVideo(media);
+ file=await verifiedVideo(media,{deadline,sourceProfile:note.sourceUserAgent});
  const extension=file.type==='video/webm'?'webm':'mp4';
  const filename=(note.title||'PHA-Rednote').replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g,' ').trim().slice(0,100)+'.'+extension;
- const resultHeaders=new Headers({...headers,'content-type':file.type,'content-disposition':'attachment; filename="PHA-Rednote.'+extension+'"; filename*=UTF-8\'\''+encodeURIComponent(filename),'x-video-name':encodeURIComponent(filename),'x-video-mode':mode,'x-rednote-title':encodeURIComponent(note.title),'x-rednote-author':encodeURIComponent(note.author),'x-rednote-source':encodeURIComponent(note.sourceUrl)});
+ const resultHeaders=new Headers({...headers,'content-type':file.type,'content-disposition':'attachment; filename="PHA-Rednote.'+extension+'"; filename*=UTF-8\'\''+encodeURIComponent(filename),'x-video-name':encodeURIComponent(filename),'x-video-mode':mode,'x-source-user-agent':note.sourceUserAgent,'x-video-final-url':encodeURIComponent(media),'x-video-reason':encodeURIComponent(reason),'x-rednote-title':encodeURIComponent(note.title),'x-rednote-author':encodeURIComponent(note.author),'x-rednote-source':encodeURIComponent(note.sourceUrl)});
  const caption=[note.title,note.caption].filter(Boolean).join('\n\n');
  const encoded=encodeURIComponent(caption);
  if(encoded.length<=6500){resultHeaders.set('x-rednote-caption',encoded);resultHeaders.set('x-caption-complete','1')}else resultHeaders.set('x-caption-complete','0');
@@ -223,28 +310,33 @@ export default {async fetch(request,env){
    if(remote){const response=await fetch(remote,{signal:AbortSignal.timeout(60000)});if(!response.ok)return json({error:'Chưa tải được bộ xử lý.'},502);return new Response(response.body,{headers:{'content-type':url.pathname.endsWith('.wasm')?'application/wasm':url.pathname.endsWith('.ttf')?'font/ttf':'text/javascript','cache-control':'private, max-age=31536000, immutable','x-content-type-options':'nosniff'}});}
   }
   const dubResponse=await handleDub(request,env,translationProfile);if(dubResponse)return dubResponse;
-  if(request.method==='GET'&&url.pathname==='/')return new Response(HTML,{headers:{...headers,'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.xhscdn.com https://*.xhsimg.com; media-src 'self' blob:; connect-src 'self' blob: https:; font-src 'self' blob: https://fonts.gstatic.com; base-uri 'self'; form-action 'self'"}});
+  if(request.method==='GET'&&url.pathname==='/')return new Response(HTML,{headers:{...headers,'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.xhscdn.com https://*.xhsimg.com; media-src 'self' blob:; connect-src 'self' blob: https:; font-src 'self' blob: https://fonts.gstatic.com; base-uri 'self'; form-action 'self'"}});
   if(url.pathname==='/api/download'&&request.method==='GET'){
    let media=validUrl(url.searchParams.get('url'),MEDIA_HOSTS);const range=request.headers.get('range');
-   let response,lastError;
+   let response,lastError,finalVideoUrl,sourceProfile=url.searchParams.get('profile')==='mobile-share'?'mobile-share':'desktop';const deadline=Date.now()+SOURCE_BUDGET_MS;
    for(let attempt=0;attempt<2;attempt++){
     try{
      if(attempt&&url.searchParams.get('source')){
-      const refreshed=await readSourceNote(url.searchParams.get('source'));
       const kind=url.searchParams.get('kind');
-      const fresh=kind==='original'?refreshed.originalVideoUrl:kind==='p1080'?(await pick1080(refreshed)).url:refreshed.videoUrl;
-      if(fresh)media=validUrl(fresh,MEDIA_HOSTS);
+      const resolved=await resolveVideoSource(url.searchParams.get('source'),env,deadline,{preferKind:['original','p1080','p720'].includes(kind)?kind:undefined,allowLargeOriginal:kind==='original'&&url.searchParams.get('largeOriginal')==='1'});
+      const fresh=resolved.chosen.url;sourceProfile=resolved.note.sourceUserAgent;
+      if(fresh){media=validUrl(fresh,MEDIA_HOSTS);console.info('rednote_video_refreshed',JSON.stringify({userAgent:sourceProfile,mode:kind,url:media.href}));}
      }
-     ({response}=await fetchAllowed(media.href,MEDIA_HOSTS,{headers:{'user-agent':UA,'referer':'https://www.xiaohongshu.com/','range':range||'bytes=0-'}},25000));
-     if(response.ok)break;
-     const code=response.status;await response.body?.cancel();response=null;
+     ({response,url:finalVideoUrl}=await fetchAllowed(media.href,MEDIA_HOSTS,{headers:{...(SOURCE_PROFILES[sourceProfile]||DESKTOP_HEADERS),accept:'*/*','range':range||'bytes=0-'}},25000,deadline));
+     if(response.ok){
+      if(['original','p1080','p720'].includes(url.searchParams.get('kind'))&&watermarkUrl(finalVideoUrl)){cancelBody(response.body);throw new AppError('Link video chuyển sang bản có dấu hiệu watermark. Đã dừng tải để tránh lấy nhầm bản có logo.',422);}
+      if(finalVideoUrl!==media.href)console.info('rednote_video_redirected',JSON.stringify({userAgent:sourceProfile,mode:url.searchParams.get('kind'),url:finalVideoUrl}));
+      break;
+     }
+     const code=response.status;cancelBody(response.body);response=null;
      lastError=new AppError('Nguồn từ chối tải video ('+code+'). Hãy thử lại hoặc mở video trực tiếp.',502);
     }catch(e){lastError=e;response=null}
    }
    if(!response)throw lastError||new AppError('Link video đã hết hạn. Hãy lấy lại link bài.',502);
    const type=response.headers.get('content-type')||'video/mp4';if(!/video|octet-stream/i.test(type))throw new AppError('Nguồn chưa trả về file video.',502);
    const resultHeaders=new Headers({...headers,'content-type':type,'content-disposition':(url.searchParams.get('inline')?'inline':'attachment')+'; filename="PHA-Rednote-'+(url.searchParams.get('id')||'video').replace(/[^a-z0-9-]/gi,'').slice(0,40)+'.mp4"'});
-   for(const h of ['content-length','content-range','accept-ranges'])if(response.headers.has(h))resultHeaders.set(h,response.headers.get(h));
+   resultHeaders.set('x-video-final-url',encodeURIComponent(finalVideoUrl));
+   for(const h of ['content-length','content-range','accept-ranges','etag','last-modified'])if(response.headers.has(h))resultHeaders.set(h,response.headers.get(h));
    return new Response(response.body,{status:response.status,headers:resultHeaders});
   }
   if(request.method==='POST'&&['/api/extract','/api/dub/fetch-video'].includes(url.pathname)){
@@ -252,18 +344,20 @@ export default {async fetch(request,env){
    const origin=request.headers.get('origin');if(origin&&origin!==url.origin)throw new AppError('Yêu cầu không hợp lệ.',403);
    if(Number(request.headers.get('content-length'))>100000)throw new AppError('Dữ liệu quá lớn.',413);
    const bodyText=await limitedText(request,100000);let body;try{body=JSON.parse(bodyText)}catch{throw new AppError('Dữ liệu không hợp lệ.',400)}
-   if(url.pathname==='/api/dub/fetch-video')return await fetchVideoFile(body);
-   const source=shareUrl(body.url);const note=await readSourceNote(source,{requireVideo:false});
+   if(url.pathname==='/api/dub/fetch-video')return await fetchVideoFile(body,env);
+   const source=shareUrl(body.url),deadline=Date.now()+SOURCE_BUDGET_MS;
+   const resolved=await resolveVideoSource(source,env,deadline,{allowCaptionOnly:true}),note=resolved.note,selected=resolved.chosen;
    note.caption=[note.title,note.caption].filter(Boolean).join('\n\n');
-   note.videoKind='stream';note.streamVideoUrl=note.videoUrl;note.videoSize=note.streamSize;
-   if(note.originalVideoUrl){try{const {response:probe}=await fetchAllowed(note.originalVideoUrl,MEDIA_HOSTS,{headers:{range:'bytes=0-1023','referer':'https://www.xiaohongshu.com/'}});const accessible=probe.ok&&/video|octet-stream/i.test(probe.headers.get('content-type')||'');const total=probe.headers.get('content-range')?.match(/\/(\d+)$/)?.[1]||probe.headers.get('content-length');await probe.body?.cancel();if(accessible){note.videoUrl=note.originalVideoUrl;note.videoKind='original';note.videoSize=Number(total)||null;note.width=null;note.height=null}}catch{}}
+   if(resolved.selectionError)note.videoSelectionError=resolved.selectionError;
+   note.videoUrl=selected?.url||null;note.videoKind=selected?.mode||null;note.videoSize=selected?.size||null;
+   note.streamVideoUrl=['p1080','p720'].includes(selected?.mode)?selected.url:null;
    const context='&source='+encodeURIComponent(source);
    const download=note.videoUrl?'/api/download?url='+encodeURIComponent(note.videoUrl)+'&id='+encodeURIComponent(note.id)+'&kind='+note.videoKind+context:null;
    const small=note.streamVideoUrl?'/api/download?url='+encodeURIComponent(note.streamVideoUrl)+'&id='+encodeURIComponent(note.id)+'-mobile&kind=mobile'+context:null;
    return json({...note,downloadUrl:download,smallDownloadUrl:small,previewUrl:small?small+'&inline=1':download?download+'&inline=1':null});
   }
   return json({error:'Không tìm thấy trang.'},404);
- }catch(error){if(new URL(request.url).pathname==='/api/download'&&!new URL(request.url).searchParams.has('inline'))return downloadError(request,error);if(error instanceof AppError)return json({error:error.message,...(error.code?{code:error.code}:{}),...(request.headers.get('x-pha-diagnostic')==='1'?{sourceDetails:error.sourceDetails}:{})},error.status);return json({error:'Chưa kết nối được dịch vụ nguồn. Hãy thử lại sau; caption đã dán vẫn được giữ nguyên.'},502)}
+ }catch(error){if(new URL(request.url).pathname==='/api/download'&&!new URL(request.url).searchParams.has('inline'))return downloadError(request,error);if(error instanceof AppError)return json({error:error.message,...(error.code?{code:error.code}:{}),...(error.largeOriginal?{largeOriginal:error.largeOriginal}:{}),...(request.headers.get('x-pha-diagnostic')==='1'?{sourceDetails:error.sourceDetails}:{})},error.status);return json({error:'Chưa kết nối được dịch vụ nguồn. Hãy thử lại sau; caption đã dán vẫn được giữ nguyên.'},502)}
 }};
 const HTML=String.raw`<!doctype html>
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#183c34"><meta name="description" content="Tải video Rednote và Việt hóa caption theo chuyên môn cùng PHA."><title>PHA Rednote — Lưu cảm hứng. Hiểu đúng nghĩa.</title>
@@ -278,7 +372,7 @@ ${dubAssets['/dub/dub.css']}
 </style><script type="importmap">{"imports":{"onnxruntime-web":"https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs","onnxruntime-web/wasm":"https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.mjs"}}</script></head><body>
 <header><nav><div class="brand"><div class="brandmark">p.</div><div><strong>PHA <span style="font-weight:400">rednote</span></strong><small>CREATIVE TOOLKIT</small></div></div><div class="navright"><span class="private"><i class="dot"></i> Không lưu nội dung trên máy chủ</span><details class="release-menu" data-app-release="${APP_RELEASE.version}"><summary class="release-badge"><b>Bản ${APP_RELEASE.version}</b><span>${escapeHtml(APP_RELEASE.name)}</span></summary><div class="release-history"><strong>Lịch sử cập nhật</strong><ol>${APP_RELEASES.map((release,index)=>'<li><b>Bản '+release.version+' · '+escapeHtml(release.name)+(index===0?' <small>Đang dùng</small>':'')+'</b><time>'+release.date+'</time><p>'+escapeHtml(release.description)+'</p></li>').join('')}</ol><p class="release-note">Phần tải video: bản 27 · phần sửa 08, 09 và 10.</p></div></details></div></nav></header>
 <main class="shell"><section class="hero"><div><div class="eyebrow">TỪ REDNOTE ĐẾN WORKFLOW CỦA BẠN</div><h1>Lưu cảm hứng.<br><span>Hiểu đúng nghĩa.</span></h1><p class="lead">Một đường link. Video nguồn và caption gốc.<br>Lưu video, giữ nguyên nội dung của bài viết.</p></div><div class="stamp" aria-hidden="true">CREATED FOR<strong>PHA</strong><span>YOUR CREATIVE FLOW</span></div></section>
-<div class="workspace"><aside><section class="panel inputpanel" data-download-version="27-sua10"><div class="titleline"><span class="step">01</span><h2>Dán link Rednote</h2></div><p class="helper"><b>Tải video · Bản 27 · Phần sửa 08, 09 và 10</b> Lưu video vào app, kiểm tra lại dung lượng và đưa sang Dịch &amp; lồng tiếng.</p><form id="extractForm"><label class="field" for="url">Link video hoặc đoạn chia sẻ</label><div class="urlwrap"><textarea id="url" placeholder="Dán link xhslink.com hoặc xiaohongshu.com vào đây…" required maxlength="5000" spellcheck="false"></textarea><button type="button" class="paste" id="pasteBtn">Dán clipboard</button></div><label class="field" for="domain">Chuyên môn dịch video</label><select id="domain"><optgroup label="Hệ sinh thái PhaHa">${Object.entries(CHANNEL_PROFILES).slice(0,8).map(([id,p])=>'<option value="'+id+'"'+(id==='pha_light'?' selected':'')+'>'+p.label+'</option>').join('')}</optgroup><optgroup label="Chuyên môn khác">${Object.entries(CHANNEL_PROFILES).slice(8).map(([id,p])=>'<option value="'+id+'">'+p.label+'</option>').join('')}</optgroup></select><p class="helper" id="profileHint"></p><details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px">Quy tắc dịch video của kênh</summary><p class="helper" id="profileRules" style="white-space:pre-line"></p><label class="field" for="customRules">Quy tắc riêng bổ sung</label><textarea id="customRules" maxlength="3000" style="width:100%;min-height:110px;padding:12px;font-size:16px" placeholder="Ví dụ: giữ nguyên tên công cụ Photoshop; dùng cách xưng hô anh em…"></textarea><p class="helper">Lưu riêng từng kênh trên thiết bị này. Áp dụng cho bước dịch và lồng tiếng video.</p><button id="clearRules" class="secondary" type="button" style="margin-top:8px">Xóa quy tắc bổ sung</button><p class="helper">Đã cấu hình theo quy tắc PHA hiện có. Quy tắc riêng được lưu trên thiết bị này.</p></details><p class="helper"><b>Ưu tiên bản 1080p của Rednote (bản phát trên web, không logo) nếu nhẹ hơn bản gốc; không có thì lấy bản gốc.</b> Khi xuất, app tự hạ 2K/4K xuống 1080p, giữ tỉ lệ và tiếng gốc, không thêm logo. Logo đã có trong nội dung nguồn có thể vẫn còn.</p><button type="submit" class="primary" id="extractBtn"><span>↓</span> Lấy video → Dịch & lồng tiếng <span>↗</span></button></form><div id="status" class="status hidden" role="status" aria-live="polite"></div><input id="fileInput" type="file" accept="video/mp4,video/webm,video/*" hidden><button id="chooseFile" type="button" class="secondary" style="width:100%;margin-top:12px">Chọn video từ máy</button><p class="underlink">Đã có nội dung? <button id="manualBtn">Nhập caption gốc ↗</button></p></section><div class="tipbox"><strong>✧ Lấy link đúng, thao tác nhanh</strong><ol><li>Mở video trong ứng dụng Rednote.</li><li>Chọn <b>Chia sẻ → Sao chép liên kết</b>.</li><li>Dán vào đây và để PHA xử lý.</li></ol><p style="margin-top:10px;font-size:10px">iPhone: tải về Tệp; để lưu vào Ảnh, mở video → Chia sẻ → Lưu video nếu thiết bị hỗ trợ.</p></div></aside>
+<div class="workspace"><aside><section class="panel inputpanel" data-download-version="600MB-1080-720-R1"><div class="titleline"><span class="step">01</span><h2>Dán link Rednote</h2></div><p class="helper"><b>Tải video · Quy tắc 600 MB · 1080p / 720p sạch</b> Lưu video vào app, kiểm tra lại dung lượng và đưa sang Dịch &amp; lồng tiếng.</p><form id="extractForm"><label class="field" for="url">Link video hoặc đoạn chia sẻ</label><div class="urlwrap"><textarea id="url" placeholder="Dán link xhslink.com hoặc xiaohongshu.com vào đây…" required maxlength="5000" spellcheck="false"></textarea><button type="button" class="paste" id="pasteBtn">Dán clipboard</button></div><label class="field" for="domain">Chuyên môn dịch video</label><select id="domain"><optgroup label="Hệ sinh thái PhaHa">${Object.entries(CHANNEL_PROFILES).slice(0,8).map(([id,p])=>'<option value="'+id+'"'+(id==='pha_light'?' selected':'')+'>'+p.label+'</option>').join('')}</optgroup><optgroup label="Chuyên môn khác">${Object.entries(CHANNEL_PROFILES).slice(8).map(([id,p])=>'<option value="'+id+'">'+p.label+'</option>').join('')}</optgroup></select><p class="helper" id="profileHint"></p><details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px">Quy tắc dịch video của kênh</summary><p class="helper" id="profileRules" style="white-space:pre-line"></p><label class="field" for="customRules">Quy tắc riêng bổ sung</label><textarea id="customRules" maxlength="3000" style="width:100%;min-height:110px;padding:12px;font-size:16px" placeholder="Ví dụ: giữ nguyên tên công cụ Photoshop; dùng cách xưng hô anh em…"></textarea><p class="helper">Lưu riêng từng kênh trên thiết bị này. Áp dụng cho bước dịch và lồng tiếng video.</p><button id="clearRules" class="secondary" type="button" style="margin-top:8px">Xóa quy tắc bổ sung</button><p class="helper">Đã cấu hình theo quy tắc PHA hiện có. Quy tắc riêng được lưu trên thiết bị này.</p></details><p class="helper"><b>Tối đa 600 MB: tải bản gốc. Trên 600 MB: ưu tiên 1080p không watermark, không có thì lấy 720p không watermark; H.264 trước H.265.</b> Không xác minh được bản 1080p/720p sạch thì app báo rõ và dừng tải. Logo đã có trong nội dung nguồn có thể vẫn còn.</p><button type="submit" class="primary" id="extractBtn"><span>↓</span> Lấy video → Dịch & lồng tiếng <span>↗</span></button></form><div id="status" class="status hidden" role="status" aria-live="polite"></div><div id="largeOriginalOffer" class="status hidden"><p id="largeOriginalInfo"></p><button id="largeOriginalBtn" type="button" class="secondary" style="margin-top:12px;width:100%">Tải bản gốc dung lượng lớn</button><p class="helper">Bản gốc có thể vẫn chứa logo của tác giả. File lớn cần nhiều dung lượng trống và thời gian tải.</p></div><input id="fileInput" type="file" accept="video/mp4,video/webm,video/*" hidden><button id="chooseFile" type="button" class="secondary" style="width:100%;margin-top:12px">Chọn video từ máy</button><p class="underlink">Đã có nội dung? <button id="manualBtn">Nhập caption gốc ↗</button></p></section><div class="tipbox"><strong>✧ Lấy link đúng, thao tác nhanh</strong><ol><li>Mở video trong ứng dụng Rednote.</li><li>Chọn <b>Chia sẻ → Sao chép liên kết</b>.</li><li>Dán vào đây và để PHA xử lý.</li></ol><p style="margin-top:10px;font-size:10px">iPhone: tải về Tệp; để lưu vào Ảnh, mở video → Chia sẻ → Lưu video nếu thiết bị hỗ trợ.</p></div></aside>
 <section class="panel results" id="results"><div class="resulttop"><div class="titleline"><span class="step">02</span><h2>Video & caption của bạn</h2></div><span class="tag" id="resultTag">SẴN SÀNG</span></div><div class="empty" id="empty"><div class="illustration" aria-hidden="true"><div class="cardback"><div style="font-size:15px;margin-bottom:13px">文</div><div class="line"></div><div class="line"></div><div class="line" style="width:60%"></div></div><div class="cardfront"><div class="play">▶</div><span class="spark">✧</span></div><div class="smallflag">Caption gốc</div></div><h3>Cảm hứng tiếp theo đang chờ bạn</h3><p>Dán link Rednote để lấy video, đọc caption gốc<br>và copy nguyên nội dung tại đây.</p><div class="flow"><b>Dán link</b><i>→</i><b>Lấy nội dung</b><i>→</i><b>Tải & copy</b></div></div><div id="resultbody" class="resultbody hidden"><div class="videohead hidden" id="videohead"><video id="video" controls playsinline preload="none"></video><div class="videoinfo"><h3 id="videoTitle"></h3><p id="author"></p><a id="download" class="download" download>↓ Lưu video về máy</a><br><a id="smallDownload" class="secondary hidden" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;margin:5px 0">↓ Tải MP4 cho điện thoại</a><br><button id="openVideo" class="secondary hidden" type="button" style="margin:8px 0">Chia sẻ / Lưu vào Tệp</button><p id="videoMessage"></p><a class="download" href="#videoStudio">→ Dịch & lồng tiếng video</a><a id="sourceLink" target="_blank" rel="noopener noreferrer" style="font-size:10px">Mở bài gốc ↗</a></div></div><p class="manualhint hidden" id="manualhint">Caption gốc được giữ tại đây để copy hoặc lưu.</p><div class="captionhead"><label for="original">Caption gốc · Có thể chỉnh sửa</label><button class="secondary" id="copyOriginal">⧉ Copy caption gốc</button></div><textarea class="captionarea" id="original" placeholder="Caption gốc của bài viết sẽ hiện ở đây…" maxlength="16000"></textarea><div class="captionfoot"><button class="secondary" id="saveTxt">↓ Lưu caption gốc .txt</button><button class="secondary" id="resetBtn">Làm mới</button></div></div></section></div>
 <section class="panel" style="padding:22px;margin-top:20px"><details open><summary style="cursor:pointer;font-weight:600">📋 Nhật ký xử lý</summary><p class="helper">Ghi lại tải video, lấy caption gốc và lồng tiếng trên máy này. Sao chép để gửi hỗ trợ; xóa log khi đã xử lý xong.</p><textarea id="runLog" class="captionarea" style="min-height:220px;font-family:monospace;font-size:12px" readonly spellcheck="false" aria-label="Nhật ký xử lý"></textarea><div class="captionfoot"><button type="button" id="copyRunLog" class="secondary">📋 Sao chép nhật ký</button><button type="button" id="clearRunLog" class="secondary">🗑 Xóa toàn bộ nhật ký</button></div><p id="runLogFeedback" class="helper" role="status"></p></details></section>
 ${dubAssets['/dub/dub.html']}
@@ -287,11 +381,11 @@ ${dubAssets['/dub/dub.html']}
 <script src="/dub/run-journal.js"></script><script src="/dub/video-download.js"></script>
 <script>
 try{for(const k of ['pha-caption-chatgpt-job-v1','pha-caption-chatgpt-result-v1','pha-caption-chatgpt-config-v1'])localStorage.removeItem(k)}catch{}
-const $=id=>document.getElementById(id);let note=null,busy=false,toastTimer,videoFile=null,localVideoUrl=null,savedVideo=null,savedVideoUrl=null;
+const $=id=>document.getElementById(id);let largeOriginalOffer=null,note=null,busy=false,toastTimer,videoFile=null,localVideoUrl=null,savedVideo=null,savedVideoUrl=null;
 function logRun(stage,message){globalThis.PHARunLog?.add(stage,message);}
 function toast(text){$('toast').textContent=text;$('toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),3500)}
 function status(text,error=false){$('status').textContent=text;$('status').classList.remove('hidden');$('status').classList.toggle('error',error)}
-function setBusy(value){busy=value;for(const id of ['extractBtn','resetBtn','domain','original','manualBtn','chooseFile','customRules','clearRules']){const control=$(id);if(control)control.disabled=value;}$('results').classList.toggle('busy',value);$('resultTag').textContent=value?'ĐANG XỬ LÝ':videoFile||note?.delivery==='attachment'?'VIDEO SẴN SÀNG':'SẴN SÀNG'}
+function setBusy(value){busy=value;for(const id of ['extractBtn','resetBtn','domain','original','manualBtn','chooseFile','largeOriginalBtn','customRules','clearRules']){const control=$(id);if(control)control.disabled=value;}$('results').classList.toggle('busy',value);$('resultTag').textContent=value?'ĐANG XỬ LÝ':videoFile||note?.delivery==='attachment'?'VIDEO SẴN SÀNG':'SẴN SÀNG'}
 async function api(path,body){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);try{logRun('Gọi dịch vụ',path);const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:controller.signal});logRun('Gọi dịch vụ',path+' → HTTP '+r.status);const data=await r.json();if(!r.ok)throw Error(data.error||'Chưa xử lý được yêu cầu.');return data}catch(e){logRun('Lỗi dịch vụ',path+' · '+e.message);if(e.name==='AbortError')throw Error('Dịch vụ phản hồi quá lâu. Hãy thử lại.');throw e}finally{clearTimeout(timer)}}
 function showResults(){$('empty').classList.add('hidden');$('resultbody').classList.remove('hidden')}
 function keepCaption(){try{localStorage.setItem('pha-original-caption-v1',$('original').value)}catch{}}
@@ -307,7 +401,7 @@ function updateProfile(){const p=currentProfile();$('profileHint').textContent=p
 $('domain').value=channelSettings.selected;updateProfile();
 function clearSavedVideo(){if(savedVideoUrl)URL.revokeObjectURL(savedVideoUrl);if(savedVideo&&savedVideo!==videoFile)globalThis.PHAVideoDownload?.release(savedVideo);savedVideo=null;savedVideoUrl=null;}
 function loadFile(file,title){
- clearSavedVideo();
+ largeOriginalOffer=null;$('largeOriginalOffer').classList.add('hidden');clearSavedVideo();
  logRun('Video sẵn sàng',file.name+' · '+file.size+' byte · đã nhận vào app');
  if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);
  const previous=videoFile;videoFile=file;if(previous!==file)globalThis.PHAVideoDownload?.release(previous);localVideoUrl=URL.createObjectURL(file);showResults();
@@ -326,38 +420,83 @@ async function prepareVideo(file,signal){
   return result.file;
  }catch(error){throw error;}
 }
-async function pullLink(){
+// Small-video fallback for browsers without OPFS. Treat the whole file as one
+// bounded part, with the same 60s/35s/three-retry policy as disk downloads.
+async function receiveSmallVideo(initial,total,downloadUrl,signal){
+ if(total>256*1024*1024){try{void initial.body?.cancel().catch(()=>{})}catch{}throw Error('File quá lớn để nhận trên điện thoại.');}
+ let last;
+ for(let attempt=0;attempt<=3;attempt++){
+  const watch=new AbortController(),combined=AbortSignal.any([signal,watch.signal]);let timer,reader,cancel;
+  const timeout=(ms,label)=>{clearTimeout(timer);timer=setTimeout(()=>watch.abort(Object.assign(Error(label),{name:'TimeoutError'})),ms)};
+  const wait=p=>new Promise((resolve,reject)=>{const stop=()=>{combined.removeEventListener('abort',stop);reject(combined.reason)};combined.addEventListener('abort',stop,{once:true});Promise.resolve(p).then(v=>{combined.removeEventListener('abort',stop);resolve(v)},e=>{combined.removeEventListener('abort',stop);reject(e)});if(combined.aborted)stop()});
+  const permanent=message=>Object.assign(Error(message),{permanent:true});
+  try{
+   let response=initial;
+   if(attempt){timeout(60000,'Nguồn chưa trả phản hồi đầu sau 60 giây.');response=await wait(fetch(downloadUrl,{signal:combined}));clearTimeout(timer);}
+   if(!response.ok)throw Error('Nguồn video trả lỗi '+response.status+'.');
+   const responseSize=Number(response.headers.get('content-length'));if(total&&responseSize&&total!==responseSize)throw permanent('File video đã thay đổi dung lượng. Hãy lấy lại link.');
+   reader=response.body.getReader();cancel=()=>{void reader.cancel().catch(()=>{})};combined.addEventListener('abort',cancel,{once:true});
+   const parts=[];let received=0,lastData=Date.now(),lastLogged=0;const first=new Uint8Array(12);let magicBytes=0;
+   for(;;){
+    combined.throwIfAborted();timeout(Math.max(1,35000-(Date.now()-lastData)),'Không nhận thêm dữ liệu sau 35 giây.');const part=await wait(reader.read());combined.throwIfAborted();clearTimeout(timer);if(part.done)break;if(!part.value?.length)continue;lastData=Date.now();
+    received+=part.value.length;if(received>256*1024*1024)throw permanent('File quá lớn để nhận trên điện thoại.');
+    if(magicBytes<12){const take=part.value.subarray(0,12-magicBytes);first.set(take,magicBytes);magicBytes+=take.length;}
+    parts.push(part.value);
+    if(received-lastLogged>=8*1024*1024){lastLogged=received;logRun('Tải Rednote','Đã nhận '+received+' / '+(total||'?')+' byte');}
+    status('Đang nhận video: '+Math.round(received/1e6)+' MB'+(total?' / '+Math.round(total/1e6)+' MB · '+Math.floor(received/total*100)+'%':''));
+   }
+   if(total&&received!==total)throw Error('Video tải chưa đủ byte.');
+   if(magicBytes<12||!(String.fromCharCode(...first.slice(4,8))==='ftyp'||first[0]===26&&first[1]===69&&first[2]===223&&first[3]===163))throw permanent('Nguồn trả về trang web, không phải video.');
+   return parts;
+  }catch(e){last=watch.signal.aborted?watch.signal.reason:e;signal.throwIfAborted();if(e.permanent||!downloadUrl||attempt===3)throw last;logRun('Tải lại phần video','Toàn file nhỏ · lần '+(attempt+1)+'/3 · '+last.name+': '+last.message);}
+  finally{clearTimeout(timer);combined.removeEventListener('abort',cancel);watch.abort();try{void reader?.cancel().catch(()=>{})}catch{}try{reader?.releaseLock()}catch{}}
+ }
+ throw last;
+}
+async function pullLink(allowLargeOriginal=false){
+ const requestedSource=$('url').value;
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),1800000);
  try{
   // Ghi được xuống bộ nhớ app thì xin máy chủ trả kiểu tải từng phần cho mọi kích thước (không giữ video trong RAM).
   const disk=await globalThis.PHAVideoDownload?.canUseDisk?.().catch(()=>false);
   logRun('Tải Rednote',disk?'Ghi video thẳng xuống bộ nhớ app, không giữ trong RAM':'Trình duyệt chưa cho ghi xuống bộ nhớ app → nhận video vào RAM (tối đa 256 MB)');
-  const r=await fetch('/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:$('url').value,preferOriginal:true,delivery:disk?'attachment':'stream'}),signal:controller.signal});
-  logRun('Tải Rednote','/api/dub/fetch-video → HTTP '+r.status);if(!r.ok){let error;try{error=await r.json()}catch{}throw Error(error?.error||'Máy chủ chưa lấy được video. Hãy thử lại.')}
+  const firstResponse=new AbortController(),firstTimer=setTimeout(()=>firstResponse.abort(),60000);let r;
+  try{r=await fetch('/api/dub/fetch-video',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({url:requestedSource,preferOriginal:true,allowLargeOriginal,delivery:disk?'attachment':'stream'}),signal:AbortSignal.any([controller.signal,firstResponse.signal])});}
+  catch(error){if(firstResponse.signal.aborted)throw Error('Máy chủ chưa trả phản hồi đầu sau 60 giây. Hãy thử lại hoặc chọn video từ máy.');throw error;}finally{clearTimeout(firstTimer)}
+  logRun('Tải Rednote','/api/dub/fetch-video → HTTP '+r.status);if(!r.ok){let error;try{error=await r.json()}catch{}if(error?.code==='LARGE_ORIGINAL_AVAILABLE'&&Number.isSafeInteger(error.largeOriginal?.size)&&error.largeOriginal.size>600000000){largeOriginalOffer={source:requestedSource,size:error.largeOriginal.size};$('largeOriginalInfo').textContent='Không có bản nhỏ xác nhận sạch. Bản gốc: '+(largeOriginalOffer.size/1e9).toFixed(2)+' GB. Chỉ tải khi bạn chọn nút bên dưới.';$('largeOriginalOffer').classList.remove('hidden');logRun('Tải bản gốc lớn','Đang chờ bạn chọn · '+largeOriginalOffer.size+' byte');}throw Error(error?.error||'Máy chủ chưa lấy được video. Hãy thử lại.')}
   if((r.headers.get('content-type')||'').includes('application/json')){
    const data=await r.json();if(data.delivery!=='attachment')throw Error(data.error||'Chưa lấy được video.');
-   const label=data.mode==='original'?'gốc':data.mode==='p1080'?'1080p':'bản chia sẻ';
-   if(data.reason)logRun('Tải Rednote',data.reason+(data.mode==='p1080'?' → dùng bản 1080p của Rednote ('+data.width+'×'+data.height+' · '+(data.codec||'')+')':''));
-   logRun('Tải Rednote',(data.mode==='original'?'Bản gốc ':data.mode==='p1080'?'Bản 1080p ':'Bản chia sẻ ')+data.size+' byte · tải từng phần vào bộ lưu trữ app');note={...data,videoUrl:data.mode};showResults();$('videohead').classList.remove('hidden');$('videoTitle').textContent=data.title;$('author').textContent=data.author?'Tác giả: '+data.author:'Rednote';
+   if(data.sourceUserAgent==='mobile-share')logRun('Tải Rednote','Đã lấy được trang chia sẻ điện thoại theo cách cũ · không dùng cookie');
+   if(data.sourceUserAgent==='desktop')logRun('Tải Rednote','Đã dùng User-Agent Chrome desktop để lấy thông tin video');
+   if(data.selectedVideoUrl)logRun('Tải Rednote','Link video cuối cùng được chọn: '+data.selectedVideoUrl);
+   const label=data.mode==='original'?'gốc':data.mode==='p1080'?'1080p':data.mode==='p720'?'720p':'bản chia sẻ';
+   if(data.reason)logRun('Tải Rednote',data.reason+(['p1080','p720'].includes(data.mode)?' → dùng bản '+label+' của Rednote ('+data.width+'×'+data.height+' · '+(data.codec||'')+')':''));
+   logRun('Tải Rednote',(data.mode==='original'?'Bản gốc ':data.mode==='p1080'?'Bản 1080p ':data.mode==='p720'?'Bản 720p ':'Bản chia sẻ ')+data.size+' byte · tải từng phần vào bộ lưu trữ app');note={...data,videoUrl:data.mode};showResults();$('videohead').classList.remove('hidden');$('videoTitle').textContent=data.title;$('author').textContent=data.author?'Tác giả: '+data.author:'Rednote';
    $('video').classList.remove('hidden');$('video').removeAttribute('src');$('download').classList.add('hidden');$('download').href=data.downloadUrl;$('download').removeAttribute('download');$('download').target='_blank';$('download').rel='noopener';$('download').textContent='↓ Tải video '+label+' · '+Math.round(data.size/1e6)+' MB';
    $('openVideo').classList.add('hidden');$('smallDownload').classList.add('hidden');$('sourceLink').href=data.sourceUrl;$('sourceLink').classList.remove('hidden');$('original').value=data.caption;
    $('videoMessage').textContent='Đang tải video vào app…';
    try{
     if(!globalThis.PHAVideoDownload)throw Error('Chưa tải được bộ lưu video. Hãy mở lại app.');
-    logRun('Tải vào app','Tải song song tối đa '+globalThis.PHAVideoDownload.CONCURRENCY+' luồng; ghi từng phần vào bộ lưu trữ');
-    let logged=0,loggedStorageRetries=0;const file=await globalThis.PHAVideoDownload.attachment(data,{signal:controller.signal,onProgress:(received,total,stats={})=>{if((stats.storageRetries||0)>loggedStorageRetries){loggedStorageRetries=stats.storageRetries;logRun('Tải vào app','Safari lỗi ghi tạm thời → ghi lại phần đang lưu · lần '+loggedStorageRetries);}const speed=stats.bytesPerSecond||0,remaining=speed?Math.ceil((total-received)/speed):0;status('Đang tải vào app: '+Math.round(received/1e6)+' / '+Math.round(total/1e6)+' MB · '+Math.floor(received/total*100)+'%'+(speed?' · '+(speed/1e6).toFixed(1)+' MB/s · còn khoảng '+Math.floor(remaining/60)+' phút '+remaining%60+' giây':''));if(received-logged>=32*1048576||received===total&&logged!==total){logged=received;logRun('Tải vào app','Đã lưu '+received+' / '+total+' byte · '+(speed/1e6).toFixed(1)+' MB/s · '+(stats.concurrency||1)+' luồng'+(stats.retries?' · đã tải lại '+stats.retries+' phần bị đứng/lỗi':''));}}});
-    loadFile(file,data.title);logRun('Tải vào app','Hoàn tất · '+file.size+' byte'+(file.phaStorage?' · cách ghi: '+file.phaStorage.kind+(file.phaStorage.trimmed?' · đã cắt '+file.phaStorage.trimmed+' byte thừa':''):'')+' · đưa bản '+label+' sang Dịch & lồng tiếng ngay');if(data.mode==='p1080')$('videoMessage').textContent='Bản gốc quá nặng nên app dùng bản 1080p của Rednote. Video đã vào phần Dịch & lồng tiếng.';return file;
+    logRun('Tải vào app','Tải tự điều chỉnh 4 → 6 luồng theo tốc độ; giảm khi lỗi. Phần cuối đứng được thử lại sớm; tối đa 3 lần tải lại, giữ byte đã lưu.');
+    let logged=0,loggedStorageRetries=0;const file=await globalThis.PHAVideoDownload.attachment(data,{signal:controller.signal,onTune:t=>logRun('Điều chỉnh tốc độ',t.from+' → '+t.to+' luồng · '+t.reason+' · đo được '+(t.bytesPerSecond/1e6).toFixed(1)+' MB/s'),onRetry:r=>logRun('Tải lại phần video','Byte '+r.start+'–'+r.end+' · '+(r.phase==='header'?'chờ phản hồi đầu':'đọc dữ liệu')+' · lần '+r.retry+'/'+r.maxRetries+(r.resumedBytes?' · giữ '+r.resumedBytes+' byte đã lưu, tiếp từ byte '+r.resumeFrom:'')+' · '+r.name+': '+r.reason),onProgress:(received,total,stats={})=>{if((stats.storageRetries||0)>loggedStorageRetries){loggedStorageRetries=stats.storageRetries;logRun('Tải vào app','Safari lỗi ghi tạm thời → ghi lại phần đang lưu · lần '+loggedStorageRetries);}const speed=stats.bytesPerSecond||0,remaining=speed?Math.ceil((total-received)/speed):0;status('Đang tải vào app: '+Math.round(received/1e6)+' / '+Math.round(total/1e6)+' MB · '+Math.floor(received/total*100)+'%'+(speed?' · '+(speed/1e6).toFixed(1)+' MB/s · còn khoảng '+Math.floor(remaining/60)+' phút '+remaining%60+' giây':''));if(received-logged>=32*1048576||received===total&&logged!==total){logged=received;logRun('Tải vào app','Đã lưu '+received+' / '+total+' byte · '+(speed/1e6).toFixed(1)+' MB/s · '+(stats.concurrency||1)+' luồng'+(stats.retries?' · đã tải lại '+stats.retries+' phần bị đứng/lỗi':''));}}});
+    loadFile(file,data.title);logRun('Tải vào app','Hoàn tất · '+file.size+' byte'+(file.phaStorage?' · cách ghi: '+file.phaStorage.kind+(file.phaStorage.trimmed?' · đã cắt '+file.phaStorage.trimmed+' byte thừa':''):'')+' · đưa bản '+label+' sang Dịch & lồng tiếng ngay');if(['p1080','p720'].includes(data.mode))$('videoMessage').textContent='App dùng bản '+label+' của Rednote có cờ không watermark theo quy tắc 600 MB. Video đã vào phần Dịch & lồng tiếng.';return file;
    }catch(error){logRun('Lỗi tải vào app',(error.name||'Error')+' · '+error.message);
     // Không để người dùng kẹt: bản gốc luôn còn nút tải thẳng về Tệp (không qua bộ nhớ app), kể cả video trên 2 GB.
-    const offer=data.mode==='original'||data.mode==='p1080';if(offer){$('download').classList.remove('hidden');$('download').textContent='↓ Tải video '+label+' về Tệp · '+Math.round(data.size/1e6)+' MB';logRun('Tải vào app','Đã hiện nút tải video '+label+' thẳng về Tệp');}
+    const offer=['original','p1080','p720'].includes(data.mode);if(offer){$('download').classList.remove('hidden');$('download').textContent='↓ Tải video '+label+' về Tệp · '+Math.round(data.size/1e6)+' MB';logRun('Tải vào app','Đã hiện nút tải video '+label+' thẳng về Tệp');}
     $('videoMessage').textContent='Chưa tải vào app: '+error.message+(offer?' Bạn vẫn có thể bấm nút ở trên để tải video '+label+' về Tệp.':' Hãy thử lại hoặc mở app bằng Safari đã cập nhật.');return null;}
 
   }
-  const total=Number(r.headers.get('content-length'));if(total>256*1024*1024){await r.body.cancel();throw Error('File quá lớn để nhận trên điện thoại.')}
-  logRun('Tải Rednote','Nhận file · dự kiến '+(total||'chưa biết')+' byte');const reader=r.body.getReader(),parts=[];let received=0,lastLogged=0;
-  for(;;){const part=await reader.read();if(part.done)break;parts.push(part.value);received+=part.value.length;if(received-lastLogged>=8*1024*1024){lastLogged=received;logRun('Tải Rednote','Đã nhận '+received+' / '+(total||'?')+' byte');}if(received>256*1024*1024){await reader.cancel();throw Error('File quá lớn để nhận trên điện thoại.')}status('Đang nhận video: '+Math.round(received/1e6)+' MB'+(total?' / '+Math.round(total/1e6)+' MB · '+Math.floor(received/total*100)+'%':''))}
-  if(total&&received!==total)throw Error('Video tải chưa đủ. Hãy nhấn Lấy video để thử lại.');
+  if(r.headers.get('x-source-user-agent')==='mobile-share')logRun('Tải Rednote','Đã lấy được trang chia sẻ điện thoại theo cách cũ · không dùng cookie');
+  if(r.headers.get('x-source-user-agent')==='desktop')logRun('Tải Rednote','Đã dùng User-Agent Chrome desktop để lấy thông tin video');
+  for(const [header,label] of [['x-video-final-url','Link video cuối cùng được chọn: '],['x-video-reason','Lý do chọn: ']])if(r.headers.get(header))logRun('Tải Rednote',label+decodeURIComponent(r.headers.get(header)));
   const readHeader=name=>{try{return decodeURIComponent(r.headers.get(name)||'')}catch{return ''}};
+  const total=Number(r.headers.get('content-length')),selected=readHeader('x-video-final-url'),mode=readHeader('x-video-mode'),source=readHeader('x-rednote-source');
+  const downloadUrl=selected&&['original','p1080','p720'].includes(mode)?'/api/download?'+new URLSearchParams({url:selected,kind:mode,source,profile:readHeader('x-source-user-agent')}):null;
+  logRun('Tải Rednote','Nhận file · dự kiến '+(total||'chưa biết')+' byte');let parts;
+  try{parts=await receiveSmallVideo(r,total,downloadUrl,controller.signal)}catch(error){
+   if(!downloadUrl)throw error;
+   const label=mode==='original'?'gốc':'1080p';note={title:readHeader('x-rednote-title'),caption:readHeader('x-rednote-caption'),author:readHeader('x-rednote-author'),sourceUrl:source,mode};showResults();$('original').value=note.caption;$('videohead').classList.remove('hidden');$('videoTitle').textContent=note.title;$('video').classList.add('hidden');$('download').href=downloadUrl;$('download').removeAttribute('download');$('download').target='_blank';$('download').rel='noopener';$('download').classList.remove('hidden');$('download').textContent='↓ Tải video '+label+' về Tệp';$('videoMessage').textContent='Chưa tải vào app: '+error.message+' Bạn vẫn có thể tải video về Tệp rồi chọn video từ máy.';logRun('Lỗi tải vào app',error.name+': '+error.message);logRun('Tải vào app','Đã hiện nút tải video '+label+' thẳng về Tệp');return null;
+  }
   let file=new File(parts,readHeader('x-video-name')||'PHA-Rednote.mp4',{type:r.headers.get('content-type')||'video/mp4'});
   note={title:readHeader('x-rednote-title'),caption:readHeader('x-rednote-caption'),author:readHeader('x-rednote-author'),sourceUrl:readHeader('x-rednote-source'),videoUrl:'local',mode:readHeader('x-video-mode')};
   $('original').value=note.caption;loadFile(file,note.title);$('author').textContent=note.author?'Tác giả: '+note.author:'Rednote';
@@ -367,20 +506,22 @@ async function pullLink(){
  }catch(error){logRun('Lỗi tải video',error.message);if(error.name==='AbortError')throw Error('Video tải quá lâu. Hãy thử lại khi mạng ổn định.');throw error}finally{clearTimeout(timer)}
 }
 // Một đường tải duy nhất: nút chính và ô link trong phần Dịch video đều gọi hàm này.
-async function runExtract(){
- if(busy)return {ok:false,message:'Đang xử lý video khác, đợi xong rồi thử lại.'};logRun('Bắt đầu tải','Link: '+($('url').value.match(/https?:[^\s]+/)?.[0]||'chưa có link')+' · '+$('domain').value+' · ưu tiên bản 1080p Rednote, không có thì bản gốc · đưa thẳng sang dịch · hạ 1080p lúc xuất');logRun('Thiết bị',globalThis.navigator?.userAgent||'chưa đọc được UA');setBusy(true);status('Máy chủ đang đọc link và lấy file video…');note=null;$('original').value='';clearSavedVideo();globalThis.PHAVideoDownload?.release(videoFile);videoFile=null;if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);localVideoUrl=null;$('video').pause();$('video').removeAttribute('src');$('videohead').classList.add('hidden');if(globalThis.dispatchEvent)globalThis.dispatchEvent(new Event('pha-video-reset'));
+async function runExtract(allowLargeOriginal=false){
+ if(busy)return {ok:false,message:'Đang xử lý video khác, đợi xong rồi thử lại.'};largeOriginalOffer=null;$('largeOriginalOffer').classList.add('hidden');if(allowLargeOriginal)logRun('Tải bản gốc lớn','Bạn đã chủ động chọn tải bản gốc vượt 600 MB');logRun('Bắt đầu tải','Link: '+($('url').value.match(/https?:[^\s]+/)?.[0]||'chưa có link')+' · '+$('domain').value+' · Chrome desktop → dự phòng trang chia sẻ điện thoại · gốc ≤ 600 MB; trên 600 MB lấy 1080p hoặc 720p không watermark · 4→6 luồng tự điều chỉnh · đưa thẳng sang dịch · hạ 1080p lúc xuất');logRun('Thiết bị',globalThis.navigator?.userAgent||'chưa đọc được UA');setBusy(true);status('Máy chủ đang đọc link và lấy file video…');note=null;$('original').value='';clearSavedVideo();globalThis.PHAVideoDownload?.release(videoFile);videoFile=null;if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);localVideoUrl=null;$('video').pause();$('video').removeAttribute('src');$('videohead').classList.add('hidden');if(globalThis.dispatchEvent)globalThis.dispatchEvent(new Event('pha-video-reset'));
  try{
-  await pullLink();$('manualhint').classList.add('hidden');status(videoFile?'Video ('+(note?.mode==='p1080'?'bản 1080p của Rednote':'bản gốc')+') đã sẵn sàng trong phần Dịch & lồng tiếng.':'Chưa tải được video vào app. Caption gốc vẫn giữ nguyên.',!videoFile);
+  await pullLink(allowLargeOriginal);$('manualhint').classList.add('hidden');status(videoFile?'Video gốc đã sẵn sàng trong phần Dịch & lồng tiếng.':'Chưa tải được video vào app. Caption gốc vẫn giữ nguyên.',!videoFile);
   // Downloading into Studio does not start a separate save or encode job.
   keepCaption();logRun('Caption gốc',String($('original').value.length)+' ký tự · giữ nguyên · không gọi dịch vụ dịch');
  }catch(error){status(error.message,true)}finally{keepCaption();setBusy(false);if(videoFile)$('videoStudio')?.scrollIntoView?.({behavior:'smooth',block:'start'})}
  return {ok:!!videoFile,message:$('status').textContent};
 }
+$('largeOriginalBtn').onclick=()=>{if(busy||!largeOriginalOffer)return;if($('url').value!==largeOriginalOffer.source){largeOriginalOffer=null;$('largeOriginalOffer').classList.add('hidden');status('Link đã đổi. Bấm Lấy video để kiểm tra lại.',true);return;}return runExtract(true);};
 $('extractForm').addEventListener('submit',e=>{e.preventDefault();return runExtract();});
 $('video').addEventListener('loadedmetadata',()=>logRun('Thông tin video',$('video').duration.toFixed(2)+' giây · '+$('video').videoWidth+'×'+$('video').videoHeight));
 $('video').addEventListener('error',()=>{const e=$('video').error;if(e)logRun('Lỗi xem trước','mã '+e.code+' · '+(e.message||'Safari chưa phát được video'));});
 $('download').addEventListener('click',async event=>{
  if(savedVideo){logRun('Lưu video','Đã yêu cầu Safari mở/tải bản tối đa 1080p; chưa xác nhận đã lưu vào Tệp.');return;}
+ if(!busy&&!videoFile&&note?.delivery==='attachment'){logRun('Lưu video','Đã mở tải bản '+note.mode+' về Tệp theo lựa chọn của bạn');return;}
  event.preventDefault();if(!videoFile||busy)return;setBusy(true);const source=videoFile;
  try{
   const file=await prepareVideo(source,AbortSignal.timeout(1800000));savedVideo=file;savedVideoUrl=URL.createObjectURL(file);
@@ -398,6 +539,6 @@ async function copy(id){const text=$(id).value;if(!text.trim())return toast('Ch�
 $('copyOriginal').onclick=()=>copy('original');
 $('pasteBtn').onclick=async()=>{try{$('url').value=await navigator.clipboard.readText();toast('Đã dán link.')}catch{$('url').focus();toast('Giữ ô nhập rồi chọn Dán trên điện thoại.')}};
 $('saveTxt').onclick=()=>{const text=$('original').value;if(!text.trim())return toast('Chưa có caption gốc để lưu.');const blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=currentProfile().label.replace(/[^a-zA-Z0-9À-ỹ -]/g,'').trim()+'-caption-goc.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),15000)};
-$('resetBtn').onclick=()=>{try{localStorage.removeItem('pha-original-caption-v1')}catch{}note=null;clearSavedVideo();globalThis.PHAVideoDownload?.release(videoFile);videoFile=null;if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);localVideoUrl=null;$('url').value='';$('original').value='';$('video').pause();$('video').removeAttribute('src');$('video').load();$('videohead').classList.add('hidden');$('resultbody').classList.add('hidden');$('empty').classList.remove('hidden');$('status').classList.add('hidden');$('url').focus();if(globalThis.dispatchEvent)globalThis.dispatchEvent(new Event('pha-video-reset'))};
+$('resetBtn').onclick=()=>{largeOriginalOffer=null;$('largeOriginalOffer').classList.add('hidden');try{localStorage.removeItem('pha-original-caption-v1')}catch{}note=null;clearSavedVideo();globalThis.PHAVideoDownload?.release(videoFile);videoFile=null;if(localVideoUrl)URL.revokeObjectURL(localVideoUrl);localVideoUrl=null;$('url').value='';$('original').value='';$('video').pause();$('video').removeAttribute('src');$('video').load();$('videohead').classList.add('hidden');$('resultbody').classList.add('hidden');$('empty').classList.remove('hidden');$('status').classList.add('hidden');$('url').focus();if(globalThis.dispatchEvent)globalThis.dispatchEvent(new Event('pha-video-reset'))};
 globalThis.PHADownload={fetchLink:text=>{$('url').value=String(text||'');return runExtract();},getVideoFile:()=>videoFile,prepareVideo,isBusy:()=>busy,getProfile:currentProfile,getProfiles:()=>browserProfiles,getRules:()=>$('customRules').value,lock:setBusy,setVideo:(file,metadata)=>{note=metadata||null;$('original').value=metadata?.caption||'';keepCaption();loadFile(file,metadata?.title);$('author').textContent=metadata?.author||'Video chọn từ máy';if(metadata?.sourceUrl){$('sourceLink').href=metadata.sourceUrl;$('sourceLink').classList.remove('hidden')}else $('sourceLink').classList.add('hidden')}};
 </script><script type="module" src="/dub/app.js"></script></body></html>`;

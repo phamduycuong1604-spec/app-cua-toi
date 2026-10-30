@@ -12,6 +12,9 @@ import { bamNghe } from "./nghe-thu.js";
 
 // ----- Nhận video (chọn file hoặc tải từ link) -----
 export function nhanVideo(tep) {
+  if(S.dangChay)return;
+  if($("xem-goc").src)URL.revokeObjectURL($("xem-goc").src);
+  invalidateResult();
   S.tepVideo = tep;
   S.cacCau = [];
   S.videoKetQua = null;
@@ -63,6 +66,7 @@ async function taiTuLink() {
 export function boVideo() {
   if (S.dangChay) return;
   if ($("xem-goc").src) URL.revokeObjectURL($("xem-goc").src);
+  invalidateResult();
   S.tepVideo = null;
   S.thoiLuong = 0;
   S.cacCau = [];
@@ -217,9 +221,79 @@ export function choKiemPhuDe() {
   });
 }
 
+let resultURL=null,tepChiaSe=null,dangLuuVideo=false;
+function tenVideoLuu() {
+  return (S.tepVideo?.name || "video").replace(/\.[^.]+$/, "") + "-tieng-viet.mp4";
+}
+function baoLuuVideo(message) {
+  $("tt-luu-video").textContent=message;$("tt-luu-video").classList.remove("an");
+}
+function capNhatLinkLuuVideo() {
+  const link=$("nut-tai-tep");
+  if(!S.videoKetQua)return link;
+  if(!resultURL)resultURL=URL.createObjectURL(S.videoKetQua);
+  link.href=resultURL;link.download=tenVideoLuu();link.target='_blank';link.rel='noopener';link.classList.remove("an");return link;
+}
+async function moLaiFileDeLuu(file) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(()=>globalThis.PHAVideoDownload.openFile(file)),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new DOMException('Bộ lưu video chưa phản hồi.','TimeoutError')),10000);}),
+    ]);
+  } finally {clearTimeout(timer);}
+}
+async function luuVideo() {
+  const result=S.videoKetQua,nut=$("nut-luu");
+  if(!result){baoLuuVideo('Chưa có video kết quả để lưu.');nhat('Lưu video: chưa có file kết quả');return;}
+  if(dangLuuVideo)return;
+  dangLuuVideo=true;nut.disabled=true;let stage='tạo file chia sẻ';
+  nhat('Lưu video: bắt đầu · '+result.size+' byte');
+  try {
+    const link=capNhatLinkLuuVideo(),tep=tepChiaSe||new File([result],tenVideoLuu(),{type:'video/mp4'});
+    tepChiaSe=tep;let canShare=false;
+    // Giữ user activation: không chờ đọc OPFS trước khi gọi bảng chia sẻ iPhone.
+    stage='kiểm tra chia sẻ';
+    try {canShare=typeof navigator.share==='function'&&navigator.canShare?.({files:[tep]})===true;}
+    catch(loi){nhat('Lưu video: kiểm tra chia sẻ · '+loi.name+' · '+loi.message);if(['NotFoundError','NotReadableError','UnknownError'].includes(loi.name))throw loi;}
+    if(canShare){
+      stage='mở bảng chia sẻ';baoLuuVideo('Trong bảng chia sẻ, chọn Lưu video hoặc Lưu vào Tệp.');
+      nhat('Lưu video: mở bảng chia sẻ iPhone/trình duyệt');
+      await navigator.share({files:[tep]});
+      if(result!==S.videoKetQua)return;
+      baoLuuVideo('Đã đóng bảng chia sẻ. Nếu chưa lưu, bấm Tải về Tệp.');nhat('Lưu video: bảng chia sẻ hoàn tất');return;
+    }
+    stage='tải về Tệp';link.click();
+    baoLuuVideo('Đã yêu cầu tải video. Nếu chưa thấy file, bấm Tải về Tệp; nếu Safari mở video, chọn Chia sẻ → Lưu vào Tệp.');
+    nhat('Lưu video: dùng liên kết tải trực tiếp về Tệp');
+  } catch(loi) {
+    if(result!==S.videoKetQua)return;
+    nhat('Lưu video: '+stage+' · '+(loi.name||'Error')+' · '+loi.message);
+    if(loi.name==='AbortError'){baoLuuVideo('Bạn đã đóng bảng chia sẻ. Có thể bấm Lưu video hoặc Tải về Tệp để lưu lại.');return;}
+    baoLuuVideo('Chưa mở được bảng chia sẻ. Bấm Tải về Tệp ở bên dưới để lưu video.');
+    if(['NotFoundError','NotReadableError','UnknownError'].includes(loi.name)&&globalThis.PHAVideoDownload?.openFile){
+      try {
+        nhat('Lưu video: mở lại file từ bộ nhớ app');
+        const fresh=await moLaiFileDeLuu(result);
+        if(result!==S.videoKetQua)return;
+        if(fresh.size!==result.size)throw Error('File kết quả chưa đủ dung lượng.');
+        tepChiaSe=new File([fresh],tenVideoLuu(),{type:'video/mp4'});
+        const oldURL=resultURL;resultURL=URL.createObjectURL(tepChiaSe);$("xem-ket-qua").src=resultURL;capNhatLinkLuuVideo();
+        if(oldURL)URL.revokeObjectURL(oldURL);
+        baoLuuVideo('Đã mở lại file. Bấm Lưu video lần nữa hoặc Tải về Tệp.');nhat('Lưu video: đã mở lại file · '+fresh.size+' byte');
+      } catch(error){
+        if(result!==S.videoKetQua)return;
+        nhat('Lưu video: mở lại file · '+(error.name||'Error')+' · '+error.message);
+        baoLuuVideo('Chưa mở lại được file. Hãy thử Tải về Tệp hoặc chia sẻ từ khung video ở trên.');
+      }
+    }
+  } finally {dangLuuVideo=false;nut.disabled=false;}
+}
+
 // ----- Hiện video kết quả -----
 export function hienKetQua() {
-  $("xem-ket-qua").src = URL.createObjectURL(S.videoKetQua);
+  if(resultURL)URL.revokeObjectURL(resultURL);
+  tepChiaSe=null;$("xem-ket-qua").src=resultURL=URL.createObjectURL(S.videoKetQua);capNhatLinkLuuVideo();
   $("the-ket-qua").classList.remove("an");
   $("the-ket-qua").scrollIntoView({ behavior: "smooth" });
 }
@@ -301,15 +375,7 @@ export function khoiDongGiaoDien() {
   });
 
   // Kết quả: lưu video (iPhone: mở bảng Chia sẻ → "Lưu video" vào Ảnh), tải phụ đề
-  $("nut-luu").addEventListener("click", async () => {
-    if (!S.videoKetQua) return;
-    const ten = tenTep("-tieng-viet.mp4");
-    const tep = new File([S.videoKetQua], ten, { type: "video/mp4" });
-    if (navigator.canShare?.({ files: [tep] })) {
-      try { await navigator.share({ files: [tep] }); return; } catch (loi) { if (loi.name === "AbortError") return; }
-    }
-    taiXuong(S.videoKetQua, ten);
-  });
+  $("nut-luu").addEventListener("click",luuVideo);
   $("nut-phu-de").addEventListener("click", () => taiXuong(new Blob([taoSrt(S.cacCau)], { type: "text/plain" }), tenTep("-tieng-viet.srt")));
   // Kiểm tra phụ đề: chép / tải SRT tiếng Trung
   $("nut-chep-trung").addEventListener("click", async () => {
@@ -319,4 +385,12 @@ export function khoiDongGiaoDien() {
     setTimeout(() => (nut.textContent = "📋 Chép SRT tiếng Trung"), 2000);
   });
   $("nut-tai-trung").addEventListener("click", () => taiXuong(new Blob([$("pd-trung").value], { type: "text/plain" }), tenTep("-tieng-trung.srt")));
+}
+
+export function invalidateResult(){
+ const old=S.videoKetQua;S.videoKetQua=null;tepChiaSe=null;
+ if(resultURL)URL.revokeObjectURL(resultURL);resultURL=null;
+ $("nut-tai-tep").removeAttribute('href');$("nut-tai-tep").classList.add('an');$("tt-luu-video").textContent='';$("tt-luu-video").classList.add('an');
+ $("xem-ket-qua").pause();$("xem-ket-qua").removeAttribute('src');$("the-ket-qua").classList.add('an');
+ if(old)globalThis.PHAVideoDownload?.release?.(old)?.catch?.(()=>{});
 }

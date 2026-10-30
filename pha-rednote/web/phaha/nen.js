@@ -11,6 +11,10 @@ export const TAN_SO_NGHE = 16000; // âm thanh gửi đi nghe: 16.000 mẫu/giâ
 export const TAN_SO_DOC = 24000; // giọng đọc trả về / ghép vào video
 export const DOAN_NGHE = 90; // mỗi lần gửi khoảng 1,5 phút âm thanh (đoạn ngắn trả lời nhanh, gửi song song)
 export const NHANH_TOI_DA = 1.6; // câu dài quá thì đọc nhanh hơn, tối đa 1,6 lần
+let activeSignal=null;
+export function setRunSignal(signal){activeSignal=signal;}
+export function runSignal(){return activeSignal;}
+export function assertRunning(){activeSignal?.throwIfAborted();}
 
 export function docLuu(ten) {
   try { return JSON.parse(localStorage.getItem(ten)) || {}; } catch { return {}; }
@@ -90,6 +94,9 @@ let dongNhat = [], mocNhat = Date.now();
 export function batDauNhat() { dongNhat = []; mocNhat = Date.now(); }
 export const giayDaChay = () => (Date.now() - mocNhat) / 1000;
 export function nhat(chu) {
+  chu=String(chu);
+  const keys=[caiDat.khoa,...String(caiDat.khoaDoc||'').split(/[\s,;]+/),...Object.values(caiDat.dv||{}).map(v=>v.khoa),...Object.values(caiDat.dp||{}).filter(v=>typeof v==='string')];
+  for(const key of keys.filter(v=>v&&v.length>=4))chu=chu.split(key).join('[đã ẩn]');
   const s = giayDaChay();
   dongNhat.push(`[${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}] ${chu}`);
   if (dongNhat.length > 500) dongNhat.shift();
@@ -136,6 +143,7 @@ export function ghiDangChay(ten) {
 // Chờ vài giây (đếm ngược trên bước đang chạy)
 export async function cho(giay, tenBuoc) {
   for (let s = Math.ceil(giay); s > 0; s--) {
+    assertRunning();
     if (tenBuoc) ghiChu(tenBuoc, `Gemini bảo chờ chút (giới hạn lượt miễn phí)… ${s}s`);
     await new Promise((x) => setTimeout(x, 1000));
   }
