@@ -4,8 +4,8 @@
 // - Ghi nhớ trên máy theo từng cặp (mã + loại Gemini): đã dùng bao nhiêu lượt hôm nay, hết ngày chưa, đang khoá tạm đến lúc nào
 // - Google bảo chờ ≤ 15 giây → chờ rồi gửi lại CÙNG mã; lâu hơn → khoá tạm cặp đó, đổi sang mã khác
 // - Báo hết lượt ngày (…PerDay…) → cặp đó nghỉ tới hôm sau (giờ Mỹ), không thử lại nữa
-// - Khóa model + giọng sau gói thành công đầu tiên; chỉ đổi mã, không đổi model/giọng
-// - Model đã khóa hết lượt ở mọi mã → tạm dừng, giữ các gói đã đọc để tiếp tục
+// - Loại đọc được đoạn đầu tiên được ưu tiên cho cả video; hết lượt ở MỌI mã mới đổi loại, chỉ cho các đoạn còn thiếu
+// - Hết sạch mọi loại ở mọi mã → báo HET_NGAY ngay để app chuyển sang giọng kế tiếp (không chờ)
 // =====================================================
 import { API_GEMINI, caiDat, nhat, cho, docLuu, ghiLuu, demDung, ngayMy, vanTayMa, maHopLe, LOI_MA_LA } from "./nen.js";
 import { dsKhoaDoc, maNghe, gioLamMoiGemini } from "./gemini.js";
@@ -33,16 +33,14 @@ const ten = (k, mh) => k.vt + ":" + mh;
 const cap = (k, mh) => (st().cap[ten(k, mh)] ||= { dung: 0 });
 
 // ----- Trạng thái của 1 lần lồng tiếng -----
-let khoaDoc = {}; // cùng đối tượng được giữ lại khi bấm Làm lại
-let mhUuTien = null; // model đã khóa sau gói thành công đầu tiên
+let mhUuTien = null; // loại đọc được đoạn đầu tiên → ưu tiên cho cả video
 let conCan = 0; // số đoạn còn phải đọc trong lần này
 let soMa = 0; // mã đang dùng (giữ nguyên tới khi mã đó không dùng được)
 const maBo = new Set(); // mã sai / không có quyền / có ký tự lạ (bỏ trong lần này)
 let loiMa = null;
 
-export function batDauDocGemini(soDoan = 0, khoa = {}) {
-  khoaDoc = khoa;
-  mhUuTien = khoa.moHinh || null;
+export function batDauDocGemini(soDoan = 0) {
+  mhUuTien = null;
   conCan = soDoan;
   soMa = 0;
   maBo.clear();
@@ -50,11 +48,9 @@ export function batDauDocGemini(soDoan = 0, khoa = {}) {
   tt = null;
 }
 // Đoạn lấy lại từ bộ nhớ (đọc ở lần trước) → ưu tiên luôn loại đã đọc đoạn đó cho giọng đồng nhất
-export function uuTienMoHinh(mh, giong = caiDat.giong) {
-  if (!mhUuTien && mh) {
-    mhUuTien = khoaDoc.moHinh = mh;
-    khoaDoc.giong = giong;
-  }
+export function uuTienMoHinh(mh) {
+  conCan = Math.max(0, conCan - 1);
+  if (!mhUuTien && mh) mhUuTien = mh;
 }
 // Đổi mã / bấm Lưu (có thể vừa nâng lên trả phí) → quên hết lượt / khoá tạm, thử lại thật
 export function quenLuotDoc() {
@@ -83,12 +79,15 @@ function conLuot(k, mh) {
   return Math.max(hoc ? 0 : 1, (hoc || LUOT_UOC) - cap(k, mh).dung);
 }
 
-// Đã khóa thì chỉ dùng đúng model đó. Trước gói đầu: ưu tiên loại đủ lượt cho các gói còn thiếu.
+// Chọn loại Gemini: loại đang ưu tiên nếu còn dùng được ở ít nhất 1 mã; không thì loại đầu tiên (theo thứ tự)
+// còn đủ lượt cho mọi đoạn còn lại (cả video 1 giọng); không loại nào đủ thì loại còn nhiều lượt nhất
 function chonLoai(cacMa) {
-  if (mhUuTien) return cacMa.some((k) => dungDuoc(k, mhUuTien)) ? mhUuTien : null;
+  if (mhUuTien && cacLoai().includes(mhUuTien) && cacMa.some((k) => dungDuoc(k, mhUuTien))) return mhUuTien;
   const luot = cacLoai().map((mh) => [mh, cacMa.reduce((s, k) => s + conLuot(k, mh), 0)]).filter(([, n]) => n > 0);
   const du = luot.find(([, n]) => n >= Math.max(1, conCan));
   const tot = (du || luot.reduce((a, b) => (b[1] > a[1] ? b : a), luot[0]) || [null])[0];
+  if (tot && mhUuTien && tot !== mhUuTien) nhat(`↪️ ${mhUuTien} đã hết lượt ở mọi mã → các đoạn CÒN THIẾU đọc bằng ${tot} (đoạn đã đọc giữ nguyên)`);
+  if (tot && mhUuTien !== tot) mhUuTien = null;
   return tot;
 }
 // Chọn mã cho loại đó: giữ mã đang dùng nếu còn được; mã nào cũng đang khoá tạm → trả về thời điểm mở khoá sớm nhất
@@ -101,7 +100,7 @@ function chonMa(cacMa, mh) {
 }
 
 // Mã miễn phí: 1 yêu cầu mỗi lúc. Mã đã đọc quá hạn mức miễn phí trong 1 ngày → là mã trả phí → 3 cùng lúc
-export const soLuongDocGemini = () => (mhUuTien && dsMa().some(laTraPhi) ? 3 : 1);
+export const soLuongDocGemini = () => (dsMa().some(laTraPhi) ? 3 : 1);
 
 // Tổng lượt còn lại hôm nay (mọi mã, mọi loại). null = chưa biết chắc (có cặp chưa từng hết lượt) → cứ thử
 export function luotDocConLai() {
@@ -128,7 +127,7 @@ export function moTaLuotDoc(khoa) {
   return `${hetSach ? "HẾT lượt đọc hôm nay · " : ""}đọc hôm nay: ${phan.join(" · ") || "chưa rõ"} (làm mới lúc ${gioLamMoiGemini()})`;
 }
 
-function ghiDung(k, mh, giong) {
+function ghiDung(k, mh) {
   const c = cap(k, mh);
   c.dung++;
   conCan = Math.max(0, conCan - 1);
@@ -137,9 +136,8 @@ function ghiDung(k, mh, giong) {
   luu();
   demDung(`gm:${k.vt}:doc`, 1, ngayMy());
   if (!mhUuTien) {
-    mhUuTien = khoaDoc.moHinh = mh;
-    khoaDoc.giong = giong;
-    nhat(`🔒 Khóa ${mh} / ${giong} cho video này; hết lượt chỉ đổi mã, không đổi model hay giọng`);
+    mhUuTien = mh;
+    nhat(`🎙️ Ưu tiên ${mh} cho cả video (giọng đồng nhất; mã hết lượt thì đổi mã, chưa đổi loại)`);
   }
 }
 function ghiHetNgay(k, mh) {
@@ -162,7 +160,7 @@ function ghiNgung(k, mh) {
 }
 
 // Gửi 1 đoạn cho 1 cặp mã + loại. Trả về phần âm thanh, hoặc null = cặp này không dùng được lúc này (đã ghi nhớ) → chọn lại
-async function goiMot(k, mh, chu, giong) {
+async function goiMot(k, mh, chu) {
   let mang = 0, quaLau = 0, loiMay = 0, thieuTieng = 0, daCho = 0;
   for (;;) {
     const huy = new AbortController();
@@ -177,7 +175,7 @@ async function goiMot(k, mh, chu, giong) {
         // Chỉ gửi đúng câu cần đọc (không kèm lời dặn: Gemini đời mới đọc to luôn lời dặn vào video)
         body: JSON.stringify({
           contents: [{ parts: [{ text: chu }] }],
-          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: giong } } } },
+          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } } },
         }),
         signal: huy.signal,
       });
@@ -202,6 +200,7 @@ async function goiMot(k, mh, chu, giong) {
         if (++thieuTieng <= 2) { nhat(`Gemini đọc thiếu tiếng (${j.candidates?.[0]?.finishReason || "?"}) → gửi lại đoạn này`); continue; }
         throw new Error("Gemini không trả về giọng đọc. Thử lại sau ít phút.");
       }
+      ghiDung(k, mh);
       const u = j.usageMetadata;
       nhat(`Gemini đọc (${mh}, ${tenMa(k)}): xong sau ${giay()} giây${u ? ` · ${u.promptTokenCount || 0}→${u.candidatesTokenCount || 0} token` : ""}`);
       return phan;
@@ -252,12 +251,7 @@ export async function docGeminiTTS(chu) {
   for (let vong = 0; vong < 100; vong++) {
     if (cacMa.every((k) => maBo.has(k.vt))) throw loiMa || new Error("Chưa có mã Gemini cho giọng đọc.");
     const mh = chonLoai(cacMa);
-    if (!mh) {
-      const tb = mhUuTien
-        ? `Tạm dừng lồng tiếng: model ${mhUuTien} / giọng ${khoaDoc.giong} đã hết lượt hoặc không dùng được trên mọi key. Các gói audio đã tạo được giữ nguyên. Chờ lượt làm mới hoặc thêm key còn lượt cho đúng model này, rồi bấm “Làm lại” để chỉ đọc các gói còn thiếu. App không tự đổi model hay chuyển sang Giọng máy.`
-        : "HET_NGAY";
-      throw Object.assign(new Error(tb), { hetGemini: true, giuGiong: !!mhUuTien });
-    }
+    if (!mh) throw Object.assign(new Error("HET_NGAY"), { hetGemini: true });
     const { k, moKhoa } = chonMa(cacMa, mh);
     if (!k) {
       const giay = Math.max(1, Math.ceil((moKhoa - Date.now()) / 1000));
@@ -269,16 +263,11 @@ export async function docGeminiTTS(chu) {
       if (vong) nhat(`🔑 Chuyển sang ${tenMa(k)}`);
       soMa = k.so - 1;
     }
-    const giong = khoaDoc.giong || caiDat.giong;
-    const phan = await goiMot(k, mh, chu, giong);
+    const phan = await goiMot(k, mh, chu);
     if (!phan) continue;
     const byte = tuBase64(phan.inlineData.data);
-    const pcm = new Int16Array(byte.buffer, byte.byteOffset, byte.length >> 1);
-    if (!pcm.length) throw new Error("Gemini trả về audio rỗng. Bấm Làm lại để đọc tiếp.");
-    ghiDung(k, mh, giong);
     return {
-      pcm,
-      giong,
+      pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
       tanSo: Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || 24000,
       moHinh: mh,
     };
