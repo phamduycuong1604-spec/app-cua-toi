@@ -1,13 +1,14 @@
 // =====================================================
 // ĐỌC TIẾNG VIỆT & LỒNG TIẾNG CẢ VIDEO
 // Thứ tự giọng (người dùng chọn): Gemini → ElevenLabs → Viettel → Google Cloud → FPT → Fish → Azure → Edge → Giọng máy
-// Giọng trên hết lượt/lỗi thì đọc lại TOÀN BỘ video bằng giọng kế tiếp (không trộn 2 giọng trong 1 video)
+// Gemini đã đọc thành công: giữ model + giọng + audio, lỗi thì tạm dừng.
+// Các dịch vụ khác giữ cơ chế dự phòng hiện tại.
 // =====================================================
 import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, uuTienMoHinh } from "./doc-gemini.js";
+import { docGeminiTTS, soLuongDocGemini, batDauDocGemini, uuTienMoHinh } from "./doc-gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
@@ -427,22 +428,38 @@ export function dvDocDung(imLang) {
 
 // Đọc 1 câu → âm thanh 24.000 mẫu/giây đã cắt lặng. Giữ trong bộ nhớ để "Làm lại" khỏi đọc lại
 const khoGiong = new Map(); // "dịch vụ|giọng|câu" → { mau, mh }
+// Giữ model, giọng và audio của video hiện tại qua các lần Làm lại (không lưu API key).
+let videoDoc = null, dangLongGemini = false;
+function layVideoDoc() {
+  if (!videoDoc || videoDoc.tep !== S.tepVideo) videoDoc = { tep: S.tepVideo, khoa: {}, audio: new Map() };
+  return videoDoc;
+}
 export async function docCau(chu, dv) {
   chu = chuanHoaDoc(chu);
   if (!chu) return new Float32Array(0);
+  const video = dv === "gemini" && dangLongGemini ? layVideoDoc() : null;
+  if (video?.audio.has(chu)) {
+    const daCo = video.audio.get(chu);
+    uuTienMoHinh(daCo.mh, daCo.giong);
+    return daCo.mau;
+  }
+  // Nghe thử dùng phiên riêng, không thay khóa hay audio của video đang tạm dừng.
+  if (dv === "gemini" && !video) batDauDocGemini(1);
   const c = caiDat.dv[dv] || {};
   const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   // Đoạn đã đọc thành công ở lần trước → dùng lại luôn, không tốn lượt (Gemini: ưu tiên loại đã đọc đoạn đó cho giọng đồng nhất)
-  const daCo = khoGiong.get(khoa);
+  const daCo = video ? null : khoGiong.get(khoa);
   if (daCo) {
-    if (dv === "gemini") uuTienMoHinh(daCo.mh);
+    if (dv === "gemini") uuTienMoHinh(daCo.mh, daCo.giong);
     return daCo.mau;
   }
   const kq = await DICH_VU[dv].doc(chu);
   let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
-  khoGiong.set(khoa, { mau, mh: kq.moHinh || "" });
+  const luu = { mau, mh: kq.moHinh || "", giong: kq.giong || "" };
+  if (video) video.audio.set(chu, luu);
+  else khoGiong.set(khoa, luu);
   return mau;
 }
 
@@ -473,11 +490,12 @@ export async function longTieng() {
     return await longTiengThu();
   } finally {
     giongGcLanNay = null;
+    dangLongGemini = false;
   }
 }
 async function longTiengThu() {
   let loiCuoi;
-  const ds = dvDocDung();
+  const ds = layVideoDoc().khoa.moHinh ? ["gemini"] : dvDocDung();
   for (let i = 0; i < ds.length; i++) {
     const dv = ds[i], ke = DICH_VU[ds[i + 1]]?.ten;
     try {
@@ -487,18 +505,14 @@ async function longTiengThu() {
         await taiDsGiong(dv);
         nhat(`${DICH_VU[dv].ten}: chưa chọn giọng → tự chọn ${tenGiong(dv)}`);
       }
-      // Gemini mã miễn phí: ~10 lượt/ngày mỗi loại. Tính trước số lượt cần; biết chắc không đủ (hoặc đã hết sạch) thì bỏ qua ngay
-      if (dv === "gemini" && ke) {
-        const can = chiaNhom(cauDocDuoc(), "gemini").length, con = luotDocConLai();
-        if (con !== null && can > con) {
-          nhat(con ? `⏩ Bỏ qua Gemini: cần ~${can} lượt đọc, mọi mã chỉ còn ~${con} lượt hôm nay → đọc thẳng bằng ${ke}` : `⏩ Bỏ qua Gemini: mọi loại Gemini ở mọi mã đã hết lượt hôm nay → đọc thẳng bằng ${ke}`);
-          loiCuoi = new Error("HET_NGAY");
-          continue;
-        }
-      }
       return await longTiengBangThat(dv);
     } catch (loi) {
       loiCuoi = loi;
+      if (dv === "gemini" && layVideoDoc().khoa.moHinh) {
+        loi.giuGiong = true;
+        nhat(`⏸️ Giữ ${videoDoc.khoa.moHinh} / ${videoDoc.khoa.giong} và ${videoDoc.audio.size} gói audio đã tạo; tạm dừng, không chuyển dịch vụ đọc`);
+        throw loi;
+      }
       if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
       if (ke) nhat(`↪️ Đọc bằng ${DICH_VU[dv].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → đọc lại toàn bộ bằng ${ke}`);
     }
@@ -508,7 +522,11 @@ async function longTiengThu() {
 
 async function longTiengBangThat(dv) {
   const cau = chiaNhom(cauDocDuoc(), dv);
-  if (dv === "gemini") batDauDocGemini(cau.length); // mỗi lần lồng tiếng chọn lại loại Gemini ưu tiên cho cả video
+  if (dv === "gemini") {
+    dangLongGemini = true;
+    const video = layVideoDoc();
+    batDauDocGemini(cau.filter((c) => !video.audio.has(chuanHoaDoc(c.vi))).length, video.khoa);
+  }
   const boQua = S.cacCau.length - cauDocDuoc().length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
@@ -517,7 +535,7 @@ async function longTiengBangThat(dv) {
   const bd = Date.now();
   const cacGiong = await docTatCa(cau, dv, donVi);
   if (dv === "may") tatGiongMay(); // đọc xong → tắt bộ đọc để trả bộ nhớ cho bước xuất video
-  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
+  nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${(dv === "gemini" ? videoDoc.khoa.giong : tenGiong(dv)) ? " / " + (dv === "gemini" ? videoDoc.khoa.giong : tenGiong(dv)) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
   return taoWav(xepGiongVaoVideo(cau, cacGiong), TAN_SO_DOC);
 }
 
@@ -542,7 +560,7 @@ async function docTatCa(cau, dv, donVi) {
   const loiEdge = [], toiDaLoiEdge = Math.max(3, Math.ceil(cau.length * 0.1));
   if (dv === "edge") edgeLoi = edgeXong = 0;
   let xong = 0, hong = false, edgeHongLienTiep = 0;
-  await Promise.all(Array.from({ length: DICH_VU[dv].cungLuc }, async () => {
+  const ketQua = await Promise.allSettled(Array.from({ length: DICH_VU[dv].cungLuc }, async () => {
     while (hang.length && !hong) {
       const i = hang.shift();
       try {
@@ -565,6 +583,8 @@ async function docTatCa(cau, dv, donVi) {
       ghiChu("long", `${++xong}/${cau.length} ${donVi} (${DICH_VU[dv].ten})`);
     }
   }));
+  const thatBai = ketQua.find((k) => k.status === "rejected");
+  if (thatBai) throw thatBai.reason; // chờ các gói đang đọc lưu xong trước khi cho Làm lại
   if (loiEdge.length) nhat(`⚠️ Edge bỏ trống ${loiEdge.length} câu (Microsoft ngắt kết nối) – xem các dòng ⚠️ ở trên; muốn đủ câu thì bấm “Làm lại lồng tiếng & xuất video”`);
   return cacGiong;
 }
