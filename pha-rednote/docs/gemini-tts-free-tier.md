@@ -16,8 +16,9 @@ translation keep their existing implementation. The downloader is unchanged.
   per model per day and are estimates; this device cannot observe usage elsewhere.
   A reported daily quota value replaces that assumption.
 - Prefer the model with the most remaining quota, then configured/default order.
-  Once a model succeeds, prefer it on subsequent packets. When its keys are
-  exhausted or unavailable, switch only unfinished packets to another model.
+  Once the first packet succeeds, lock its model AND voice. All later packets
+  rotate only API keys for that exact model and voice. Requests cannot change
+  the locked voice even if settings are edited while a run is active.
 - Default model order: gemini-3.8-flash-tts, gemini-3.1-flash-tts-preview,
   gemini-2.5-flash-preview-tts. An explicit Advanced setting can precede these.
   Unavailable models are skipped on HTTP 404; availability is not assumed.
@@ -29,17 +30,28 @@ translation keep their existing implementation. The downloader is unchanged.
   Unusually long individual rows are split without discarding text. The original
   subtitle rows are not modified.
 - Successful trimmed audio is cached with its model/provider and voice/text
-  identity in IndexedDB. Private-mode storage failure falls back to memory for
+  identity in IndexedDB. Model-specific variants retain older successful audio
+  without allowing it to replace the current lock. Private-mode storage failure falls back to memory for
   the current page session. Failed or empty audio is not cached. Voice/text edits
-  invalidate the corresponding cache entry; changing model does not discard audio.
-- If Gemini is exhausted, the next configured voice fills missing packets only.
-  A rerun also reuses successful fallback packets. This intentionally permits
-  mixed models/providers when necessary and records the switch in the journal.
+  invalidate the corresponding cache entry on a new run. Audio from another
+  model or provider is retained in storage but excluded from a locked Gemini run.
+- If the locked model is exhausted on every key/project, pause immediately
+  with TTS_LOCKED_DAY_EXHAUSTED. Temporary unavailability pauses with
+  TTS_LOCKED_UNAVAILABLE. Neither condition switches model or provider.
+  Successful packets survive rerun and page reload where IndexedDB is available;
+  their metadata restores the same lock, and only missing packets are sent.
+  A pause also cancels parallel rendering and prevents export of partial speech.
+- Before any Gemini audio has succeeded (and when no Gemini cache restores a
+  lock), the existing initial model selection and configured provider fallback
+  remain available. A new run clears the in-memory lock; matching cached Gemini
+  packets restore it. Explicitly choosing a different voice on a new run uses a
+  separate cache identity.
 - Silence trimming, timestamp placement, normal 1.6x speed cap and delayed 1.9x
   cap remain unchanged.
 
 Tests cover queue serialization, 429 thresholds, quota persistence/day reset,
-known shared projects, model/key recovery, cancellation, partial fallback,
+known shared projects, key rotation under a model/voice lock, cancellation,
+initial fallback before a lock, quota pause without provider fallback,
 rerun/reload caching, denied storage, grouping and timing caps. Provider responses
 and IndexedDB are controlled test doubles; real Google quota and iPhone behavior
 still depend on the account and device.

@@ -103,3 +103,21 @@ test('Stopping a real pending Gemini call never starts another voice or exports 
  taiFfmpeg=async()=>{ff={}};ganVideo=async()=>{thoiLuong=3;return {width:1280,height:720,coTieng:true}};tachTieng=async()=>new Int16Array(48000);ngheVaDich=async()=>[{start:0,end:1,vi:'Đèn chính'}];`);
  h.context.edgeSpy=()=>{edge++;return {pcm:new Int16Array([12000]),tanSo:24000}};h.context.exportSpy=()=>{exported++;return new Blob(['output'])};h.eval('DICH_VU.edge.doc=edgeSpy;xuatVideo=exportSpy');const job=h.eval('chay(true)');await seen.promise;h.eval('stopRun()');await job;assert.equal(edge,0);assert.equal(exported,0);assert.equal(h.eval('dangChay'),false);assert.equal(h.eval('PHADownload.isBusy()'),false);
 });
+
+test('A quota pause aborts parallel rendering, never exports, and restores the rerun controls',{timeout:5000},async()=>{
+ let calls=0,edge=0,exported=0,renderAborted=false;const rendering=deferred();
+ const h=setup({nativeFetch:async(url,init)=>{
+  if(url==='/ai/capabilities')return Response.json({edge:true});
+  if(++calls===1)return Response.json(speech());
+  await rendering.promise;return Response.json({error:{message:'per day'}},{status:429});
+ }});
+ h.eval(`tepVideo=new File(['source'],'video.mp4');caiDat.khoaDoc='one-key';for(const dv of THU_TU)caiDat.bat[dv]=dv==='gemini'||dv==='edge';caiDat.tachNhac=false;caiDat.lop.phuDe.bat=true;
+ taiFfmpeg=async()=>{ff={}};ganVideo=async()=>{thoiLuong=20;return {width:1280,height:720,coTieng:true,duong:'/source'}};tachTieng=async()=>new Int16Array(48000);
+ ngheVaDich=async()=>[{start:0,end:1,vi:'Câu đã đọc'},{start:10,end:11,vi:'Câu chưa đọc'}];`);
+ h.module('giong-doc.js').DICH_VU.edge.doc=async()=>{edge++;throw Error('Must not call fallback')};
+ h.module('video.js').xuatVideo=async()=>{exported++;return new Blob(['output'])};
+ h.module('lop-phu.js').xuatHinh=async()=>{const signal=h.eval('runSignal()');rendering.resolve();return new Promise((resolve,reject)=>{signal.addEventListener('abort',()=>{renderAborted=true;reject(signal.reason)},{once:true})})};
+ await h.eval('chay(true)');assert.equal(calls,2);assert.equal(edge,0);assert.equal(exported,0);assert.equal(renderAborted,true);
+ assert.equal(h.eval('S.dangChay'),false);assert.equal(h.eval('PHADownload.isBusy()'),false);assert.equal(h.get('nut-lam-lai').disabled,false);
+ assert.match(h.get('loi').textContent,/Tạm dừng lồng tiếng/);assert.match(h.get('o-nhat-ky').textContent,/không chuyển model hoặc giọng dự phòng/);
+});

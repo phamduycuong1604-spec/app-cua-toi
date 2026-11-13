@@ -2,8 +2,9 @@
 import {API_GEMINI,caiDat,nhat,cho,docLuu,ghiLuu,demDung,daDung,ngayMy,vanTayMa,assertRunning,runSignal} from './nen.js';
 import {createTtsScheduler,TTS_MODELS} from './gemini-tts.js';
 let moHinhDocCoDinh=null;
-export const moHinhDocDaChot=()=>moHinhDocCoDinh;
-export const chotMoHinhDoc=mh=>{moHinhDocCoDinh=mh;tts.prefer(mh);};
+export const moHinhDocDaChot=()=>tts.locked()?.model||moHinhDocCoDinh;
+export const giongDocDaChot=()=>tts.locked()?.voice||null;
+export const chotMoHinhDoc=(mh,giong=caiDat.giong)=>{if(mh)moHinhDocCoDinh=tts.lock(mh,giong).model;};
 export function batDauLanMoiGemini(){daBaoNghi=new Set();moHinhDocCoDinh=null;tts.reset();napMoHinhNghi();}
 export function quenGhiNhoGemini(caHanMuc=false){
  moHinhNghi.clear();lyDoNghiGemini.clear();localStorage.removeItem('phaha-dv-gemini-nghi');localStorage.removeItem('phaha-dv-gemini-nghi-loai');

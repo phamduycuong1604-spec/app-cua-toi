@@ -104,3 +104,31 @@ test('The working mobile media headers survive selection, byte-range downloads a
   const stream=await worker.fetch(request('/api/dub/fetch-video','POST',{url:SOURCE,delivery:'stream'}),staleEnv);assert.equal(stream.status,200);assert.equal(stream.headers.get('x-source-user-agent'),'mobile-share');assert.deepEqual(new Uint8Array(await stream.arrayBuffer()),MP4);
  }finally{globalThis.fetch=before}
 });
+
+test('Android public share fallback preserves its exact query and working headers into media downloads',async()=>{
+ const originalFetch=globalThis.fetch,seen=[];
+ const query='app_platform=android&app_version=9.0&xhsshare=CopyLink&source=app&xsec_source=app_share&xsec_token=a%2Bb%3D&share_id=public-share';
+ globalThis.fetch=async(url,init={})=>{
+  const u=new URL(url),h=new Headers(init.headers);seen.push({url,ua:h.get('user-agent')});assert.equal(h.get('cookie'),null);assert.equal(h.get('authorization'),null);
+  if(u.hostname==='xhslink.com')return new Response(null,{status:302,headers:{location:SOURCE.replace('/explore/','/discovery/item/')+'?'+query}});
+  if(u.hostname.endsWith('xhscdn.com')){
+   assert.match(h.get('user-agent'),/Android/);assert.equal(h.get('referer'),'https://www.rednote.com/');
+   return new Response(MP4,{status:206,headers:{'content-range':'bytes 0-15/16','content-length':'16'}});
+  }
+  if(u.hostname==='www.rednote.com'&&h.get('user-agent').includes('Android')){assert.equal(u.search.slice(1),query);return new Response(PAGE)}
+  return new Response(LOGIN);
+ };
+ try{
+  const r=await worker.fetch(request('/api/dub/fetch-video','POST',{url:'https://xhslink.com/o/android-share',delivery:'attachment'}),staleEnv),d=await r.json();
+  assert.equal(r.status,200);assert.equal(d.sourceUserAgent,'mobile-android');assert.equal(new URL(d.downloadUrl,'https://site.test').searchParams.get('profile'),'mobile-android');
+  const download=await worker.fetch(new Request(new URL(d.downloadUrl,'https://site.test'),{headers:{range:'bytes=0-15'}}),staleEnv);
+  assert.equal(download.status,206);assert.deepEqual(new Uint8Array(await download.arrayBuffer()),MP4);assert.ok(seen.some(x=>x.ua.includes('iPhone')));assert.ok(seen.some(x=>x.ua.includes('Android')));
+ }finally{globalThis.fetch=originalFetch}
+});
+
+for(const gate of ['captcha','error'])test('Server-side verification '+gate+' is not reported as proof that the note requires user login',()=>upstream(url=>{
+ if(new URL(url).pathname.startsWith('/website-login/'))return new Response(LOGIN);
+ return new Response(null,{status:302,headers:{location:'https://www.rednote.com/website-login/'+gate}});
+},async()=>{
+ const r=await worker.fetch(request(),staleEnv),d=await r.json();assert.equal(r.status,422);assert.equal(d.code,'REDNOTE_SERVER_VERIFICATION');assert.match(d.error,/máy chủ app/);assert.match(d.error,/Chưa thể kết luận/);assert.match(d.error,/chọn video từ máy/);assert.equal(d.downloadUrl,undefined);
+}));

@@ -1,13 +1,13 @@
 // =====================================================
 // ĐỌC TIẾNG VIỆT & LỒNG TIẾNG CẢ VIDEO
 // Thứ tự giọng (người dùng chọn): Gemini → ElevenLabs → Viettel → Google Cloud → FPT → Fish → Azure → Edge → Giọng máy
-// Gemini hết lượt/lỗi: giữ các gói đã có audio, giọng kế tiếp chỉ đọc phần còn thiếu.
+// Gemini đã đọc thành công: khóa model + giọng; hết lượt/lỗi thì giữ audio và tạm dừng.
 // =====================================================
 import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,assertRunning,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { goiGemini, moHinhDocDaChot, chotMoHinhDoc } from "./gemini.js";
+import { goiGemini, moHinhDocDaChot, giongDocDaChot, chotMoHinhDoc } from "./gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
@@ -81,10 +81,11 @@ async function docGemini(chu, lan = 0) {
   const mime=phan.inlineData.mimeType||'';
   if(!byte.length)throw Error('Gemini trả âm thanh rỗng.');
   nhat('GEMINI-R2 · nhận âm thanh · '+byte.length+' byte · '+(mime||'PCM 24000 Hz'));
-  if(/wav/i.test(phan.inlineData.mimeType||""))return {...docWav(byte),moHinh:tl.moHinh};
+  if(/wav/i.test(phan.inlineData.mimeType||""))return {...docWav(byte),moHinh:tl.moHinh,giong:tl.giong};
   if(byte.length%2||mime&&!/^audio\/(?:L16|pcm)(?:;|$)/i.test(mime))throw Error('Gemini trả định dạng âm thanh chưa hỗ trợ: '+(mime||'?')+'.');
   return {
     moHinh: tl.moHinh,
+    giong: tl.giong,
     pcm: new Int16Array(byte.buffer, 0, byte.length >> 1),
     tanSo: Number(/rate=(\d+)/.exec(phan.inlineData.mimeType || "")?.[1]) || TAN_SO_DOC,
   };
@@ -452,12 +453,16 @@ export async function docCau(chu, dv) {
   chu = chuanHoaDoc(chu);
   if (!chu) return new Float32Array(0);
   const c = caiDat.dv[dv] || {};
-  const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
+  const giongGemini=giongDocDaChot()||caiDat.giong;
+  const khoa = [dv, dv === "gemini" ? giongGemini : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
   const id=dv==='gemini'?await audioCacheId(khoa):null;
-  const daCo=khoGiong.get(khoa)||(id?await readAudio(id):null);
+  const model=dv==='gemini'?moHinhDocDaChot():null;
+  const modelKey=model?khoa+'|model:'+model:null,modelId=modelKey?await audioCacheId(modelKey):null;
+  let daCo=(modelKey?khoGiong.get(modelKey)||await readAudio(modelId):null)||khoGiong.get(khoa)||(id?await readAudio(id):null);
+  if(dv==='gemini'&&daCo&&(!daCo.mh||model&&daCo.mh!==model||daCo.giong&&daCo.giong!==giongGemini))daCo=null;
   assertRunning();
   if(daCo){
-    if(dv==='gemini'){chotMoHinhDoc(daCo.mh);nhat('GEMINI-TTS · dùng audio đã lưu · '+daCo.mh+' · không gọi lại');}
+    if(dv==='gemini'){chotMoHinhDoc(daCo.mh,giongGemini);nhat('GEMINI-TTS · dùng audio đã lưu · '+daCo.mh+' / '+giongGemini+' · không gọi lại');}
     return daCo.mau;
   }
   const kq = await DICH_VU[dv].doc(chu);
@@ -465,7 +470,11 @@ export async function docCau(chu, dv) {
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
   if(!mau.length)throw Error('Giọng đọc không có mẫu âm thanh, không lưu vào cache.');
-  const saved={mau,mh:dv==='gemini'?(kq.moHinh||moHinhDocDaChot()):'',provider:dv};
+  const saved={mau,mh:dv==='gemini'?(kq.moHinh||moHinhDocDaChot()):'',giong:dv==='gemini'?(kq.giong||giongDocDaChot()||giongGemini):'',provider:dv};
+  if(dv==='gemini'){
+    chotMoHinhDoc(saved.mh,saved.giong);
+    const variant=khoa+'|model:'+saved.mh;khoGiong.set(variant,saved);await saveAudio(await audioCacheId(variant),saved);
+  }
   khoGiong.set(khoa,saved);
   if(id)await saveAudio(id,saved);
   return mau;
@@ -519,9 +528,15 @@ async function longTiengThu() {
     const plan=JSON.stringify(ds.map(dv=>[dv,dv==='gemini'?caiDat.giong:caiDat.dv[dv]?.giong||'',dv==='el'?caiDat.dv[dv]?.mh||'':'']));
     const ids=await Promise.all(groups.map(c=>audioCacheId('tts-progress-v1|'+plan+'|'+chuanHoaDoc(c.vi))));
     const records=await Promise.all(ids.map(id=>readAudio(id)));
-    const cachedModel=records.find(r=>r?.provider==='gemini'&&r.mh)?.mh;if(cachedModel)chotMoHinhDoc(cachedModel);
-    progress={audio:records.map(r=>r?.mau),save:async(i,mau,meta)=>saveAudio(ids[i],{mau,...meta})};
-    const ready=records.filter(Boolean).length;
+    const fixedVoice=giongDocDaChot()||caiDat.giong;
+    const cachedModel=records.find(r=>r?.provider==='gemini'&&r.mh&&(!r.giong||r.giong===fixedVoice))?.mh;
+    if(cachedModel)chotMoHinhDoc(cachedModel,fixedVoice);
+    const fixedModel=moHinhDocDaChot();
+    const usable=records.map(r=>ds[0]!=='gemini'||r?.provider==='gemini'&&r.mh===fixedModel&&(!r.giong||r.giong===fixedVoice)?r:null);
+    const skipped=records.filter((r,i)=>r&&!usable[i]).length;
+    if(skipped)nhat(`GEMINI-TTS · giữ ${skipped} bản audio cũ trong bộ lưu; không trộn model/giọng khác vào video này`);
+    progress={audio:usable.map(r=>r?.mau),save:async(i,mau,meta)=>saveAudio(ids[i],{mau,...meta})};
+    const ready=usable.filter(Boolean).length;
     nhat(`GEMINI-TTS · ${groups.length} gói ≤40s · tái dùng ${ready} gói · chỉ đọc ${groups.length-ready} gói còn thiếu`);
   }
   for (let i = 0; i < ds.length; i++) {
@@ -538,6 +553,11 @@ async function longTiengThu() {
       if (loi.name === "AbortError") throw loi;
       assertRunning();
       loiCuoi = loi;
+      if(dv==='gemini'&&(loi.pauseTts||moHinhDocDaChot())){
+        nhat('⏸ GEMINI-TTS · tạm dừng · giữ audio đã xong · không chuyển model hoặc giọng dự phòng');
+        if(loi.pauseTts)throw loi;
+        throw Object.assign(new Error(`Tạm dừng lồng tiếng ${moHinhDocDaChot()} / ${giongDocDaChot()}: ${loi.message}. Đã giữ audio đọc xong; bấm “Làm lại” để tiếp tục, không tự đổi giọng.`,{cause:loi}),{pauseTts:true,code:'TTS_LOCKED_UNAVAILABLE'});
+      }
       if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
       if (ke) nhat(`↪️ Đọc bằng ${DICH_VU[dv].ten} không được (${loiDeHieu(loi).split("\n")[0]}) → ${ke} chỉ đọc các gói chưa có audio`);
     }
@@ -546,7 +566,7 @@ async function longTiengThu() {
 }
 
 async function longTiengBang(dv, groups=null, progress=null) {
-  // Model đã thành công được ưu tiên; cache không bị bỏ khi chuyển model.
+  // Gemini giữ model/giọng đã khóa và chỉ đọc gói còn thiếu.
   const cau = groups||chiaNhom(cauDocDuoc(), dv);
   const boQua = S.cacCau.length - cauDocDuoc().length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
@@ -589,7 +609,7 @@ async function docTatCa(cau, dv, donVi, progress=null) {
       const i = hang.shift();
       try {
         cacGiong[i] = await docCau(cau[i].vi, dv);
-        await progress?.save(i,cacGiong[i],{provider:dv,mh:dv==='gemini'?moHinhDocDaChot():''});
+        await progress?.save(i,cacGiong[i],{provider:dv,mh:dv==='gemini'?moHinhDocDaChot():'',giong:dv==='gemini'?giongDocDaChot():''});
         if (dv !== "may") S.baoChonGiong("khac");
         edgeHongLienTiep = 0;
       } catch (loi) {

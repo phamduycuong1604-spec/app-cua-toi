@@ -32,9 +32,9 @@ test('The structured daily Free Tier quota is stored per key + model until next 
  await f.api.request(payload);assert.equal(f.api.snapshot('key-a','first-tts').exhausted,true);assert.equal(f.api.snapshot('key-b','first-tts').exhausted,false);
  await f.api.request(payload);assert.equal(f.calls.filter(c=>c.key==='key-a'&&c.model==='first-tts').length,1);f.nextDay();assert.equal(f.api.snapshot('key-a','first-tts').remaining,10);
 });
-test('Model exhaustion tries every key for that model, then changes model only for the new packet',async()=>{
+test('After first audio, exhaustion tries every key for the locked model and pauses without changing it',async()=>{
  let first=true;const f=fixture({reply:({model})=>first||model==='second-tts'?(first=false,Response.json(audio())):fail('per day')});
- await f.api.request(payload);await f.api.request(payload);assert.deepEqual(f.calls.map(c=>c.model),['first-tts','first-tts','first-tts','second-tts']);assert.deepEqual(f.waits,[]);
+ await f.api.request(payload);await assert.rejects(f.api.request(payload),{code:'TTS_LOCKED_DAY_EXHAUSTED',pauseTts:true});assert.deepEqual(f.calls.map(c=>c.model),['first-tts','first-tts','first-tts']);assert.deepEqual(f.waits,[]);const sent=f.calls.length;await assert.rejects(f.api.request(payload),{code:'TTS_LOCKED_DAY_EXHAUSTED'});assert.equal(f.calls.length,sent);
 });
 test('All pairs exhausted returns immediately and the next call sends no requests',async()=>{
  const f=fixture({reply:()=>fail('per day')});await assert.rejects(f.api.request(payload),{code:'TTS_DAY_EXHAUSTED'});const n=f.calls.length;
@@ -77,4 +77,32 @@ test('Retry hints honor headers, JSON RetryInfo, full hour durations and HTTP da
  assert.equal(retrySeconds(body,new Response(null,{headers:{'retry-after':'15'}})),15);
  assert.equal(retrySeconds(body,new Response(null)),12.5);body.error.details=[];assert.equal(retrySeconds(body,new Response(null)),72382);
  assert.equal(retrySeconds(body,new Response(null,{headers:{'retry-after':new Date(130000).toUTCString()}}),100000),30);
+});
+
+test('Key rotation after the first success preserves the locked model and voice despite changed settings',async()=>{
+ const sent=[];let phase='first';
+ const f=fixture({saved:{pairs:{'hash-b:first-tts':{day:'2026-10-21',used:5,limit:10},'hash-a:second-tts':{day:'2026-10-21',used:9,limit:10},'hash-b:second-tts':{day:'2026-10-21',used:9,limit:10}}},reply:({key,model,init})=>{const body=JSON.parse(init.body);sent.push({key,model,voice:body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName});return phase==='rotate'&&key==='key-a'?fail('per day'):Response.json(audio())}});
+ const voiced=voice=>({...payload,generationConfig:{speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}}});
+ await f.api.request(voiced('Kore'));phase='rotate';await f.api.request(voiced('Puck'));
+ assert.deepEqual(sent,[{key:'key-a',model:'first-tts',voice:'Kore'},{key:'key-a',model:'first-tts',voice:'Kore'},{key:'key-b',model:'first-tts',voice:'Kore'}]);
+ // A later preference update must not replace the successful voice identity.
+ const locked=f.api.locked();assert.deepEqual(locked,{model:'first-tts',voice:'Kore'});f.api.lock('second-tts','Puck');assert.deepEqual(f.api.locked(),locked);
+});
+for(const reply of [()=>fail('Please retry in 44s'),()=>fail('busy',503),()=>Response.json({candidates:[]}),()=>fail('not found',404)])test('After audio succeeds, unavailable locked pairs pause rather than trying another model: '+reply().status,async()=>{
+ let first=true;const f=fixture({reply:()=>first?(first=false,Response.json(audio())):reply()});await f.api.request(payload);
+ await assert.rejects(f.api.request(payload),e=>e.pauseTts===true&&e.model==='first-tts'&&e.voice==='Kore');assert.ok(f.calls.every(c=>c.model==='first-tts'));assert.equal(f.waits.length,0);
+});
+test('A restored lock remains in effect when model preferences change, until an explicit new run',async()=>{
+ const models=['first-tts'],f=fixture({models});f.api.lock('saved-tts','Kore');await f.api.request(payload);assert.equal(f.calls[0].model,'saved-tts');f.api.reset();await f.api.request(payload);assert.equal(f.calls[1].model,'first-tts');
+});
+test('Interactions requests also preserve the first successful voice when settings change',async()=>{
+ const bodies=[];const f=fixture({models:['gemini-3.8-flash-tts'],reply:({init})=>{bodies.push(JSON.parse(init.body));return Response.json({steps:[{type:'model_output',content:[{type:'audio',data:'AQACAA==',mime_type:'audio/L16;rate=24000'}]}]})}});
+ const voiced=voice=>({...payload,generationConfig:{speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}}});
+ await f.api.request(voiced('Kore'));await f.api.request(voiced('Puck'));assert.deepEqual(bodies.map(b=>b.generation_config.speech_config[0].voice),['Kore','Kore']);
+});
+
+test('A locked daily pause resumes on the next quota day with the same model and voice',async()=>{
+ let available=true;const f=fixture({reply:()=>available?Response.json(audio()):fail('per day')});
+ await f.api.request(payload);available=false;await assert.rejects(f.api.request(payload),{code:'TTS_LOCKED_DAY_EXHAUSTED'});
+ f.nextDay();available=true;const result=await f.api.request({...payload,generationConfig:{speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:'Puck'}}}}});assert.equal(result.moHinh,'first-tts');assert.equal(result.giong,'Kore');
 });

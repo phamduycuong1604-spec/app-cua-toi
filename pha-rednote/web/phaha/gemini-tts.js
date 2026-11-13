@@ -17,7 +17,22 @@ export function createTtsScheduler({keys, models = () => TTS_MODELS, fetch: send
   now = () => Date.now(), day, fingerprint, wait, signal = () => null, log = () => {}, usage = () => {}, api}) {
   const saved = read();
   const state = {pairs: saved?.pairs || {}, projects: saved?.projects || {}};
-  let preferred = null, queue = Promise.resolve(), rejected = new Set();
+  let preferred = null, locked = null, queue = Promise.resolve(), rejected = new Set();
+  function lock(model, voice = 'Kore') {
+    if (model && !locked) {
+      locked = {model, voice}; preferred = model;
+      log(`GEMINI-TTS · khóa model ${model} · giọng ${voice} · chỉ đổi mã, không đổi giọng`);
+    }
+    return locked ? {...locked} : null;
+  }
+  function pause(error, exhausted = false) {
+    if (!locked || error?.name === 'AbortError' || error?.pauseTts) return error;
+    const reason = exhausted ? 'đã hết lượt trên mọi mã/project' : 'tạm không dùng được trên các mã hiện có';
+    return Object.assign(new Error(`Tạm dừng lồng tiếng: ${locked.model} / ${locked.voice} ${reason}. Đã giữ audio đọc xong; không tự đổi model hoặc giọng. ${exhausted ? 'Chờ hạn mức làm mới hoặc thêm mã thuộc project khác dùng được model này' : 'Thử lại sau hoặc thêm mã dùng được model này'}, rồi bấm “Làm lại”.`, {cause:error}), {
+      code: exhausted ? 'TTS_LOCKED_DAY_EXHAUSTED' : 'TTS_LOCKED_UNAVAILABLE', pauseTts:true,
+      model:locked.model, voice:locked.voice, hetLuot:exhausted,
+    });
+  }
   const save = () => { try { write(state); } catch {} };
   const scope = key => state.projects[fingerprint(key)] || fingerprint(key);
   const pair = (key, model) => {
@@ -35,7 +50,7 @@ export function createTtsScheduler({keys, models = () => TTS_MODELS, fetch: send
     const project = detail?.metadata?.consumer || detail?.metadata?.project;
     if (!project || state.projects[fingerprint(key)] === project) return;
     const old = scope(key); state.projects[fingerprint(key)] = project;
-    for (const model of listModels()) {
+    for (const model of new Set([...listModels(), ...(locked ? [locked.model] : [])])) {
       const from = state.pairs[old + ':' + model], target = pair(key, model);
       if (from?.day === day()) {
         target.used = Math.max(target.used, from.used || 0); target.exhausted ||= from.exhausted;
@@ -49,10 +64,13 @@ export function createTtsScheduler({keys, models = () => TTS_MODELS, fetch: send
     for(const key of listKeys()){const project=scope(key);if(!seen.has(project)){seen.add(project);total+=left(pair(key,model));}}
     return total;
   };
-  const candidates = () => listModels().map((model, order) => ({model, order,left:modelRemaining(model)}))
+  const candidates = () => (locked ? [locked.model] : listModels()).map((model, order) => ({model, order,left:modelRemaining(model)}))
     .sort((a, b) => Number(b.model === preferred) - Number(a.model === preferred) || b.left - a.left || a.order - b.order);
   async function perform(payload, active) {
     check(active);
+    const voice = locked?.voice || payload.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName || 'Kore';
+    payload = {...payload, generationConfig:{...payload.generationConfig, speechConfig:{...payload.generationConfig?.speechConfig,
+      voiceConfig:{...payload.generationConfig?.speechConfig?.voiceConfig, prebuiltVoiceConfig:{voiceName:voice}}}}};
     const began = now(), seen = new Set(); let waited = 0, lastError;
     for (const {model} of candidates()) {
       for (const key of listKeys().sort((a, b) => left(pair(b, model)) - left(pair(a, model)))) {
@@ -91,8 +109,8 @@ export function createTtsScheduler({keys, models = () => TTS_MODELS, fetch: send
               if (!body?.candidates?.some(c => c.content?.parts?.some(part => part.inlineData?.data))) {
                 p.blockedUntil = now() + 60000; save(); log(`${label} · không có audio, thử cặp khác`); break;
               }
-              preferred = model; body.moHinh = model;
-              log(`${label} · xong ${(now() - began) / 1000}s · giữ audio, ưu tiên model này cho gói sau`);
+              lock(model, voice); body.moHinh = model; body.giong = voice;
+              log(`${label} · xong ${(now() - began) / 1000}s · giữ audio, giữ model và giọng cho gói sau`);
               return body;
             }
           } catch (error) {
@@ -131,15 +149,18 @@ export function createTtsScheduler({keys, models = () => TTS_MODELS, fetch: send
         }
       }
     }
-    const allDay = listKeys().length && listModels().every(model => listKeys().every(key => !left(pair(key, model))));
+    const allDay = listKeys().length && (locked ? [locked.model] : listModels()).every(model => listKeys().every(key => !left(pair(key, model))));
+    if (locked) throw pause(lastError, !!allDay);
     if (allDay) throw Object.assign(Error('Mọi cặp key/project + model Gemini TTS đã hết lượt ngày. Chuyển giọng kế tiếp cho các gói chưa có audio.'), {code: 'TTS_DAY_EXHAUSTED', hetLuot: true});
     throw Object.assign(lastError || Error('Gemini TTS đang khóa tạm hoặc không có model dùng được.'), {code: 'TTS_TEMPORARY'});
   }
   return {
-    request(payload) { const active = signal(); const job = queue.catch(() => {}).then(() => perform(payload, active)); queue = job.catch(() => {}); return job; },
-    reset() { preferred = null; rejected = new Set(); },
+    request(payload) { const active = signal(); const job = queue.catch(() => {}).then(() => perform(payload, active)).catch(error => {throw pause(error)}); queue = job.catch(() => {}); return job; },
+    reset() { preferred = null; locked = null; rejected = new Set(); },
+    lock,
+    locked() { return locked ? {...locked} : null; },
     prefer(model) { if (model) preferred = model; },
     snapshot(key, model) { return {...pair(key, model), remaining: left(pair(key, model))}; },
-    remaining() { const seen = new Set(); let total = 0; for (const key of listKeys()) for (const model of listModels()) { const id = scope(key) + ':' + model; if (!seen.has(id)) { seen.add(id); total += left(pair(key, model)); } } return total; },
+    remaining() { const seen = new Set(); let total = 0; for (const key of listKeys()) for (const model of new Set([...listModels(), ...(locked ? [locked.model] : [])])) { const id = scope(key) + ':' + model; if (!seen.has(id)) { seen.add(id); total += left(pair(key, model)); } } return total; },
   };
 }

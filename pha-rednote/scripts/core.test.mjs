@@ -72,7 +72,7 @@ test('Uses the official rednote domain when Xiaohongshu requires login and prese
   requests.push(url);const u=new URL(url);
   if(u.hostname==='xhslink.com')return new Response(null,{status:302,headers:{location:'https://www.xiaohongshu.com/discovery/item/'+id+'?xsec_token=keep-me&xsec_source=app_share&app_platform=ios'}});
   if(u.hostname==='www.xiaohongshu.com')return u.pathname==='/login'?new Response('<script>window.__INITIAL_STATE__={"login":{}}</script>'):new Response(null,{status:302,headers:{location:'/login'}});
-  if(u.hostname==='www.rednote.com'){assert.equal(u.searchParams.get('xsec_token'),'keep-me');assert.equal(u.searchParams.get('xsec_source'),'app_share');assert.equal(u.searchParams.has('app_platform'),false);return new Response(html)}
+  if(u.hostname==='www.rednote.com'){assert.equal(u.searchParams.get('xsec_token'),'keep-me');assert.equal(u.searchParams.get('xsec_source'),'app_share');assert.equal(u.searchParams.get('app_platform'),'ios');return new Response(html)}
   return new Response(bytes,{headers:{'content-length':String(bytes.length)}});
  };
  try{

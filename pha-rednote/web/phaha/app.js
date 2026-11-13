@@ -91,6 +91,7 @@ async function chay(lamTuDau) {
   try {
     await quyTrinh(lamTuDau, viec);
   } catch (loi) {
+    if(viec.pauseTts)loi=viec.pauseTts;
     console.error(loi);
     nhat("❌ Chi tiết lỗi: " + (loi?.message || loi) + (loi?.status ? ` (mã ${loi.status})` : ""));
     buoc(viec.buocDang, "loi");
@@ -162,8 +163,9 @@ async function quyTrinh(lamTuDau, viec) {
   const coVe = canVe(caiDat.lop, S.cacCau, S.anhLogo) || thongTin.qua1080;
   moChoVeHinh(coVe);
   const daChonGiong = new Promise((x) => (S.baoChonGiong = x));
+  const longController=runController;
   const huaLong = Promise.resolve().then(longTieng).then((r) => { buoc("long", "xong"); return r; });
-  huaLong.catch(() => {});
+  huaLong.catch(loi => {if(loi.pauseTts){viec.pauseTts=loi;longController?.abort(loi);}});
   // Giọng máy cần nhiều bộ nhớ lúc khởi động: nếu phải dùng Giọng máy thì cho đọc TRƯỚC khi tách nhạc/chèn chữ
   // (lúc điện thoại còn rảnh), đọc xong tắt hẳn rồi mới làm các bước nặng
   let henGiong,giongChon;
