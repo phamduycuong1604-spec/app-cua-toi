@@ -13,6 +13,7 @@ const CAU_AO = /请不吝|点赞|點贊|订阅|訂閱|打赏|打賞|字幕由|�
 
 // Câu "dịch" mà vẫn còn chữ Trung (AI chép lại nguyên văn) = chưa dịch
 import { KENH, thuatNguKenh } from "./chuyen-mon.js";
+import { boChuThichAmThanh } from "./loi-noi.js";
 
 export const chuaDich = (x) => !x || (String(x).match(/[\u3400-\u9fff]/g) || []).length >= 2;
 
@@ -441,7 +442,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
     // Nghe 1 đoạn âm thanh + dịch → [{start, end, zh, vi}] (giây, tính từ đầu đoạn)
     async ngheVaDich(wav, b64) {
       let cau = await thuLanLuot(NGHE, ["groq", "cloudflare", "azure"], "nghe", (n) => n.chay(wav, b64));
-      cau = cau.filter((c) => c.zh && !CAU_AO.test(c.zh) && c.end > c.start);
+      cau = cau.map(c=>({...c,zh:boChuThichAmThanh(c.zh)})).filter((c) => c.zh && !CAU_AO.test(c.zh) && c.end > c.start);
       if (!cau.length) return [];
       // Dịch từng nhóm tối đa 40 câu, tối đa 3 nhóm cùng lúc (nhóm sau không phải chờ nhóm trước)
       const cacNhom = [];

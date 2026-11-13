@@ -13,6 +13,7 @@ import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
 import { loiDeHieu } from "./loi.js";
 import {audioCacheId,readAudio,saveAudio} from "./tts-audio-cache.js";
+import { boChuThichAmThanh } from "./loi-noi.js";
 
 // Thứ tự dùng giọng (theo yêu cầu người dùng: Gemini có xoay vòng nhiều mã đọc trước tiên)
 export const THU_TU = ["gemini", "el", "vt", "gc", "fpt", "fish", "az", "edge", "may"];
@@ -66,7 +67,8 @@ async function goiDocGiong(dv, diaChi, tuyChon, kieu = "json") {
 // ----- Gemini -----
 async function docGemini(chu, lan = 0) {
   const tl = await goiGemini("doc", {
-    // Lần đầu kèm lời dặn; Gemini trả lời không kèm tiếng (OTHER) thì lần sau chỉ gửi đúng câu cần đọc
+    // Only spoken text belongs here. Instructions and sound captions must not
+    // become part of the text Gemini is asked to speak.
     contents: [{ parts: [{ text: chu }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
@@ -490,12 +492,12 @@ function chiaNhom(cau, dv) {
     if(count<=1)return[c];
     return Array.from({length:count},(_,i)=>({
       start:c.start+(c.end-c.start)*i/count,end:c.start+(c.end-c.start)*(i+1)/count,
-      vi:words.slice(Math.floor(words.length*i/count),Math.floor(words.length*(i+1)/count)).join(' '),
+      vi:words.slice(Math.floor(words.length*i/count),Math.floor(words.length*(i+1)/count)).join(' '),tachGoi:i===0&&c.tachGoi,
     }));
   });
   for (const c of tungCau) {
     const cuoi = nhom[nhom.length - 1];
-    if (cuoi && c.start - cuoi.end < 1.2 && c.end - cuoi.start <= 40) {
+    if (cuoi && !c.tachGoi && c.start - cuoi.end < 1.2 && c.end - cuoi.start <= 40) {
       cuoi.end = Math.max(cuoi.end, c.end);
       cuoi.vi += " " + c.vi.trim();
     } else {
@@ -505,7 +507,15 @@ function chiaNhom(cau, dv) {
   return nhom;
 }
 // Câu có lời Việt đọc được (bỏ câu rỗng / chỉ có chữ Trung, ký hiệu – dịch vụ đọc sẽ báo lỗi nếu gửi chữ trống)
-const cauDocDuoc = () => S.cacCau.filter((c) => chuanHoaDoc(c.vi));
+const cauDocDuoc = () => {
+  const result=[];let tachGoi=false;
+  for(const c of S.cacCau){
+    const vi=boChuThichAmThanh(c.vi);
+    if(!chuanHoaDoc(vi)){if(String(c.vi||'').trim()&&!vi)tachGoi=true;continue;}
+    result.push({...c,vi,tachGoi});tachGoi=false;
+  }
+  return result;
+};
 
 // =====================================================
 // LỒNG TIẾNG CẢ VIDEO → file WAV dài bằng video
@@ -520,6 +530,8 @@ export async function longTieng() {
 async function longTiengThu() {
   let loiCuoi;
   const ds = dvDocDung();
+  const chiDan=S.cacCau.filter(c=>boChuThichAmThanh(c.vi)!==String(c.vi||'').normalize('NFC').trim()).length;
+  if(chiDan)nhat(`Lồng tiếng: bỏ chú thích nhạc/âm thanh ở ${chiDan} dòng khỏi chữ đọc; giữ mốc thời gian gốc, không đọc chú thích thành lời`);
   // All providers use the same grouped timeline when Gemini participates, so
   // fallback and rerun can retain each successful packet exactly as it was.
   const groups=ds.includes('gemini')?chiaNhom(cauDocDuoc(),'gemini'):null;
@@ -568,7 +580,7 @@ async function longTiengThu() {
 async function longTiengBang(dv, groups=null, progress=null) {
   // Gemini giữ model/giọng đã khóa và chỉ đọc gói còn thiếu.
   const cau = groups||chiaNhom(cauDocDuoc(), dv);
-  const boQua = S.cacCau.length - cauDocDuoc().length;
+  const boQua = S.cacCau.filter(c=>!chuanHoaDoc(c.vi)&&!(String(c.vi||'').trim()&&!boChuThichAmThanh(c.vi))).length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";
   giongGcLanNay = dv === "gc" ? chonGiongGc(cau.reduce((n, c) => n + c.vi.length, 0)) : null;

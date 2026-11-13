@@ -2,6 +2,7 @@
 // XỬ LÝ ÂM THANH & CHỮ ĐỌC (không gọi mạng, không đụng giao diện)
 // =====================================================
 import { TAN_SO_DOC } from "./nen.js";
+import { boChuThichAmThanh } from "./loi-noi.js";
 
 // Đóng gói mẫu âm thanh (Float32 -1..1 hoặc Int16) thành file WAV 16 bit, 1 kênh
 export function taoWav(mau, tanSo) {
@@ -139,7 +140,7 @@ function docSo(so) {
 }
 const DON_VI = { kg: "ki lô gam", g: "gam", ml: "mi li lít", l: "lít", cm: "xen ti mét", mm: "mi li mét", m: "mét", km: "ki lô mét" };
 export function chuanHoaDoc(chu) {
-  return String(chu)
+  return boChuThichAmThanh(chu)
     .replace(/[㐀-鿿]+/g, " ") // chữ Trung còn sót
     .replace(/(\d)[.,](\d{3})(?!\d)/g, "$1$2") // 1.500 / 1,500 → 1500
     .replace(/(\d+)[.,](\d+)/g, (_, a, b) => `${docSo(a)} phẩy ${docSo(b)}`)

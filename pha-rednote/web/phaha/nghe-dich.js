@@ -9,6 +9,7 @@ import { taoDuPhong, chuaDich, loiDanThem } from "./du-phong.js";
 import { goiGemini, layChu } from "./gemini.js";
 import { taoWav, sangBase64 } from "./am-thanh.js";
 import { loiDeHieu } from "./loi.js";
+import { boChuThichAmThanh } from "./loi-noi.js";
 
 export const duPhong = taoDuPhong({
   caiDat, nhat, cho,
@@ -181,12 +182,14 @@ async function ngheGemini(duLieu, dai, batDau) {
   try { ds = JSON.parse(layChu(tl)); } catch { throw new Error("Gemini trả lời không đúng dạng, bấm Bắt đầu để thử lại."); }
   const ra = [];
   for (const c of Array.isArray(ds) ? ds : []) {
+    const rawZh=String(c.zh||''),zh=boChuThichAmThanh(rawZh),vi=boChuThichAmThanh(c.vi);
+    if(rawZh.trim()&&!zh||!vi)continue;
     let s = Number(c.start), e = Number(c.end);
     if (!isFinite(s) || !String(c.vi || "").trim()) continue;
     s = Math.max(0, Math.min(s, dai));
     if (!isFinite(e) || e <= s) e = s + 2;
     e = Math.min(e, dai);
-    ra.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh: String(c.zh || ""), vi: String(c.vi).trim() });
+    ra.push({ start: +(batDau + s).toFixed(2), end: +(batDau + e).toFixed(2), zh, vi });
   }
   nhat(`Đoạn ${dongHo(batDau)}: được ${ra.length} câu`);
   // Câu Gemini để nguyên chữ Trung → nhờ dịch vụ dịch (DeepSeek/Groq/…) dịch lại
@@ -209,6 +212,7 @@ function loiNhacDich(dai) {
   return `Đây là ${dai.toFixed(1)} giây âm thanh lấy từ một video tiếng Trung.
 Hãy nghe kỹ TOÀN BỘ phần LỜI NÓI từ đầu đến cuối (bỏ qua nhạc nền, tiếng động) và chia thành từng câu ngắn, mỗi câu tối đa khoảng 8 giây.
 KHÔNG được bỏ sót câu nào – kể cả câu nói nhỏ, nói nhanh, nói chen, lời thuyết minh trên nền nhạc, lời ở đầu và cuối đoạn.
+Đoạn chỉ có nhạc hoặc tiếng động, không có người nói: không tạo câu thoại và không viết chú thích như [nhạc mở đầu], [âm nhạc], [tiếng vỗ tay] vào zh hoặc vi. Giữ đúng thời điểm câu nói đầu tiên; không kéo lời nói về đầu đoạn nhạc.
 Với mỗi câu trả về:
 - start, end: thời điểm bắt đầu và kết thúc, tính bằng GIÂY (số thập phân) kể từ đầu đoạn âm thanh này, thật chính xác.
 - zh: lời gốc tiếng Trung (chữ Hán).

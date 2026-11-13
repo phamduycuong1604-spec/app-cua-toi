@@ -55,3 +55,26 @@ initial fallback before a lock, quota pause without provider fallback,
 rerun/reload caching, denied storage, grouping and timing caps. Provider responses
 and IndexedDB are controlled test doubles; real Google quota and iPhone behavior
 still depend on the account and device.
+
+## Spoken text and music-only intervals
+
+`loi-noi.js` removes recognized music/sound captions before number and symbol
+normalization. Previously `[nhạc mở đầu]` lost only its brackets and became
+spoken narration. Known standalone music labels and bracketed sound labels are
+now excluded, while normal dialogue about music and technical parentheticals
+remain intact. The raw subtitle table is not rewritten.
+
+Only narrated text is passed to TTS. No prose instructions are prepended to its
+text field. Gemini listening instructions explicitly exclude music-only rows;
+Whisper labels such as `[音乐]` are filtered before translation as well.
+
+The original timestamps are retained. An intro with no speech creates no TTS
+request and remains silence in the synthesized voice track, leaving the original
+music to the existing mixer. Speech packets do not merge across an explicit
+music-only row. Ordinary nearby dialogue still groups up to 40 seconds to save
+quota, as requested. This change does not add per-word forced alignment inside
+those groups, and cannot detect every possible hallucination in generated audio.
+
+Changed spoken text gets a different audio-cache identity, so an old packet that
+actually included a removed music label is not reused. Valid cached narration,
+model/voice locks, pause-on-exhaustion, and speed caps are retained.
