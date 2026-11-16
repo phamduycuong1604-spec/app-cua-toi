@@ -65,7 +65,8 @@ export function sangBase64(byte) {
 //   Khung có tiếng nói = đủ to và không rè (tiếng rè đổi dấu liên tục). Phụ âm s, x… liền với tiếng nói thì giữ
 //   (tối đa 0,15 giây); tạp âm cách lời đọc bởi khoảng lặng hoặc dài hơn thì cắt bỏ
 // - Làm mềm 2 đầu (vào 10 ms, ra 30 ms) cho khỏi "bụp/tách"
-// - Chỉnh âm lượng theo mức to thật của lời (bỏ qua vài mẫu vọt), khuếch đại tối đa 2 lần để không thổi to tạp âm
+// - Chỉnh âm lượng theo độ to TRUNG BÌNH của lời nói (mọi đoạn to đều nhau, không chỗ to chỗ nhỏ khi chuyển đoạn),
+//   khuếch đại tối đa 2 lần để không thổi to tạp âm, không để đỉnh vượt 0,95
 export function lamGon(mau) {
   const n = mau.length;
   if (!n) return new Float32Array(0);
@@ -105,10 +106,14 @@ export function lamGon(mau) {
   const den = Math.min(n, (cuoi + 1) * KHUNG + Math.round(TAN_SO_DOC * 0.04));
   const ra = new Float32Array(den - tu);
   for (let i = 0; i < ra.length; i++) ra[i] = mau[tu + i] - tb;
-  // mức to thật: mẫu thứ 99,9% (bỏ qua vài mẫu vọt lên do tạp âm)
+  // độ to trung bình của các khung có tiếng nói (không tính khoảng lặng giữa câu)
+  let eNoi = 0, soNoi = 0;
+  for (let k = dau; k <= cuoi; k++) if (rms[k] >= nguong) { eNoi += rms[k] * rms[k]; soNoi++; }
+  const toNoi = soNoi ? Math.sqrt(eNoi / soNoi) : 0;
+  // đỉnh thật: mẫu thứ 99,9% (bỏ qua vài mẫu vọt lên do tạp âm)
   const tuyetDoi = Float32Array.from(ra, Math.abs).sort();
   const dinh = tuyetDoi[Math.floor((tuyetDoi.length - 1) * 0.999)] || 0;
-  const tang = dinh > 0 ? Math.min(2, 0.85 / dinh) : 1;
+  const tang = toNoi > 0 && dinh > 0 ? Math.min(2, 0.16 / toNoi, 0.95 / dinh) : 1;
   const vao = Math.min(Math.round(TAN_SO_DOC * 0.01), ra.length >> 1), ra2 = Math.min(Math.round(TAN_SO_DOC * 0.03), ra.length >> 1);
   for (let i = 0; i < ra.length; i++) {
     let he = tang;

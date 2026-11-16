@@ -36,5 +36,9 @@ for (const goc of ["../am-thanh.js", "../../pha-rednote/web/phaha/am-thanh.js"])
   // không bao giờ trả về rỗng khi có âm thanh (kể cả âm thanh lạ: chỉ DC, vài mẫu đổi dấu)
   assert.ok(lamGon(new Float32Array(2400).fill(0.3)).length > 0, `${goc}: đoạn chỉ có DC bị xoá sạch`);
   assert.ok(lamGon(Float32Array.from([0.37, -0.37, 0.37, -0.37])).length === 4, `${goc}: đoạn ngắn bị xoá`);
+  // 2 lượt đọc to nhỏ khác nhau → sau khi làm sạch to đều nhau (chuyển đoạn không bị chỗ to chỗ nhỏ)
+  const doTo = (v) => Math.sqrt(v.reduce((t, x) => t + x * x, 0) / v.length);
+  const a1 = lamGon(giong(1, 0.2)), a2 = lamGon(giong(1, 0.5));
+  assert.ok(Math.abs(doTo(a1) / doTo(a2) - 1) < 0.1, `${goc}: 2 đoạn to nhỏ khác nhau (${doTo(a1).toFixed(3)} / ${doTo(a2).toFixed(3)})`);
   console.log(`✅ ${goc}: làm sạch giọng đúng (${dai.toFixed(2)} giây)`);
 }
