@@ -71,6 +71,7 @@ async function chay(ten, o) {
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
+    if (u.includes("tts") && o.tts503?.test(u)) { dem("gemTTS"); return rt.fulfill({ status: 503, headers: J, body: JSON.stringify({ error: { code: 503, message: "This model is currently experiencing high demand." } }) }); }
     if (u.includes("tts") && o.gemPhutNgan?.[khoaGui] && !goi["phutNgan:" + khoaGui]) { dem("phutNgan:" + khoaGui); dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: o.gemPhutNgan[khoaGui] + "s" }] } }) }); }
     if (u.includes("tts") && (o.gemPhut || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "45s" }] } }) }); }
     if (u.includes("tts") && o.tts404 && o.tts404.test(u) && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 404, headers: J, body: JSON.stringify({ error: { code: 404, message: "models/x is not found for API version v1beta, or is not supported for generateContent." } }) }); }
@@ -306,16 +307,23 @@ const KICH_BAN = {
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = [...new Set(await p.evaluate(() => globalThis.__phahaMhDoc || []))];
         kq.mhDung = mh;
         if (mh.length !== 1 || !/3\.8-flash-tts/.test(mh[0])) kq.loi = "Đọc bằng nhiều loại Gemini (giọng lệch): " + mh.join(", ");
-        else if (!/Ưu tiên gemini-3.8-flash-tts/.test(nk) || !/Chuyển sang mã 2\/2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
-  // Loại đang dùng hết lượt ở MỌI mã → chỉ các đoạn CÒN THIẾU đọc bằng loại khác; đoạn đã đọc giữ nguyên (không đọc lại)
+        else if (!/Cả video đọc bằng gemini-3.8-flash-tts/.test(nk) || !/Chuyển sang mã 2\/2/.test(nk)) kq.loi = "Không đổi mã để giữ 1 loại Gemini"; } },
+  // Loại đang dùng hết lượt ở MỌI mã giữa chừng → đọc lại CẢ video bằng loại khác (video chỉ 1 giọng, không ghép 2 loại)
   "27h-gemini-doi-loai-khi-het-moi-ma": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, cau: CAU_THUA,
       gemHetSau: { "MA-DOC-111111": { mh: "3.8-flash-tts", sau: 1 }, "MA-DOC-222222": { mh: "3.8-flash-tts", sau: 0 } },
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = await p.evaluate(() => globalThis.__phahaMhDoc || []);
-        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); kq.mhDung = mh;
-        const soDoan = Number(/Đã đọc (\d+) lượt/.exec(nk)?.[1]);
-        if (!/các đoạn CÒN THIẾU đọc bằng gemini-3.1/.test(nk)) kq.loi = "Không đổi loại cho các đoạn còn thiếu";
+        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        const soDoan = Number(/Đã đọc (\d+) lượt/.exec(nk)?.[1]), cuoi = [...new Set(mh.slice(-soDoan))];
+        kq.mhVideo = cuoi;
+        if (!/đọc lại CẢ video bằng loại Gemini khác/.test(nk)) kq.loi = "Không đọc lại cả video bằng loại khác";
         else if (!/Gemini/.test(kq.docBang)) kq.loi = "Không đọc bằng Gemini: " + kq.docBang;
-        else if (mh.length !== soDoan || !/3\.8/.test(mh[0])) kq.loi = `Đọc lại đoạn đã có (${mh.length} lần đọc cho ${soDoan} đoạn): ${mh.join(", ")}`; } },
+        else if (cuoi.length !== 1 || !/3\.1/.test(cuoi[0])) kq.loi = "Video ghép nhiều loại Gemini (2 giọng): " + mh.join(", "); } },
+  // Google báo quá tải (503) loại 3.8 ở mọi mã → bỏ loại đó, cả video đọc bằng 3.1 (không xoay mã mãi)
+  "27n-gemini-qua-tai-doi-loai": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222, MA-DOC-333333", bat: { ...DU, el: false } }, cau: CAU_THUA, tts503: /3\.8-flash-tts/, han: 300000,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"), mh = [...new Set(await p.evaluate(() => globalThis.__phahaMhDoc || []))];
+        kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80); kq.mhDung = mh;
+        if (!/quá tải → đọc lại CẢ video/.test(nk)) kq.loi = "Không bỏ loại quá tải";
+        else if (mh.length !== 1 || !/3\.1/.test(mh[0]) || !/Gemini/.test(kq.docBang)) kq.loi = "Không đọc cả video bằng 1 loại khác: " + mh.join(", "); } },
   // Mã 1 bị giới hạn mỗi phút, Google bảo chờ 45 giây (> 15) → khoá tạm, đổi ngay sang mã 2
   "27e-gemini-xoay-khi-cho-phut": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111, MA-DOC-222222", bat: { ...DU, el: false } }, gemPhut: ["MA-DOC-111111"],
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.xoay = nk.match(/Khoá tạm[^\n]*/g); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);

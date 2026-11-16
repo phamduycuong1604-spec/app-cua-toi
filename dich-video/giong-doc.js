@@ -7,7 +7,7 @@ import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
-import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, uuTienMoHinh } from "./doc-gemini.js";
+import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, dungLaiDoan, moHinhDocChot, batDauLongTiengGemini, boLoaiDoc } from "./doc-gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
@@ -427,22 +427,25 @@ export function dvDocDung(imLang) {
 
 // Đọc 1 câu → âm thanh 24.000 mẫu/giây đã cắt lặng. Giữ trong bộ nhớ để "Làm lại" khỏi đọc lại
 const khoGiong = new Map(); // "dịch vụ|giọng|câu" → { mau, mh }
+// Khoá bộ nhớ của 1 đoạn: dịch vụ + giọng (+ LOẠI Gemini: mỗi loại đọc cùng tên giọng vẫn nghe khác) + chữ
+function khoaGiong(chu, dv, mh = moHinhDocChot()) {
+  const c = caiDat.dv[dv] || {};
+  return [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : dv === "gemini" ? mh || "" : "", chu].join("|");
+}
 export async function docCau(chu, dv) {
   chu = chuanHoaDoc(chu);
   if (!chu) return new Float32Array(0);
-  const c = caiDat.dv[dv] || {};
-  const khoa = [dv, dv === "gemini" ? caiDat.giong : dv === "gc" ? giongGcLanNay || c.giong : c.giong || "", dv === "el" ? c.mh : "", chu].join("|");
-  // Đoạn đã đọc thành công ở lần trước → dùng lại luôn, không tốn lượt (Gemini: ưu tiên loại đã đọc đoạn đó cho giọng đồng nhất)
-  const daCo = khoGiong.get(khoa);
+  // Đoạn đã đọc thành công ở lần trước (Gemini: đúng loại đang dùng cho cả video) → dùng lại luôn, không tốn lượt
+  const daCo = khoGiong.get(khoaGiong(chu, dv));
   if (daCo) {
-    if (dv === "gemini") uuTienMoHinh(daCo.mh);
+    if (dv === "gemini") dungLaiDoan();
     return daCo.mau;
   }
   const kq = await DICH_VU[dv].doc(chu);
   let mau = kq.mau || Float32Array.from(kq.pcm, (v) => v / 32768);
   if (kq.tanSo !== TAN_SO_DOC) mau = doiTanSo(mau, kq.tanSo, TAN_SO_DOC);
   mau = lamGon(mau);
-  khoGiong.set(khoa, { mau, mh: kq.moHinh || "" });
+  khoGiong.set(khoaGiong(chu, dv, kq.moHinh), { mau, mh: kq.moHinh || "" });
   return mau;
 }
 
@@ -496,7 +499,7 @@ async function longTiengThu() {
           continue;
         }
       }
-      return await longTiengBangThat(dv);
+      return await longTiengBang(dv);
     } catch (loi) {
       loiCuoi = loi;
       if (loi.hetLuot && dv === "el") ghiDvHetThang("el");
@@ -506,9 +509,25 @@ async function longTiengThu() {
   throw loiCuoi;
 }
 
+// Gemini: cả video 1 loại. Loại đang dùng không đọc tiếp được → đọc lại CẢ video bằng loại khác
+// (không ghép 2 loại trong 1 video; đoạn đã đọc vẫn nằm trong bộ nhớ, lần sau dùng lại được)
+async function longTiengBang(dv) {
+  if (dv !== "gemini") return longTiengBangThat(dv);
+  batDauLongTiengGemini();
+  for (let lan = 0; ; lan++) {
+    try {
+      return await longTiengBangThat(dv);
+    } catch (loi) {
+      if (!loi?.doiLoai || lan >= 4) throw loi;
+      boLoaiDoc(loi.doiLoai);
+      nhat(`↻ ${loi.message} → đọc lại CẢ video bằng loại Gemini khác để cả video chỉ 1 giọng`);
+    }
+  }
+}
 async function longTiengBangThat(dv) {
   const cau = chiaNhom(cauDocDuoc(), dv);
-  if (dv === "gemini") batDauDocGemini(cau.length); // mỗi lần lồng tiếng chọn lại loại Gemini ưu tiên cho cả video
+  // chốt 1 loại Gemini cho cả video (ưu tiên loại đã đọc sẵn nhiều đoạn trong bộ nhớ)
+  if (dv === "gemini") batDauDocGemini(cau.length, (mh) => cau.filter((c) => khoGiong.has(khoaGiong(chuanHoaDoc(c.vi), "gemini", mh))).length);
   const boQua = S.cacCau.length - cauDocDuoc().length;
   if (boQua) nhat(`⚠️ ${boQua}/${S.cacCau.length} câu không có lời Việt để đọc (chưa dịch được) – xem các dòng trống trong bảng lời thoại để điền`);
   const donVi = dv === "gemini" ? "lượt đọc" : "câu";

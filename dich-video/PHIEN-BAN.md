@@ -3,6 +3,14 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.16.3
+- Cả video chỉ 1 giọng: chốt 1 loại Gemini ngay từ đầu cho cả video. Loại đó hết lượt hoặc Google báo quá tải
+  thì đọc lại CẢ video bằng loại khác (không còn ghép 2 loại giọng trong 1 video). Đoạn đã đọc được lưu theo
+  từng loại, lần làm lại không lấy nhầm đoạn của loại khác.
+- Google quá tải (lỗi 503) ở nhiều mã → bỏ loại đó ngay, không xoay mã mãi; chờ quá 2 phút cũng đổi loại.
+- Bớt tiếng "xoẹt" khi chuyển đoạn: mọi đoạn giọng to đều nhau; nhạc nền ở khúc còn sót giọng gốc
+  giảm/tăng từ từ (0,4 giây) và không bật tắt liên tục giữa các câu.
+
 ## 2026.11.16.2
 - Hiện số phiên bản ở đầu trang và trong nhật ký; thêm trang ghi các thay đổi này.
 

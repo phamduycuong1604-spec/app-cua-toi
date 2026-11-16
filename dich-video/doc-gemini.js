@@ -4,7 +4,9 @@
 // - Ghi nhớ trên máy theo từng cặp (mã + loại Gemini): đã dùng bao nhiêu lượt hôm nay, hết ngày chưa, đang khoá tạm đến lúc nào
 // - Google bảo chờ ≤ 15 giây → chờ rồi gửi lại CÙNG mã; lâu hơn → khoá tạm cặp đó, đổi sang mã khác
 // - Báo hết lượt ngày (…PerDay…) → cặp đó nghỉ tới hôm sau (giờ Mỹ), không thử lại nữa
-// - Loại đọc được đoạn đầu tiên được ưu tiên cho cả video; hết lượt ở MỌI mã mới đổi loại, chỉ cho các đoạn còn thiếu
+// - CẢ VIDEO CHỈ 1 LOẠI GEMINI + 1 GIỌNG (mỗi loại đọc cùng tên giọng vẫn nghe khác nhau): chốt loại ngay từ đầu.
+//   Loại đó không đọc tiếp được (hết lượt ở mọi mã, Google quá tải lâu) → báo doiLoai để app đọc lại CẢ video
+//   bằng loại khác, không bao giờ ghép 2 loại trong 1 video
 // - Hết sạch mọi loại ở mọi mã → báo HET_NGAY ngay để app chuyển sang giọng kế tiếp (không chờ)
 // =====================================================
 import { API_GEMINI, caiDat, nhat, cho, docLuu, ghiLuu, demDung, ngayMy, vanTayMa, maHopLe, LOI_MA_LA } from "./nen.js";
@@ -33,24 +35,39 @@ const ten = (k, mh) => k.vt + ":" + mh;
 const cap = (k, mh) => (st().cap[ten(k, mh)] ||= { dung: 0 });
 
 // ----- Trạng thái của 1 lần lồng tiếng -----
-let mhUuTien = null; // loại đọc được đoạn đầu tiên → ưu tiên cho cả video
+let mhChot = null; // loại Gemini đọc CẢ video này
 let conCan = 0; // số đoạn còn phải đọc trong lần này
 let soMa = 0; // mã đang dùng (giữ nguyên tới khi mã đó không dùng được)
 const maBo = new Set(); // mã sai / không có quyền / có ký tự lạ (bỏ trong lần này)
 let loiMa = null;
+const loaiBo = new Set(); // loại đã bỏ trong lần xuất video này (hết lượt / quá tải) → không chọn lại
+const quaTai = {}; // loại → các mã vừa bị Google báo quá tải (503)
+let daCho = 0; // giây đã ngồi chờ vì mọi mã đều khoá tạm (với loại đang chốt)
 
-export function batDauDocGemini(soDoan = 0) {
-  mhUuTien = null;
+export const moHinhDocChot = () => mhChot;
+// Bắt đầu lồng tiếng 1 video (gọi 1 lần, trước các lần đọc lại cả video bằng loại khác)
+export function batDauLongTiengGemini() {
+  loaiBo.clear();
+}
+export function boLoaiDoc(mh) {
+  loaiBo.add(mh);
+}
+// Bắt đầu đọc cả video: chốt NGAY 1 loại Gemini. daCoTheoLoai(mh) = số đoạn đã có sẵn trong bộ nhớ của loại đó
+// (ưu tiên loại đã đọc sẵn nhiều nhất để khỏi tốn lượt, miễn còn dùng được)
+export function batDauDocGemini(soDoan = 0, daCoTheoLoai = () => 0) {
   conCan = soDoan;
   soMa = 0;
   maBo.clear();
   loiMa = null;
   tt = null;
+  daCho = 0;
+  for (const k of Object.keys(quaTai)) delete quaTai[k];
+  mhChot = chonLoai(dsMa().filter((k) => maHopLe(k.khoa)), daCoTheoLoai);
+  if (mhChot) nhat(`🎙️ Cả video đọc bằng ${mhChot} / ${caiDat.giong} (1 loại, 1 giọng cho cả video)`);
 }
-// Đoạn lấy lại từ bộ nhớ (đọc ở lần trước) → ưu tiên luôn loại đã đọc đoạn đó cho giọng đồng nhất
-export function uuTienMoHinh(mh) {
+// Đoạn lấy lại từ bộ nhớ (đã đọc ở lần trước, cùng loại) → bớt 1 đoạn phải đọc
+export function dungLaiDoan() {
   conCan = Math.max(0, conCan - 1);
-  if (!mhUuTien && mh) mhUuTien = mh;
 }
 // Đổi mã / bấm Lưu (có thể vừa nâng lên trả phí) → quên hết lượt / khoá tạm, thử lại thật
 export function quenLuotDoc() {
@@ -79,17 +96,20 @@ function conLuot(k, mh) {
   return Math.max(hoc ? 0 : 1, (hoc || LUOT_UOC) - cap(k, mh).dung);
 }
 
-// Chọn loại Gemini: loại đang ưu tiên nếu còn dùng được ở ít nhất 1 mã; không thì loại đầu tiên (theo thứ tự)
-// còn đủ lượt cho mọi đoạn còn lại (cả video 1 giọng); không loại nào đủ thì loại còn nhiều lượt nhất
-function chonLoai(cacMa) {
-  if (mhUuTien && cacLoai().includes(mhUuTien) && cacMa.some((k) => dungDuoc(k, mhUuTien))) return mhUuTien;
-  const luot = cacLoai().map((mh) => [mh, cacMa.reduce((s, k) => s + conLuot(k, mh), 0)]).filter(([, n]) => n > 0);
-  const du = luot.find(([, n]) => n >= Math.max(1, conCan));
-  const tot = (du || luot.reduce((a, b) => (b[1] > a[1] ? b : a), luot[0]) || [null])[0];
-  if (tot && mhUuTien && tot !== mhUuTien) nhat(`↪️ ${mhUuTien} đã hết lượt ở mọi mã → các đoạn CÒN THIẾU đọc bằng ${tot} (đoạn đã đọc giữ nguyên)`);
-  if (tot && mhUuTien !== tot) mhUuTien = null;
-  return tot;
+// Chọn 1 loại cho cả video: loại đã đọc sẵn nhiều đoạn nhất (nếu còn đủ lượt cho phần còn thiếu);
+// không có thì loại đầu tiên (theo thứ tự) còn đủ lượt cho cả video; không loại nào đủ thì loại còn nhiều lượt nhất
+function chonLoai(cacMa, daCoTheoLoai = () => 0) {
+  const luot = cacLoai()
+    .filter((mh) => !loaiBo.has(mh))
+    .map((mh) => ({ mh, n: cacMa.reduce((s, k) => s + conLuot(k, mh), 0), co: daCoTheoLoai(mh) }))
+    .filter((x) => x.n > 0 || (x.co && x.co >= conCan));
+  if (!luot.length) return null;
+  const daCo = luot.filter((x) => x.co > 0 && x.n >= conCan - x.co).sort((a, b) => b.co - a.co)[0];
+  const du = luot.find((x) => x.n >= Math.max(1, conCan));
+  return (daCo || du || luot.reduce((a, b) => (b.n > a.n ? b : a))).mh;
 }
+// Loại đang chốt không đọc tiếp được → app đọc lại CẢ video bằng loại khác (giọng đồng nhất)
+const doiLoai = (mh, lyDo) => Object.assign(new Error(`${mh} ${lyDo}`), { doiLoai: mh });
 // Chọn mã cho loại đó: giữ mã đang dùng nếu còn được; mã nào cũng đang khoá tạm → trả về thời điểm mở khoá sớm nhất
 function chonMa(cacMa, mh) {
   const dung = cacMa.filter((k) => dungDuoc(k, mh));
@@ -135,10 +155,8 @@ function ghiDung(k, mh) {
   if (c.dung > 15 && !st().hoc[ten(k, mh)]) st().traPhi[k.vt] = true;
   luu();
   demDung(`gm:${k.vt}:doc`, 1, ngayMy());
-  if (!mhUuTien) {
-    mhUuTien = mh;
-    nhat(`🎙️ Ưu tiên ${mh} cho cả video (giọng đồng nhất; mã hết lượt thì đổi mã, chưa đổi loại)`);
-  }
+  delete quaTai[mh];
+  daCho = 0;
 }
 function ghiHetNgay(k, mh) {
   const c = cap(k, mh);
@@ -233,6 +251,8 @@ async function goiMot(k, mh, chu) {
     }
     if (r.status >= 500) {
       if (++loiMay <= 2) { await cho(r.status === 503 ? 3 : 5); continue; }
+      // Google quá tải cả LOẠI này (không phải lỗi của mã): ghi lại; đủ nhiều mã cùng báo thì bỏ loại này
+      (quaTai[mh] ||= new Set()).add(k.vt);
       khoaTam(k, mh, 30);
       return null;
     }
@@ -250,13 +270,18 @@ export async function docGeminiTTS(chu) {
   }
   for (let vong = 0; vong < 100; vong++) {
     if (cacMa.every((k) => maBo.has(k.vt))) throw loiMa || new Error("Chưa có mã Gemini cho giọng đọc.");
-    const mh = chonLoai(cacMa);
+    const mh = mhChot;
     if (!mh) throw Object.assign(new Error("HET_NGAY"), { hetGemini: true });
+    const dung = cacMa.filter((k) => dungDuoc(k, mh));
+    if (!dung.length) throw doiLoai(mh, "đã hết lượt hôm nay ở mọi mã");
+    if ((quaTai[mh]?.size || 0) >= Math.min(3, dung.length)) throw doiLoai(mh, "đang bị Google báo quá tải");
     const { k, moKhoa } = chonMa(cacMa, mh);
     if (!k) {
       const giay = Math.max(1, Math.ceil((moKhoa - Date.now()) / 1000));
+      if (daCho + giay > 120) throw doiLoai(mh, "phải chờ quá lâu (mọi mã đang bị khoá tạm)");
       nhat(`⏳ ${mh}: mọi mã đang bị khoá tạm → chờ ${giay} giây`);
-      await cho(Math.min(giay, 120), "long");
+      daCho += giay;
+      await cho(giay, "long");
       continue;
     }
     if (k.so - 1 !== soMa) {

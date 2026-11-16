@@ -233,7 +233,10 @@ function dapGiongSot(wav) {
     if (ob > oa && eg > 1e-5 * (ob - oa) && en / eg > 0.65) sot.push([a, b]);
   }
   if (!sot.length) return;
-  const GIAM = 0.15, mo = Math.round(0.1 * 44100);
+  // gộp các khúc gần nhau (cách < 1,5 giây) → nhạc nền không to/nhỏ liên tục giữa các câu (nghe như tiếng "xoẹt")
+  for (let i = sot.length - 1; i > 0; i--) if (sot[i][0] - sot[i - 1][1] < 1.5) { sot[i - 1][1] = sot[i][1]; sot.splice(i, 1); }
+  // giảm còn 30%, chuyển từ từ trong 0,4 giây
+  const GIAM = 0.3, mo = Math.round(0.4 * 44100);
   for (const [a, b] of sot) {
     const ia = Math.round(a * 44100), ib = Math.min(pcm.length / 2, Math.round(b * 44100));
     for (let i = Math.max(0, ia - mo); i < Math.min(pcm.length / 2, ib + mo); i++) {
