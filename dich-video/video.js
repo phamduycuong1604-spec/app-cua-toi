@@ -284,15 +284,15 @@ export async function xuatVideo(wav, tt, wavNen, hinh, giamTheoLoi) {
       dapGiongSot(ban);
       await ff.writeFile(tepNen, ban);
     }
-    thamSo.push("-i", tepNen, "-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    thamSo.push("-i", tepNen, "-filter_complex", `[${soVao}:a]volume=${caiDat.amNen / 100}[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:attack=5:release=50:level=0[am]`);
     chonAm = "[am]";
     soVao++;
   } else if (giamTheoLoi) {
     // Không tách được nhạc: lúc có lời thoại thì gần như tắt tiếng gốc, lúc khác giữ nhạc nền
-    thamSo.push("-filter_complex", `[0:a:0]volume='${bieuThucGiam()}':eval=frame[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    thamSo.push("-filter_complex", `[0:a:0]volume='${bieuThucGiam()}':eval=frame[nen];[nen][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:attack=5:release=50:level=0[am]`);
     chonAm = "[am]";
   } else if (tt.coTieng && caiDat.amGoc > 0) {
-    thamSo.push("-filter_complex", `[0:a:0]volume=${caiDat.amGoc / 100}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0[am]`);
+    thamSo.push("-filter_complex", `[0:a:0]volume=${caiDat.amGoc / 100}[goc];[goc][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:attack=5:release=50:level=0[am]`);
     chonAm = "[am]";
   } else {
     chonAm = "1:a";
