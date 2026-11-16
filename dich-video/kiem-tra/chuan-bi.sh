@@ -23,6 +23,7 @@ taoVideo() { # ten, giay, kichthuoc, kenh(0=không tiếng), them
 [ -f dai12.mp4 ] || taoVideo dai12.mp4 725 320x180 2   # video 12 phút (thử 300/500 câu)
 [ -f dai20.mp4 ] || taoVideo dai20.mp4 1210 320x180 2  # video 20 phút
 [ -f thu.mp4 ] || ffmpeg -v error -y -f lavfi -i "testsrc=d=12:s=320x240:r=25" -f lavfi -i "sine=f=440:d=12" -ac 1 -c:v libx264 -c:a aac thu.mp4
+[ -f avc-pc.mp4 ] || ffmpeg -v error -y -f lavfi -i "testsrc=d=9.12:s=320x240:r=25" -c:v libx264 -pix_fmt yuv420p avc-pc.mp4
 [ -f logo.png ] || ffmpeg -v error -y -f lavfi -i "color=c=red:s=64x64,format=rgba" -frames:v 1 logo.png
 [ -f sine.mp3 ] || ffmpeg -v error -y -f lavfi -i "sine=f=330:d=1.5" -ar 24000 -ac 1 -b:a 48k sine.mp3
 echo "Xong: $(pwd)"
