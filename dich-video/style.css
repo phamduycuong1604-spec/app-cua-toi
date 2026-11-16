@@ -188,3 +188,6 @@ select.o-dich { appearance: auto; }
 .hop-dang-nhap .nut-chinh { width: 100%; margin-top: 16px; }
 .tt-tai-khoan { max-width: 720px; margin: 0 auto; padding: 0 16px; font-size: 13px; opacity: .8; }
 .nut-lien-ket { border: none; background: none; color: var(--nut-chinh); font: inherit; text-decoration: underline; padding: 0; cursor: pointer; }
+
+/* số phiên bản ở đầu trang (bấm xem các thay đổi) */
+.phien-ban { color: inherit; opacity: 0.75; text-decoration: none; white-space: nowrap; }

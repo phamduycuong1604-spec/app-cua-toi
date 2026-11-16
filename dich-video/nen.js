@@ -7,6 +7,9 @@ import { KENH, KENH_MAC_DINH, QUY_TAC_RIENG_SAN } from "./chuyen-mon.js";
 
 export const $ = (id) => document.getElementById(id);
 export const API_GEMINI = "https://generativelanguage.googleapis.com/v1beta";
+// PHIÊN BẢN APP: mỗi lần sửa và đưa lên app thì tăng số này (năm.tháng.ngày.lần-trong-ngày)
+// và ghi thay đổi vào PHIEN-BAN.md. Hiện ở đầu trang và dòng đầu nhật ký để biết máy đang chạy bản nào.
+export const PHIEN_BAN = "2026.11.16.2";
 export const TAN_SO_NGHE = 16000; // âm thanh gửi đi nghe: 16.000 mẫu/giây, 1 kênh
 export const TAN_SO_DOC = 24000; // giọng đọc trả về / ghép vào video
 export const DOAN_NGHE = 90; // mỗi lần gửi khoảng 1,5 phút âm thanh (đoạn ngắn trả lời nhanh, gửi song song)

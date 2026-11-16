@@ -14,7 +14,7 @@
 //   giao-dien.js, cai-dat-ui.js, dong-bo-ui.js, kiem-ma.js  màn hình & cài đặt
 //   cua-vao.js    chỉ tài khoản do chủ app cấp (còn hạn) mới dùng được app
 // =====================================================
-import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo } from "./nen.js";
+import { $, caiDat, S, nhat, buoc, ghiChu, baoLoi, batDauNhat, giayDaChay, ghiDangChay, ghiMocCaiDat, moTaMay, dongHo, PHIEN_BAN } from "./nen.js";
 import { canVe, veLop, xuatHinh } from "./lop-phu.js";
 import { KENH } from "./chuyen-mon.js";
 import { batDauLanMoiGemini, maNghe } from "./gemini.js";
@@ -36,7 +36,7 @@ const canTachNhacLai = () => S.nhacNen?.tep !== S.tepVideo || S.nhacNen.loai !==
 
 function ghiCaiDatVaoNhat(lamTuDau) {
   const l = caiDat.lop;
-  nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")}`);
+  nhat(`BẮT ĐẦU ${lamTuDau ? "(làm từ đầu)" : "(làm lại)"} · ${new Date().toLocaleString("vi-VN")} · bản ${PHIEN_BAN}`);
   nhat(`Máy: ${moTaMay()}`);
   nhat(`Video: ${S.tepVideo.name} · ${(S.tepVideo.size / 1048576).toFixed(1)}MB`);
   nhat([
@@ -261,6 +261,8 @@ async function buocVeHinh(kq) {
 }
 
 // ----- MỞ APP -----
+$("phien-ban").textContent = "bản " + PHIEN_BAN;
+$("phien-ban-dn").textContent = `(bản ${PHIEN_BAN})`;
 khoiDongGiaoDien();
 khoiDongCaiDat();
 khoiDongDongBo();
