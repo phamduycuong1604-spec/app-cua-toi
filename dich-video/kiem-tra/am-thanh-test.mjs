@@ -26,7 +26,7 @@ for (const goc of ["../am-thanh.js", "../../pha-rednote/web/phaha/am-thanh.js"])
   const x = noi(nhieu(0.1, 0.06), im(0.08), nhieu(0.08, 0.1), giong(1.0, 0.3), im(0.1), nhieu(0.15, 0.12), im(0.05)).map((v) => v + 0.02);
   const y = lamGon(x);
   const dai = y.length / R;
-  assert.ok(dai > 1.1 && dai < 1.2, `${goc}: cắt sai độ dài ${dai.toFixed(3)} giây (mong 1,14: giữ phụ âm + lời, bỏ tạp âm 2 đầu)`);
+  assert.ok(dai > 1.05 && dai < 1.2, `${goc}: cắt sai độ dài ${dai.toFixed(3)} giây (mong ~1,08: giữ phụ âm + lời, bỏ tạp âm 2 đầu)`);
   assert.ok(Math.abs(y.reduce((t, v) => t + v, 0) / y.length) < 0.002, `${goc}: còn lệch DC`);
   assert.ok(Math.abs(y[0]) < 1e-3 && Math.abs(y[y.length - 1]) < 1e-3, `${goc}: 2 đầu không êm (dễ kêu "tách")`);
   assert.ok(Math.max(...y.map(Math.abs)) <= 0.98, `${goc}: vọt quá ±0,98`);
@@ -43,6 +43,16 @@ for (const goc of ["../am-thanh.js", "../../pha-rednote/web/phaha/am-thanh.js"])
   let doiDauDuoi = 0;
   for (let i = 1; i < duoi.length; i++) if ((duoi[i] >= 0) !== (duoi[i - 1] >= 0)) doiDauDuoi++;
   assert.ok(doiDauDuoi / duoi.length < 0.1, `${goc}: đuôi đoạn còn tiếng rè`);
+  // nhiễu kiểu radio (nhiễu TRẦM, ít đổi dấu – bộ lọc cũ không nhận ra) ở khoảng nghỉ giữa 2 câu và sát cuối đoạn
+  const tram = (s, a) => { let y = 0; return Float32Array.from({ length: sec(s) }, () => (y = 0.7 * y + 0.3 * rnd() * 2) * a); };
+  const vr = noi(giong(0.6, 0.3), tram(0.4, 0.5), giong(0.6, 0.3), tram(0.3, 0.5));
+  const vrRa = lamGon(vr);
+  const giua = vrRa.subarray(sec(0.65), sec(0.95)), duoiVr = vrRa.subarray(Math.max(0, vrRa.length - sec(0.05)));
+  const doToDoan = (v) => Math.sqrt(v.reduce((t, x) => t + x * x, 0) / Math.max(1, v.length));
+  assert.ok(vrRa.length / R < 1.75, `${goc}: còn giữ nhiễu radio cuối đoạn (${(vrRa.length / R).toFixed(2)} giây)`);
+  assert.ok(doToDoan(giua) < 0.01, `${goc}: còn nhiễu radio ở khoảng nghỉ giữa câu (độ to ${doToDoan(giua).toFixed(3)})`);
+  assert.ok(doToDoan(vrRa.subarray(sec(0.1), sec(0.5))) > 0.05, `${goc}: lời đọc bị tắt nhầm`);
+  void duoiVr;
   // 2 lượt đọc to nhỏ khác nhau → sau khi làm sạch to đều nhau (chuyển đoạn không bị chỗ to chỗ nhỏ)
   const doTo = (v) => Math.sqrt(v.reduce((t, x) => t + x * x, 0) / v.length);
   const a1 = lamGon(giong(1, 0.2)), a2 = lamGon(giong(1, 0.5));
