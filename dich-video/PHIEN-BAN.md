@@ -3,6 +3,11 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.17.3
+- Lọc tiếng nhiễu kiểu radio trong giọng Gemini: nhận biết tiếng nói bằng NHỊP RUNG của giọng (cao độ), không
+  chỉ bằng độ "rè chói" như trước → nhiễu trầm kiểu radio cũng bị lọc. Lọc cả ở khoảng nghỉ giữa các câu
+  (trước chỉ lọc 2 đầu mỗi lượt đọc). Phụ âm đầu từ (s, x, ph, th…) vẫn giữ nguyên.
+
 ## 2026.11.17.2
 - Cả video đọc CÙNG MỘT TỐC ĐỘ: khi lời Việt dài hơn lời gốc, app tính 1 tốc độ chung cho cả video; mỗi lượt
   chỉ được nhanh hơn tốc độ chung một chút. Trước đây lượt này tua 1,5 lần, lượt sau bị trễ phải tua gấp tới
