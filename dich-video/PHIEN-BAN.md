@@ -3,6 +3,12 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.17.1
+- Hết tiếng "xoẹt" cuối câu sau mỗi lượt Gemini đọc: bản trước còn giữ tới 0,15 giây tiếng rè dính sát sau lời
+  đọc; nay cắt hết (tiếng Việt không có từ tận cùng bằng âm gió nên không mất chữ), cuối đoạn nhỏ dần 50 ms.
+- Giọng đồng nhất hơn giữa các lượt: mọi lượt Gemini đọc với cùng độ ngẫu nhiên thấp (0,6) và cùng "hạt giống",
+  bớt cảnh lượt này cao/nhanh, lượt kia trầm/chậm. Loại Gemini nào không nhận thì tự gửi lại không kèm.
+
 ## 2026.11.16.3
 - Cả video chỉ 1 giọng: chốt 1 loại Gemini ngay từ đầu cho cả video. Loại đó hết lượt hoặc Google báo quá tải
   thì đọc lại CẢ video bằng loại khác (không còn ghép 2 loại giọng trong 1 video). Đoạn đã đọc được lưu theo

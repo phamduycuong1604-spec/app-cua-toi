@@ -18,6 +18,10 @@ export const MO_HINH_DOC = ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-previe
 const LUOT_UOC = 10; // lượt/ngày ước tính của 1 cặp mã + loại (Free Tier); hết lượt thật thì nhớ con số đúng
 const CHO_TOI_DA = 15; // giây
 const LUU = "phaha-dv-tts";
+// Giọng đồng nhất giữa các lượt: mặc định Gemini đọc khá "ngẫu hứng" (độ ngẫu nhiên 1) nên mỗi lượt cao/thấp,
+// nhanh/chậm khác nhau dù cùng loại + cùng giọng. Hạ độ ngẫu nhiên và dùng cùng 1 "hạt giống" cho mọi lượt.
+const ON_DINH = { temperature: 0.6, seed: 20261117 };
+let khongNhanOnDinh = false; // loại Gemini nào không nhận 2 tuỳ chọn này → gửi lại không kèm
 
 // ----- Trạng thái lưu trên máy -----
 // { ngay, cap: { "vt:loại": { dung, het, khoaDen } }, hoc: { "vt:loại": số lượt thật }, ngung: { "vt:loại": hạn }, traPhi: { vt: true } }
@@ -193,7 +197,11 @@ async function goiMot(k, mh, chu) {
         // Chỉ gửi đúng câu cần đọc (không kèm lời dặn: Gemini đời mới đọc to luôn lời dặn vào video)
         body: JSON.stringify({
           contents: [{ parts: [{ text: chu }] }],
-          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } } },
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: caiDat.giong } } },
+            ...(khongNhanOnDinh ? {} : ON_DINH),
+          },
         }),
         signal: huy.signal,
       });
@@ -239,6 +247,11 @@ async function goiMot(k, mh, chu) {
       }
       khoaTam(k, mh, tre || 60);
       return null;
+    }
+    if (r.status === 400 && !khongNhanOnDinh && /temperature|seed/i.test(tb)) {
+      khongNhanOnDinh = true;
+      nhat(`${mh} không nhận tuỳ chọn giữ giọng ổn định → gửi lại không kèm`);
+      continue;
     }
     if (/location is not supported/i.test(tb))
       throw Object.assign(new Error("Google đang chặn Gemini theo vị trí mạng của bạn (thường do VPN/proxy hoặc mạng nước ngoài). Tắt VPN hoặc đổi mạng (wifi ↔ 4G) rồi thử lại. Mã Gemini vẫn đúng."), { status: 400, viTri: true });

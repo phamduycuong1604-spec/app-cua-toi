@@ -36,6 +36,13 @@ for (const goc of ["../am-thanh.js", "../../pha-rednote/web/phaha/am-thanh.js"])
   // không bao giờ trả về rỗng khi có âm thanh (kể cả âm thanh lạ: chỉ DC, vài mẫu đổi dấu)
   assert.ok(lamGon(new Float32Array(2400).fill(0.3)).length > 0, `${goc}: đoạn chỉ có DC bị xoá sạch`);
   assert.ok(lamGon(Float32Array.from([0.37, -0.37, 0.37, -0.37])).length === 4, `${goc}: đoạn ngắn bị xoá`);
+  // tiếng rè dính SÁT ngay sau lời đọc (không có khoảng lặng) → vẫn phải cắt
+  const sat = lamGon(noi(giong(1.0, 0.3), nhieu(0.25, 0.15)));
+  assert.ok(sat.length / R < 1.05, `${goc}: còn giữ tiếng rè dính sát cuối câu (${(sat.length / R).toFixed(3)} giây, lời chỉ dài 1 giây)`);
+  const duoi = sat.subarray(sat.length - sec(0.05));
+  let doiDauDuoi = 0;
+  for (let i = 1; i < duoi.length; i++) if ((duoi[i] >= 0) !== (duoi[i - 1] >= 0)) doiDauDuoi++;
+  assert.ok(doiDauDuoi / duoi.length < 0.1, `${goc}: đuôi đoạn còn tiếng rè`);
   // 2 lượt đọc to nhỏ khác nhau → sau khi làm sạch to đều nhau (chuyển đoạn không bị chỗ to chỗ nhỏ)
   const doTo = (v) => Math.sqrt(v.reduce((t, x) => t + x * x, 0) / v.length);
   const a1 = lamGon(giong(1, 0.2)), a2 = lamGon(giong(1, 0.5));

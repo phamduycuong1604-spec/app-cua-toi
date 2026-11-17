@@ -71,6 +71,8 @@ async function chay(ten, o) {
   await p.route("https://generativelanguage.googleapis.com/**", async (rt) => { const u = rt.request().url(); const body = JSON.parse(rt.request().postData() || "{}");
     const khoaGui = rt.request().headers()["x-goog-api-key"];
     if (u.includes("tts")) (goi.khoaDoc ||= new Set()).add(khoaGui); else (goi.khoaNghe ||= new Set()).add(khoaGui);
+    if (u.includes("tts")) { const g = body.generationConfig || {}; (goi.ttsOnDinh ||= []).push(`${g.temperature ?? "-"}/${g.seed ?? "-"}`);
+      if (o.tuChoiSeed && g.seed != null) { dem("gemTTS"); return rt.fulfill({ status: 400, headers: J, body: JSON.stringify({ error: { code: 400, message: 'Invalid JSON payload received. Unknown name "seed" at generation_config' } }) }); } }
     if (u.includes("tts") && o.tts503?.test(u)) { dem("gemTTS"); return rt.fulfill({ status: 503, headers: J, body: JSON.stringify({ error: { code: 503, message: "This model is currently experiencing high demand." } }) }); }
     if (u.includes("tts") && o.gemPhutNgan?.[khoaGui] && !goi["phutNgan:" + khoaGui]) { dem("phutNgan:" + khoaGui); dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: o.gemPhutNgan[khoaGui] + "s" }] } }) }); }
     if (u.includes("tts") && (o.gemPhut || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }, { retryDelay: "45s" }] } }) }); }
@@ -359,6 +361,14 @@ const KICH_BAN = {
   "54-dap-giong-sot": { caiDat: { ...CD, bat: { ...DU, el: false }, tachNhac: true }, tachSot: true,
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
         if (!/🔇 Nhạc nền còn sót giọng gốc/.test(nk)) kq.loi = "Không phát hiện giọng gốc còn sót"; } },
+  // Mọi lượt đọc Gemini gửi cùng độ ngẫu nhiên thấp + cùng "hạt giống" (giọng đồng nhất giữa các lượt)
+  "27o-gemini-giong-on-dinh": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", bat: { ...DU, el: false } }, cau: CAU_THUA,
+      sau: async (p, kq) => { const ds = [...new Set(kq.goi.ttsOnDinh || [])]; kq.onDinh = ds;
+        if (ds.length !== 1 || ds[0] !== "0.6/20261117") kq.loi = "Các lượt đọc không cùng tuỳ chọn ổn định: " + ds.join(", "); } },
+  // Google không nhận "seed" → gửi lại không kèm, vẫn đọc bằng Gemini
+  "27p-gemini-khong-nhan-on-dinh": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", bat: { ...DU, el: false } }, tuChoiSeed: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/Gemini/.test(kq.docBang) || !/không nhận tuỳ chọn giữ giọng ổn định/.test(nk)) kq.loi = "Không tự bỏ tuỳ chọn khi Google từ chối: " + kq.docBang; } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },

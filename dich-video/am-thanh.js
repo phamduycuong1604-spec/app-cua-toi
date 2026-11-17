@@ -62,9 +62,10 @@ export function sangBase64(byte) {
 // Làm sạch 1 đoạn giọng đọc trước khi ghép vào video (TAN_SO_DOC = 24.000 mẫu/giây):
 // - Bỏ lệch DC (đoạn sau nối đoạn trước bị "tách" một tiếng)
 // - Cắt khoảng lặng VÀ tiếng rè "xoẹt" ở 2 đầu: Gemini hay kèm một chút tạp âm ngay trước / ngay sau lời đọc mỗi lượt.
-//   Khung có tiếng nói = đủ to và không rè (tiếng rè đổi dấu liên tục). Phụ âm s, x… liền với tiếng nói thì giữ
-//   (tối đa 0,15 giây); tạp âm cách lời đọc bởi khoảng lặng hoặc dài hơn thì cắt bỏ
-// - Làm mềm 2 đầu (vào 10 ms, ra 30 ms) cho khỏi "bụp/tách"
+//   Khung có tiếng nói = đủ to và không rè (tiếng rè đổi dấu liên tục). ĐẦU đoạn: phụ âm s, x, ph, th… liền với
+//   tiếng nói thì giữ (tối đa 0,15 giây). CUỐI đoạn: tiếng Việt không có từ nào tận cùng bằng âm gió (s, x…) nên
+//   chỉ giữ phần vang nhỏ dần của nguyên âm; mọi tiếng rè dính sau lời đọc (dù liền sát) đều cắt bỏ
+// - Làm mềm 2 đầu (vào 10 ms, ra 50 ms) cho khỏi "bụp/tách"
 // - Chỉnh âm lượng theo độ to TRUNG BÌNH của lời nói (mọi đoạn to đều nhau, không chỗ to chỗ nhỏ khi chuyển đoạn),
 //   khuếch đại tối đa 2 lần để không thổi to tạp âm, không để đỉnh vượt 0,95
 export function lamGon(mau) {
@@ -99,11 +100,14 @@ export function lamGon(mau) {
   if (dau >= soKhung) { khongRe = false; dau = 0; while (dau < soKhung && !coTieng(dau)) dau++; }
   if (dau >= soKhung) { dau = 0; cuoi = soKhung - 1; }
   else while (cuoi > dau && !coTieng(cuoi)) cuoi--;
-  // nới ra phụ âm liền kề (đủ to, không có khoảng lặng chen giữa), tối đa 15 khung
+  // đầu: nới ra phụ âm liền kề (đủ to, không có khoảng lặng chen giữa), tối đa 15 khung
   for (let t = 0; t < 15 && dau > 0 && rms[dau - 1] >= nguong * 0.5; t++) dau--;
-  for (let t = 0; t < 15 && cuoi < soKhung - 1 && rms[cuoi + 1] >= nguong * 0.5; t++) cuoi++;
+  // cuối: chỉ nới qua phần vang nhỏ dần KHÔNG rè, tối đa 10 khung
+  if (khongRe) for (let t = 0; t < 10 && cuoi < soKhung - 1 && rms[cuoi + 1] >= nguong * 0.3 && doiDau[cuoi + 1] < 0.25; t++) cuoi++;
   const tu = Math.max(0, dau * KHUNG - Math.round(TAN_SO_DOC * 0.02));
-  const den = Math.min(n, (cuoi + 1) * KHUNG + Math.round(TAN_SO_DOC * 0.04));
+  // đệm 20 ms sau lời đọc chỉ khi ngay sau đó không phải tiếng rè
+  const dem = cuoi < soKhung - 1 && doiDau[cuoi + 1] >= 0.25 ? 0 : Math.round(TAN_SO_DOC * 0.02);
+  const den = Math.min(n, (cuoi + 1) * KHUNG + dem);
   const ra = new Float32Array(den - tu);
   for (let i = 0; i < ra.length; i++) ra[i] = mau[tu + i] - tb;
   // độ to trung bình của các khung có tiếng nói (không tính khoảng lặng giữa câu)
@@ -114,7 +118,7 @@ export function lamGon(mau) {
   const tuyetDoi = Float32Array.from(ra, Math.abs).sort();
   const dinh = tuyetDoi[Math.floor((tuyetDoi.length - 1) * 0.999)] || 0;
   const tang = toNoi > 0 && dinh > 0 ? Math.min(2, 0.16 / toNoi, 0.95 / dinh) : 1;
-  const vao = Math.min(Math.round(TAN_SO_DOC * 0.01), ra.length >> 1), ra2 = Math.min(Math.round(TAN_SO_DOC * 0.03), ra.length >> 1);
+  const vao = Math.min(Math.round(TAN_SO_DOC * 0.01), ra.length >> 1), ra2 = Math.min(Math.round(TAN_SO_DOC * 0.05), ra.length >> 1);
   for (let i = 0; i < ra.length; i++) {
     let he = tang;
     if (i < vao) he *= 0.5 - 0.5 * Math.cos((Math.PI * i) / vao);
