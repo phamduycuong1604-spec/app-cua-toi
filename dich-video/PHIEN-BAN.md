@@ -3,6 +3,11 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.17.2
+- Cả video đọc CÙNG MỘT TỐC ĐỘ: khi lời Việt dài hơn lời gốc, app tính 1 tốc độ chung cho cả video; mỗi lượt
+  chỉ được nhanh hơn tốc độ chung một chút. Trước đây lượt này tua 1,5 lần, lượt sau bị trễ phải tua gấp tới
+  1,9 lần → nghe như 2 giọng khác nhau và có tiếng "xoẹt" ở chỗ nối giữa 2 lượt Gemini.
+
 ## 2026.11.17.1
 - Hết tiếng "xoẹt" cuối câu sau mỗi lượt Gemini đọc: bản trước còn giữ tới 0,15 giây tiếng rè dính sát sau lời
   đọc; nay cắt hết (tiếng Việt không có từ tận cùng bằng âm gió nên không mất chữ), cuối đoạn nhỏ dần 50 ms.

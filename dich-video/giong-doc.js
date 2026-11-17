@@ -591,9 +591,20 @@ async function docTatCa(cau, dv, donVi) {
 // Đặt từng câu vào đúng thời điểm. Câu Việt dài hơn chỗ trống thì đọc nhanh hơn (tối đa 1,6 lần);
 // vẫn dài thì câu sau LÙI lại một chút thay vì đè lên nhau (2 giọng chồng nhau nghe như mất chữ).
 // Đang bị trễ so với hình thì cho đọc nhanh hơn nữa (tối đa 1,9 lần) để đuổi kịp.
+// TỐC ĐỘ ĐỀU: tính 1 tốc độ chung cho cả video (tổng độ dài giọng / tổng chỗ trống); mỗi câu/lượt chỉ được nhanh
+// hơn tốc độ chung một chút. Không còn cảnh lượt này 1,5 lần, lượt sau tua gấp 1,9 lần → nghe như 2 giọng khác
+// nhau và rè "xoẹt" ở chỗ nối.
 function xepGiongVaoVideo(cau, cacGiong) {
   const tong = new Float32Array(Math.ceil(S.thoiLuong * TAN_SO_DOC) + TAN_SO_DOC);
   let conTro = 0, soTre = 0, treMax = 0;
+  let canDoc = 0, choTrong = 0;
+  cau.forEach((c, i) => {
+    if (!cacGiong[i]?.length) return;
+    canDoc += cacGiong[i].length / TAN_SO_DOC;
+    choTrong += Math.max(0.3, (cau[i + 1] ? cau[i + 1].start : S.thoiLuong) - c.start - 0.08);
+  });
+  const chung = Math.min(NHANH_TOI_DA, Math.max(1, choTrong ? canDoc / choTrong : 1));
+  if (chung > 1.02) nhat(`Lời Việt dài hơn lời gốc → cả video đọc nhanh đều ${chung.toFixed(2)} lần (không lúc nhanh lúc chậm)`);
   cau.forEach((c, i) => {
     let mau = cacGiong[i];
     if (!mau.length) return;
@@ -602,7 +613,10 @@ function xepGiongVaoVideo(cau, cacGiong) {
     const sau = cau[i + 1] ? cau[i + 1].start : S.thoiLuong;
     const choPhep = Math.max(c.end - batDau, sau - batDau - 0.08, 0.3);
     const dai = mau.length / TAN_SO_DOC;
-    if (dai > choPhep * 1.02) mau = coGian(mau, Math.min(dai / choPhep, tre > 1 ? 1.9 : NHANH_TOI_DA));
+    // tốc độ câu này: ít nhất bằng tốc độ chung, nhanh hơn tối đa 0,1 (0,25 khi đang trễ > 1 giây để đuổi kịp)
+    const tran = Math.min(tre > 1 ? 1.9 : NHANH_TOI_DA, chung + (tre > 1 ? 0.25 : 0.1));
+    const tiSo = Math.min(tran, Math.max(chung, dai / choPhep));
+    if (tiSo > 1.02) mau = coGian(mau, tiSo);
     const viTri = Math.round(batDau * TAN_SO_DOC);
     for (let k = 0; k < mau.length && viTri + k < tong.length; k++) tong[viTri + k] += mau[k];
     conTro = batDau + mau.length / TAN_SO_DOC;

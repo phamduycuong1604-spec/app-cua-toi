@@ -81,7 +81,7 @@ async function chay(ten, o) {
     if (u.includes("tts") && o.gemTTS === "het" && khoaGui !== "KD" && !(o.maDocTot || []).includes(khoaGui)) { dem("gemTTS"); return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) }); }
     if (u.includes("tts")) (goi.mhDoc ||= []).push(/models\/([^:]+):/.exec(u)?.[1]);
     if (u.includes("tts")) { goi.ttsDangGoi = (goi.ttsDangGoi || 0) + 1; goi.ttsDongThoi = Math.max(goi.ttsDongThoi || 0, goi.ttsDangGoi); await new Promise((x) => setTimeout(x, 150)); goi.ttsDangGoi--; }
-    if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(2).toString("base64") } }] } }] }) }); }
+    if (u.includes("tts")) { dem("gemTTS"); const t = JSON.parse(rt.request().postData() || "{}").contents?.[0]?.parts?.[0]?.text || ""; if (/^Đọc bằng|tiếng Việt, giọng/.test(t)) goi.gemTTSLoiDan = t.slice(0, 60); return rt.fulfill({ headers: J, body: JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: "audio/L16;codec=pcm;rate=24000", data: pcm(o.ttsDai ? t.length * o.ttsDai : 2).toString("base64") } }] } }] }) }); }
     dem("gemNghe");
     { const t = JSON.stringify(JSON.parse(rt.request().postData() || "{}").contents || ""); if (/Quy tắc riêng/.test(t)) goi.gemQuyTac = (/Quy tắc riêng[^\\]*\\n([^\\]*)/.exec(t) || [])[1] || "có"; }
     if (o.gemini === "het") return rt.fulfill({ status: 429, headers: J, body: JSON.stringify({ error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } }) });
@@ -369,6 +369,11 @@ const KICH_BAN = {
   "27p-gemini-khong-nhan-on-dinh": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", bat: { ...DU, el: false } }, tuChoiSeed: true,
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
         if (!/Gemini/.test(kq.docBang) || !/không nhận tuỳ chọn giữ giọng ổn định/.test(nk)) kq.loi = "Không tự bỏ tuỳ chọn khi Google từ chối: " + kq.docBang; } },
+  // Gemini đọc dài hơn chỗ trống (lời Việt dài) → cả video 1 tốc độ đều, không lượt nào tua gấp 1,9 lần
+  "27q-toc-do-deu": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", bat: { ...DU, el: false } }, cau: CAU_THUA, ttsDai: 0.3,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
+        kq.tocDo = (nk.match(/đọc nhanh đều [\d.]+ lần/) || [""])[0];
+        if (!kq.tocDo) kq.loi = "Không tính tốc độ chung"; } },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },
