@@ -119,7 +119,9 @@ async function chay(ten, o) {
       const seg = Array.from({ length: n }, (_, k) => ({ start: +(k * buoc + 0.05).toFixed(2), end: +(k * buoc + buoc * 0.85).toFixed(2), text: "这是测试句子" + "一二三四五六七八九十"[k % 10] + "号内容", no_speech_prob: 0.01, avg_logprob: -0.2 }));
       return rt.fulfill({ headers: J, body: JSON.stringify({ segments: seg }) });
     }
-    if (u.includes("transcriptions")) { const gy = /name="prompt"\r\n\r\n([^\r]*)/.exec(rt.request().postDataBuffer()?.toString() || ""); if (gy) goi.groqGoiY = gy[1]; return rt.fulfill({ headers: J, body: JSON.stringify({ segments: SEG }) }); }
+    if (u.includes("transcriptions")) { const gy = /name="prompt"\r\n\r\n([^\r]*)/.exec(rt.request().postDataBuffer()?.toString() || ""); if (gy) goi.groqGoiY = gy[1]; goi.groqTheoChu = /timestamp_granularities/.test(rt.request().postDataBuffer()?.toString() || "");
+      if (o.groqTuChoiChu && goi.groqTheoChu) return rt.fulfill({ status: 400, headers: J, body: JSON.stringify({ error: { message: "timestamp_granularities is not supported" } }) });
+      return rt.fulfill({ headers: J, body: JSON.stringify({ segments: SEG, ...(o.groqChu ? { words: o.groqChu } : {}) }) }); }
     rt.fulfill({ headers: J, body: JSON.stringify({ choices: [{ message: { content: o.groqMang ? '["Chào bạn","Cảm ơn"]' : "<think>x</think>" + DICH } }] }) }); });
   await p.route("https://viec-hom-nay-nhac.phamduycuong1604.workers.dev/**", async (rt) => { const u = rt.request().url(); const h = rt.request().headers();
     if (rt.request().method() === "OPTIONS") return rt.fulfill({ status: 204, headers: { ...J, "Access-Control-Allow-Headers": "*" } });
@@ -377,6 +379,17 @@ const KICH_BAN = {
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },
+  // Groq trả mốc giờ theo từng chữ: câu 1 ghi bắt đầu 1,0 nhưng chữ đầu tiên ở 1,8 → câu bắt đầu ở 1,8
+  "29s-moc-gio-theo-chu": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" }, kiemPd: true }, groqChu: [{ word: "你", start: 1.8, end: 2.1 }, { word: "好", start: 2.1, end: 2.4 }, { word: "请", start: 4.0, end: 4.2 }],
+      trong: async (p, kq) => { await p.waitForSelector("#the-kiem-pd:not(.an)", { timeout: 60000 }); kq.zh = await p.inputValue("#pd-trung"); await p.click("#nut-bo-qua-pd"); },
+      sau: async (p, kq) => { if (!kq.goi.groqTheoChu) kq.loi = "Không xin mốc giờ theo từng chữ";
+        else if (!/00:00:01,800 --> 00:00:03,000/.test(kq.zh || "")) kq.loi = "Câu đầu không dời tới chữ đầu tiên: " + (kq.zh || "").slice(0, 60); } },
+  // Groq không nhận mốc giờ theo chữ → tự nghe lại kiểu cũ, vẫn chạy được
+  "29t-groq-khong-nhan-theo-chu": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk" } }, groqTuChoiChu: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); if (!/Groq không nhận mốc giờ theo từng chữ/.test(nk)) kq.loi = "Không tự nghe lại kiểu cũ"; } },
+  // Gemini đọc 1 lượt gồm nhiều câu → cắt ra từng câu, đặt đúng mốc giờ
+  "27r-gemini-cat-tung-cau": { caiDat: { ...CD, khoaDoc: "MA-DOC-111111", bat: { ...DU, el: false } },
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); if (!/Cắt 1 lượt đọc thành 4 câu/.test(nk)) kq.loi = "Không cắt lượt đọc ra từng câu"; } },
   "29-deepseek-dich": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } } },
   "29b-deepseek-het-tien": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: true } }, dsHet: true },
   "29c-deepseek-nghe-hong-ve-gemini": { caiDat: { ...CD, dichBang: "deepseek", dp: { ds: "sk-ds", groq: "gsk", cf: false, azNghe: false } }, groq: "het" },

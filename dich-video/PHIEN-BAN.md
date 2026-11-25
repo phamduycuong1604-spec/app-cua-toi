@@ -3,6 +3,13 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.25.1
+- Giọng lồng tiếng khớp phụ đề và hình hơn: mỗi lượt Gemini (đọc liền nhiều câu) được cắt ra TỪNG CÂU tại chỗ
+  ngắt hơi, mỗi câu đặt đúng mốc giờ của nó. Trước đây chỉ đầu lượt đúng giờ, các câu sau trong lượt lệch dần.
+  Không tốn thêm lượt Gemini.
+- Không còn giọng Việt cất lên trước khi người trong video nói: bộ nghe Groq lấy mốc giờ theo TỪNG CHỮ, câu bắt
+  đầu đúng lúc chữ đầu tiên được nói (trước đây câu đầu hay bị ghi từ giây 0, cả đoạn nhạc dạo).
+
 ## 2026.11.17.3
 - Lọc tiếng nhiễu kiểu radio trong giọng Gemini: nhận biết tiếng nói bằng NHỊP RUNG của giọng (cao độ), không
   chỉ bằng độ "rè chói" như trước → nhiễu trầm kiểu radio cũng bị lọc. Lọc cả ở khoảng nghỉ giữa các câu

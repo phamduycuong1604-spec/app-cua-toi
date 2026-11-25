@@ -8,7 +8,7 @@ import {
   dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
 } from "./nen.js";
 import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, dungLaiDoan, moHinhDocChot, batDauLongTiengGemini, boLoaiDoc } from "./doc-gemini.js";
-import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc } from "./am-thanh.js";
+import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc, chiaTheoCau } from "./am-thanh.js";
 import { duPhong } from "./nghe-dich.js";
 import { tatFfmpeg, ffDangBat } from "./video.js";
 import { loiDeHieu } from "./loi.js";
@@ -459,8 +459,9 @@ function chiaNhom(cau, dv) {
     if (cuoi && c.start - cuoi.end < 1.2 && c.end - cuoi.start <= 40) {
       cuoi.end = Math.max(cuoi.end, c.end);
       cuoi.vi += " " + c.vi.trim();
+      cuoi.cac.push(c);
     } else {
-      nhom.push({ start: c.start, end: c.end, vi: c.vi.trim() });
+      nhom.push({ start: c.start, end: c.end, vi: c.vi.trim(), cac: [c] });
     }
   }
   return nhom;
@@ -537,7 +538,18 @@ async function longTiengBangThat(dv) {
   const cacGiong = await docTatCa(cau, dv, donVi);
   if (dv === "may") tatGiongMay(); // đọc xong → tắt bộ đọc để trả bộ nhớ cho bước xuất video
   nhat(`Đã đọc ${cau.length} ${donVi}, ${cau.reduce((n, c) => n + c.vi.length, 0)} ký tự bằng ${DICH_VU[dv].ten}${tenGiong(dv) ? " / " + tenGiong(dv) : ""} · ${((Date.now() - bd) / 1000).toFixed(1)} giây`);
-  return taoWav(xepGiongVaoVideo(cau, cacGiong), TAN_SO_DOC);
+  // Gemini: cắt mỗi lượt (nhiều câu) ra từng câu tại chỗ ngắt hơi → mỗi câu đặt đúng mốc giờ của nó
+  let dsCau = cau, dsGiong = cacGiong;
+  if (dv === "gemini") {
+    dsCau = [];
+    dsGiong = [];
+    cau.forEach((g, i) => {
+      const phan = g.cac.length > 1 ? chiaTheoCau(cacGiong[i], g.cac.map((c) => chuanHoaDoc(c.vi).length)) : [cacGiong[i]];
+      g.cac.forEach((c, j) => { dsCau.push({ start: c.start, end: c.end, vi: c.vi }); dsGiong.push(phan[j] || new Float32Array(0)); });
+    });
+    if (dsCau.length > cau.length) nhat(`Cắt ${cau.length} lượt đọc thành ${dsCau.length} câu, đặt từng câu đúng mốc giờ (khớp phụ đề và hình)`);
+  }
+  return taoWav(xepGiongVaoVideo(dsCau, dsGiong), TAN_SO_DOC);
 }
 
 // Giọng máy cần nhiều bộ nhớ lúc khởi động → chờ tách nhạc / chèn chữ đang chạy xong, tạm tắt bộ xử lý video
