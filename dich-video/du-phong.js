@@ -132,6 +132,7 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
   }
 
   // ---------- NGHE ----------
+  let groqKhongTheoChu = false;
   const NGHE = {
     groq: {
       ten: "Groq",
@@ -146,6 +147,11 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
               f.append("model", mh);
               f.append("language", "zh");
               f.append("response_format", "verbose_json");
+              // mốc giờ theo TỪNG CHỮ: câu đầu hay bị ghi bắt đầu từ giây 0 (cả đoạn nhạc dạo) → lấy đúng lúc chữ đầu tiên cất lên
+              if (!groqKhongTheoChu) {
+                f.append("timestamp_granularities[]", "segment");
+                f.append("timestamp_granularities[]", "word");
+              }
               f.append("temperature", "0");
               // Gợi ý các thuật ngữ trong từ điển để nghe đúng chữ chuyên môn
               const goiY = docTuDien(caiDat.tuDien).map(([zh]) => zh).filter((zh) => /[\u3400-\u9fff]/.test(zh)).join("，").slice(0, 200);
@@ -154,11 +160,23 @@ export function taoDuPhong({ caiDat, nhat, cho, dem = () => {} }) {
             }, "Groq Whisper");
             const j = await r.json();
             dem("groq", Math.round((wav.length - 44) / 32000)); // giây âm thanh đã gửi (16kHz, 1 kênh)
+            const chu = Array.isArray(j.words) ? j.words : [];
             return (j.segments || [])
               .filter((s) => !(s.no_speech_prob > 0.85 && s.avg_logprob < -1)) // chỉ bỏ đoạn gần như chắc chắn là tiếng ồn
-              .map((s) => ({ start: s.start, end: s.end, zh: String(s.text || "").trim() }));
+              .map((s) => {
+                // câu bắt đầu ở chữ đầu tiên thật sự được nói (chỉ dời MUỘN hơn, không bao giờ sớm hơn)
+                const w = chu.filter((t) => t.start >= s.start - 0.05 && t.start < s.end);
+                const dau = w.length ? Math.max(s.start, Math.min(w[0].start, s.end - 0.3)) : s.start;
+                return { start: +dau.toFixed(2), end: s.end, zh: String(s.text || "").trim() };
+              });
           } catch (loi) {
             loiCuoi = loi;
+            // Groq không nhận mốc giờ theo từng chữ → gửi lại kiểu cũ (chỉ theo câu)
+            if (loi.status === 400 && !groqKhongTheoChu && /timestamp|granularit/i.test(loi.message)) {
+              groqKhongTheoChu = true;
+              nhat("Groq không nhận mốc giờ theo từng chữ → nghe lại, lấy mốc giờ theo câu");
+              return this.chay(wav);
+            }
             if (loi.status !== 404 && !/model/i.test(loi.message)) throw loi;
           }
         }

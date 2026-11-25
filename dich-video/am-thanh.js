@@ -182,6 +182,71 @@ export function lamGon(mau) {
   return ra;
 }
 
+// Cắt 1 lượt đọc Gemini (đọc liền nhiều câu) thành TỪNG CÂU tại chỗ ngắt hơi giữa các câu, để mỗi câu được đặt
+// đúng mốc giờ của nó (khớp phụ đề, khớp hình) thay vì cả lượt chạy theo nhịp riêng rồi lệch dần.
+// doDai[i] = số chữ của câu i → đoán chỗ cắt theo tỉ lệ, rồi chọn khoảng lặng dài nhất gần chỗ đoán.
+// Không tìm được khoảng lặng thì cắt ở chỗ nhỏ tiếng nhất gần đó. Luôn trả về đúng số câu.
+export function chiaTheoCau(mau, doDai) {
+  const so = doDai.length;
+  if (so <= 1 || !mau.length) return doDai.map((_, i) => (i === 0 ? mau : new Float32Array(0)));
+  const KHUNG = Math.round(TAN_SO_DOC / 100); // 10 ms
+  const soKhung = Math.ceil(mau.length / KHUNG);
+  const rms = new Float32Array(soKhung);
+  for (let k = 0; k < soKhung; k++) {
+    const a = k * KHUNG, b = Math.min(mau.length, a + KHUNG);
+    let e = 0;
+    for (let i = a; i < b; i++) e += mau[i] * mau[i];
+    rms[k] = Math.sqrt(e / (b - a));
+  }
+  const xep = Float32Array.from(rms).sort();
+  const nguong = Math.max(0.004, xep[Math.floor(xep.length * 0.9)] * 0.06);
+  // các khoảng lặng ≥ 50 ms
+  const lang = [];
+  for (let k = 0; k < soKhung; ) {
+    if (rms[k] >= nguong) { k++; continue; }
+    let h = k;
+    while (h < soKhung && rms[h] < nguong) h++;
+    if (h - k >= 5) lang.push([k, h]);
+    k = h;
+  }
+  const tong = doDai.reduce((t, d) => t + Math.max(1, d), 0);
+  const toiThieu = 20; // mỗi câu ít nhất 0,2 giây
+  const cat = [];
+  let truoc = 0, cong = 0;
+  for (let j = 1; j < so; j++) {
+    cong += Math.max(1, doDai[j - 1]);
+    const doan = Math.round((soKhung * cong) / tong);
+    const cuaSo = Math.max(60, Math.round((0.5 * soKhung) / so));
+    const tu = truoc + toiThieu, den = soKhung - toiThieu * (so - j);
+    let tot = -1, diem = -Infinity;
+    for (const [a, b] of lang) {
+      const giua = (a + b) >> 1;
+      if (giua < tu || giua > den || Math.abs(giua - doan) > cuaSo) continue;
+      const d = b - a - 0.3 * Math.abs(giua - doan);
+      if (d > diem) { diem = d; tot = giua; }
+    }
+    if (tot < 0) {
+      // không có khoảng lặng gần chỗ đoán → chỗ nhỏ tiếng nhất trong cửa sổ
+      const a = Math.max(tu, doan - cuaSo), b = Math.min(den, doan + cuaSo);
+      tot = Math.min(Math.max(doan, tu), Math.max(tu, den));
+      for (let k = a; k <= b; k++) if (rms[k] < rms[tot]) tot = k;
+    }
+    cat.push(tot);
+    truoc = tot;
+  }
+  const moc = [0, ...cat.map((k) => Math.min(mau.length, k * KHUNG)), mau.length];
+  const mem = Math.round(TAN_SO_DOC * 0.005); // làm mềm 5 ms ở chỗ cắt
+  return doDai.map((_, i) => {
+    const p = mau.slice(moc[i], moc[i + 1]);
+    for (let k = 0; k < Math.min(mem, p.length >> 1); k++) {
+      const he = k / mem;
+      if (i > 0) p[k] *= he;
+      if (i < so - 1) p[p.length - 1 - k] *= he;
+    }
+    return p;
+  });
+}
+
 export function doiTanSo(mau, tu, sang) {
   const ra = new Float32Array(Math.round((mau.length * sang) / tu));
   for (let i = 0; i < ra.length; i++) {

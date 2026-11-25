@@ -57,5 +57,17 @@ for (const goc of ["../am-thanh.js", "../../pha-rednote/web/phaha/am-thanh.js"])
   const doTo = (v) => Math.sqrt(v.reduce((t, x) => t + x * x, 0) / v.length);
   const a1 = lamGon(giong(1, 0.2)), a2 = lamGon(giong(1, 0.5));
   assert.ok(Math.abs(doTo(a1) / doTo(a2) - 1) < 0.1, `${goc}: 2 đoạn to nhỏ khác nhau (${doTo(a1).toFixed(3)} / ${doTo(a2).toFixed(3)})`);
+  // cắt 1 lượt đọc 3 câu thành từng câu đúng chỗ ngắt hơi (chỉ bản dich-video có hàm này)
+  const m = await import(tam);
+  if (m.chiaTheoCau) {
+    const luot = noi(giong(1.0, 0.3), im(0.3), giong(0.5, 0.3), im(0.25), giong(0.8, 0.3));
+    const phan = m.chiaTheoCau(luot, [20, 10, 16]);
+    const dai3 = phan.map((p) => p.length / R);
+    assert.equal(phan.length, 3, `${goc}: cắt sai số câu`);
+    assert.ok(Math.abs(dai3[0] - 1.15) < 0.12 && Math.abs(dai3[1] - 0.775) < 0.12 && Math.abs(dai3[2] - 0.925) < 0.12, `${goc}: cắt không đúng chỗ ngắt hơi: ${dai3.map((d) => d.toFixed(2)).join(" / ")}`);
+    const lien = m.chiaTheoCau(giong(2, 0.3), [5, 5]);
+    assert.ok(lien.length === 2 && lien[0].length > 0 && lien[1].length > 0, `${goc}: không có khoảng lặng thì vẫn phải cắt đủ câu`);
+    assert.equal(m.chiaTheoCau(new Float32Array(0), [3, 4]).length, 2, `${goc}: lượt rỗng vẫn trả đủ câu`);
+  }
   console.log(`✅ ${goc}: làm sạch giọng đúng (${dai.toFixed(2)} giây)`);
 }
