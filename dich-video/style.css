@@ -191,3 +191,6 @@ select.o-dich { appearance: auto; }
 
 /* số phiên bản ở đầu trang (bấm xem các thay đổi) */
 .phien-ban { color: inherit; opacity: 0.75; text-decoration: none; white-space: nowrap; }
+
+/* lệnh Terminal trong hướng dẫn VieNeu: chữ nhỏ, xuống dòng được, bấm giữ để chép */
+code.lenh { display: block; margin: 4px 0 6px; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.06); font-size: 12px; word-break: break-all; user-select: all; }

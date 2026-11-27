@@ -1,7 +1,7 @@
 // =====================================================
 // HỘP ⚙️ CÀI ĐẶT + các ô trên màn hình chính (giọng cho video này, chuyên môn dịch, chủ đề, thuật ngữ)
 // =====================================================
-import { $, caiDat, nhat, luuCaiDat, lamSachMa, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu } from "./nen.js";
+import { $, caiDat, nhat, luuCaiDat, lamSachMa, kyTuThang, coMayChu, daDangNhap, dungDuocMayChu, laMayMac } from "./nen.js";
 import { KENH, KENH_MAC_DINH } from "./chuyen-mon.js";
 import { quenGhiNhoGemini } from "./gemini.js";
 import { quenLuotDoc } from "./doc-gemini.js";
@@ -39,6 +39,7 @@ export function moCaiDat() {
   for (const dv of THU_TU) if ($("bat-" + dv)) $("bat-" + dv).checked = caiDat.bat[dv];
   $("o-giong-edge").value = caiDat.dv.edge.giong;
   $("o-giong-vt").value = caiDat.dv.vt.giong;
+  if ($("o-dia-vn")) { $("o-dia-vn").value = caiDat.dv.vn.dia; veGiongVn(); }
   $("o-giong-fpt").value = caiDat.dv.fpt.giong;
   $("o-vung-az").value = caiDat.dv.az.vung;
   $("o-dp-az-dich-vung").value = caiDat.dp.azDichVung;
@@ -62,6 +63,10 @@ export function layTuForm() {
   for (const [id, duong] of O_CHU) dat(duong, $(id).value.trim());
   caiDat.dv.edge.giong = $("o-giong-edge").value || caiDat.dv.edge.giong;
   caiDat.dv.vt.giong = $("o-giong-vt").value || caiDat.dv.vt.giong;
+  if ($("o-dia-vn")) {
+    caiDat.dv.vn.dia = $("o-dia-vn").value.trim().replace(/\/+$/, "") || "http://127.0.0.1:8765";
+    caiDat.dv.vn.giong = $("o-giong-vn").value;
+  }
   caiDat.dv.fpt.giong = $("o-giong-fpt").value || caiDat.dv.fpt.giong;
   caiDat.dv.az.vung = $("o-vung-az").value.trim().toLowerCase().replace(/\s+/g, "") || "southeastasia";
   caiDat.dv.el.mh = $("o-mh-el").value;
@@ -93,6 +98,7 @@ export function lyDoKhongMayChu() {
 }
 // Chữ nhỏ cạnh tên mỗi dịch vụ đọc: sẵn sàng / thiếu gì
 export function trangThai(dv) {
+  if (dv === "vn" && !laMayMac()) return "⏸ chỉ dùng trên Mac";
   if (dv !== "may" && !caiDat.bat[dv]) return "⏸ đang tắt";
   const khongMC = lyDoKhongMayChu();
   const thieu = {
@@ -104,6 +110,7 @@ export function trangThai(dv) {
     edge: khongMC,
     fpt: !caiDat.dv.fpt.khoa && "chưa có mã",
     vt: !caiDat.dv.vt.khoa && "chưa có mã",
+    vn: !caiDat.dv.vn.dia && "chưa có địa chỉ",
   }[dv];
   if (thieu) return "⚠️ " + thieu;
   if (dvHetThang(dv)) return "⛔ hết lượt tháng này";
@@ -122,6 +129,7 @@ export function veGiongNhanh() {
   if (!o) return;
   o.textContent = "";
   for (const dv of THU_TU) {
+    if (dv === "vn" && !laMayMac()) continue; // VieNeu chỉ dùng khi mở app trên Mac
     const nhan = document.createElement("label");
     nhan.className = "cong-tac";
     const hop = document.createElement("input");
@@ -141,6 +149,31 @@ export function veGiongNhanh() {
     tt.textContent = dv === "may" ? "" : trangThai(dv);
     nhan.append(hop, ten, tt);
     o.append(nhan);
+  }
+}
+
+// Danh sách giọng VieNeu (lấy từ máy chủ VieNeu trên Mac, nhớ lại cho lần sau)
+function veGiongVn() {
+  const o = $("o-giong-vn"), c = caiDat.dv.vn;
+  o.innerHTML = "";
+  o.add(new Option("Giọng mặc định của VieNeu", ""));
+  for (const g of c.ds || []) o.add(new Option(g.nhan, g.ten));
+  o.value = (c.ds || []).some((g) => g.ten === c.giong) ? c.giong : "";
+}
+async function ketNoiVn() {
+  const nut = $("nut-ket-noi-vn"), bao = $("chu-vn");
+  caiDat.dv.vn.dia = $("o-dia-vn").value.trim().replace(/\/+$/, "") || "http://127.0.0.1:8765";
+  nut.disabled = true;
+  bao.textContent = "⏳ Đang kết nối VieNeu…";
+  try {
+    await taiDsGiong("vn");
+    veGiongVn();
+    bao.textContent = `✅ Đã kết nối VieNeu: ${caiDat.dv.vn.ds.length} giọng.`;
+  } catch (loi) {
+    bao.textContent = "⚠️ " + loi.message;
+  } finally {
+    nut.disabled = false;
+    hienTrangThai();
   }
 }
 
@@ -174,6 +207,9 @@ function hienODich() {
 // Gắn sự kiện cho hộp cài đặt và các ô ở màn hình chính (gọi 1 lần lúc mở app)
 export function khoiDongCaiDat() {
   $("nut-cai-dat").addEventListener("click", moCaiDat);
+  // VieNeu chạy trên máy Mac: chỉ hiện khi mở app trên Mac
+  if (!laMayMac()) document.querySelector('.dv-doc[data-dv="vn"]')?.remove();
+  else $("nut-ket-noi-vn").addEventListener("click", ketNoiVn);
   $("hop-cai-dat").addEventListener("close", () => {
     layTuForm();
     veGiongNhanh();

@@ -280,6 +280,30 @@
       <h3 class="tieu-de-giong">🔊 Giọng lồng tiếng</h3>
       <p class="goi-y">App dùng lần lượt theo thứ tự dưới đây: dịch vụ trên hết lượt/lỗi thì tự đọc lại cả video bằng dịch vụ kế tiếp. Mỗi dịch vụ chọn sẵn 1 giọng mặc định, bấm 🔊 để nghe thử.</p>
 
+      <details class="dv-doc" data-dv="vn">
+        <summary>VieNeu – giọng Việt chạy trên máy Mac (miễn phí) <span class="tt" id="tt-vn"></span></summary>
+        <label class="cong-tac"><input type="checkbox" id="bat-vn"> Dùng VieNeu (chỉ khi mở app trên Mac)</label>
+        <p class="goi-y">AI đọc tiếng Việt <b>VieNeu-TTS v3 Turbo</b> chạy ngay trên máy Mac của bạn: không cần mã, không tốn lượt, không giới hạn. Bật thì app đọc bằng VieNeu trước; VieNeu chưa bật trên Mac thì app tự chuyển sang giọng kế tiếp. Trên iPhone/iPad mục này không dùng.</p>
+        <details class="huong-dan">
+          <summary>Cách bật VieNeu trên Mac</summary>
+          <ol>
+            <li>Mở <b>Terminal</b> (⌘ + Space, gõ Terminal, Enter).</li>
+            <li><b>Chỉ lần đầu</b> – dán dòng này, Enter (cài công cụ + tải chương trình VieNeu):<br><code class="lenh">curl -LsSf https://astral.sh/uv/install.sh | sh; curl -fsSL https://phamduycuong1604-spec.github.io/app-cua-toi/dich-video/vieneu/may-chu-vieneu.py -o ~/may-chu-vieneu.py</code></li>
+            <li><b>Mỗi lần dùng</b> – dán dòng này, Enter, chờ hiện “✅ VieNeu sẵn sàng” (lần đầu tải AI mất vài phút), <b>giữ cửa sổ mở</b>:<br><code class="lenh">~/.local/bin/uv run --python 3.11 --with vieneu python ~/may-chu-vieneu.py</code></li>
+            <li>Mở app này bằng <b>Chrome</b> trên chính máy Mac đó. Chrome hỏi “cho phép truy cập thiết bị trong mạng cục bộ” → bấm <b>Cho phép</b>. Bấm “🔌 Kết nối VieNeu” bên dưới để tải danh sách giọng.</li>
+          </ol>
+        </details>
+        <label class="nhan">Địa chỉ VieNeu trên máy</label>
+        <input id="o-dia-vn" autocomplete="off" placeholder="http://127.0.0.1:8765">
+        <label class="nhan">Giọng</label>
+        <select id="o-giong-vn"><option value="">Giọng mặc định của VieNeu</option></select>
+        <div class="hang-nut-giong">
+          <button type="button" class="nut-phu nut-nho" id="nut-ket-noi-vn">🔌 Kết nối VieNeu</button>
+          <button type="button" class="nut-phu nut-nho nut-nghe" data-dv="vn">🔊 Nghe thử</button>
+        </div>
+        <p class="goi-y" id="chu-vn"></p>
+      </details>
+
       <details class="dv-doc" data-dv="el">
         <summary>1. ElevenLabs <span class="tt" id="tt-el"></span></summary>
         <label class="cong-tac"><input type="checkbox" id="bat-el"> Dùng ElevenLabs</label>

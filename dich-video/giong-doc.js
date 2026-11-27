@@ -5,7 +5,7 @@
 // =====================================================
 import {
   $, caiDat, S, nhat, ghiChu, cho, docLuu, ghiLuu, luuCaiDat, kyTuThang, congKyTu, thangNay, dongHo,
-  dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA,
+  dungDuocMayChu, mayChu, veDangNhap, quaMayChu, TAN_SO_DOC, NHANH_TOI_DA, laMayMac,
 } from "./nen.js";
 import { docGeminiTTS, soLuongDocGemini, luotDocConLai, batDauDocGemini, dungLaiDoan, moHinhDocChot, batDauLongTiengGemini, boLoaiDoc } from "./doc-gemini.js";
 import { taoWav, docWav, giaiMp3, tuBase64, lamGon, doiTanSo, coGian, chuanHoaDoc, chiaTheoCau } from "./am-thanh.js";
@@ -14,7 +14,7 @@ import { tatFfmpeg, ffDangBat } from "./video.js";
 import { loiDeHieu } from "./loi.js";
 
 // Thứ tự dùng giọng (theo yêu cầu người dùng: Gemini có xoay vòng nhiều mã đọc trước tiên)
-export const THU_TU = ["gemini", "el", "vt", "gc", "fpt", "fish", "az", "edge", "may"];
+export const THU_TU = ["vn", "gemini", "el", "vt", "gc", "fpt", "fish", "az", "edge", "may"];
 export const CAC_DV = ["gc", "az", "el", "fish"]; // các dịch vụ có mã + danh sách giọng tải về
 export const CAU_MAU = "Xin chào, đây là giọng lồng tiếng của PhaHa. Chúc bạn một ngày thật vui!";
 
@@ -67,6 +67,38 @@ async function docGemini(chu) {
   const kq = await docGeminiTTS(chu);
   (globalThis.__phahaMhDoc ||= []).push(kq.moHinh); // để bộ kiểm tra xem loại Gemini đã đọc từng đoạn
   return kq;
+}
+
+// ----- VieNeu-TTS chạy trên chính máy Mac (vieneu/may-chu-vieneu.py) – chỉ dùng khi mở app trên Mac -----
+const LOI_VN = "Không kết nối được VieNeu trên máy Mac. Mở Terminal, chạy lệnh bật VieNeu (xem ⚙️ Cài đặt → VieNeu) rồi bấm Làm lại.";
+async function docVieneu(chu) {
+  const c = caiDat.dv.vn;
+  const huy = new AbortController(), hen = setTimeout(() => huy.abort(), 300000);
+  let r;
+  try {
+    r = await fetch(c.dia.replace(/\/+$/, "") + "/doc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chu, giong: c.giong }),
+      signal: huy.signal,
+    });
+  } catch (loi) {
+    throw Object.assign(new Error(huy.signal.aborted ? "VieNeu đọc quá lâu (hơn 5 phút một câu)." : LOI_VN), { dv: "vn" });
+  } finally {
+    clearTimeout(hen);
+  }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw Object.assign(new Error(j.loi || `VieNeu báo lỗi ${r.status}`), { status: r.status, dv: "vn" });
+  }
+  return docWav(new Uint8Array(await r.arrayBuffer()));
+}
+// Hỏi máy chủ VieNeu danh sách giọng có sẵn (25 giọng Bắc/Trung/Nam)
+async function layGiongVieneu() {
+  let r;
+  try { r = await fetch(caiDat.dv.vn.dia.replace(/\/+$/, "") + "/giong", { cache: "no-store" }); } catch { throw new Error(LOI_VN); }
+  if (!r.ok) throw new Error(`VieNeu báo lỗi ${r.status}`);
+  return ((await r.json()).giong || []).map((g) => ({ ten: g.ten, nhan: g.nhan }));
 }
 
 // ----- Google Cloud Text-to-Speech -----
@@ -366,6 +398,7 @@ function docMayMotLan(chu) {
 // cungLuc = số câu gửi cùng lúc; mienPhi = mức miễn phí mỗi tháng (ký tự)
 // =====================================================
 export const DICH_VU = {
+  vn: { ten: "VieNeu (máy Mac)", taiGiong: layGiongVieneu, doc: docVieneu, cungLuc: 1 },
   el: { ten: "ElevenLabs", mienPhi: 10000, taiGiong: layGiongEl, doc: docEleven, cungLuc: 2 },
   gemini: { ten: "Gemini", doc: docGemini, get cungLuc() { return soLuongDocGemini(); } }, // mã miễn phí: 1 yêu cầu mỗi lúc
   fish: { ten: "Fish Audio", taiGiong: layGiongFish, doc: docFish, cungLuc: 2 },
@@ -390,7 +423,7 @@ export function tenGiong(dv) {
 // Tải danh sách giọng; chưa chọn giọng thì lấy giọng hay nhất (đầu danh sách) làm mặc định
 export async function taiDsGiong(dv) {
   const c = caiDat.dv[dv];
-  if (dv !== "gc" && !c.khoa) throw new Error("Dán mã " + DICH_VU[dv].ten + " trước đã.");
+  if (dv !== "gc" && dv !== "vn" && !c.khoa) throw new Error("Dán mã " + DICH_VU[dv].ten + " trước đã.");
   c.ds = await DICH_VU[dv].taiGiong();
   if (!c.ds.length) throw new Error(DICH_VU[dv].ten + " chưa có giọng nào dùng được.");
   if (!c.ds.some((g) => g.ten === c.giong)) c.giong = c.ds[0].ten;
@@ -409,6 +442,7 @@ function ghiDvHetThang(dv) {
 export function dvDocDung(imLang) {
   const vao = dungDuocMayChu(); // Fish, Edge đi qua máy chủ PHAHA → chỉ chủ app
   const co = {
+    vn: () => laMayMac() && !!caiDat.dv.vn.dia,
     el: () => !!caiDat.dv.el.khoa,
     gemini: () => !!(caiDat.khoa || caiDat.khoaDoc),
     fish: () => !!caiDat.dv.fish.khoa && vao,
