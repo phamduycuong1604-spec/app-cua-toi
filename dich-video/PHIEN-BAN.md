@@ -3,6 +3,12 @@
 Số phiên bản hiện ở đầu trang app và ở dòng đầu nhật ký mỗi lần chạy.
 Cách đọc: năm.tháng.ngày.lần-sửa-trong-ngày.
 
+## 2026.11.27.1
+- Thêm giọng lồng tiếng **VieNeu (máy Mac)**: AI đọc tiếng Việt VieNeu-TTS v3 Turbo chạy ngay trên máy Mac,
+  không cần mã, không tốn lượt. Có nút bật/tắt trong ⚙️ Cài đặt (mặc định tắt). Chỉ dùng khi mở app bằng trình
+  duyệt trên Mac; trên iPhone/iPad mục này ẩn. Bật VieNeu trên Mac bằng 1 lệnh Terminal (hướng dẫn trong ⚙️);
+  VieNeu chưa bật thì app tự đọc bằng giọng kế tiếp.
+
 ## 2026.11.25.1
 - Giọng lồng tiếng khớp phụ đề và hình hơn: mỗi lượt Gemini (đọc liền nhiều câu) được cắt ra TỪNG CÂU tại chỗ
   ngắt hơi, mỗi câu đặt đúng mốc giờ của nó. Trước đây chỉ đầu lượt đúng giờ, các câu sau trong lượt lệch dần.

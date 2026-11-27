@@ -20,9 +20,15 @@ const SEG = [{start:1,end:3,text:"你好朋友",no_speech_prob:0.01,avg_logprob:
 const DICH = JSON.stringify({"1":"Chào bạn","2":"Cảm ơn"});
 
 async function chay(ten, o) {
-  const p = await b.newPage({ viewport: { width: 400, height: 900 }, acceptDownloads: true });
+  const p = await b.newPage({ viewport: { width: 400, height: 900 }, acceptDownloads: true, ...(o.mac ? { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" } : {}) });
   const loiTrang = [], goi = {}; const dem = (k, n = 1) => (goi[k] = (goi[k] || 0) + n);
   p.on("pageerror", (e) => loiTrang.push(e.message));
+  // Máy chủ VieNeu trên Mac (giả lập): vnTat = chưa bật (từ chối kết nối)
+  await p.route("http://127.0.0.1:8765/**", (rt) => { const u = rt.request().url(); if (o.vnTat) return rt.abort("connectionrefused");
+    if (u.endsWith("/giong")) { dem("vnGiong"); return rt.fulfill({ headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }, body: JSON.stringify({ giong: [{ ten: "pham_tuyen", nhan: "Phạm Tuyên (Bắc)" }, { ten: "mai_anh", nhan: "Mai Anh (Nam)" }] }) }); }
+    if (u.endsWith("/doc")) { dem("vnDoc"); goi.vnGiongGui = JSON.parse(rt.request().postData() || "{}").giong; const d = pcm(1); const h = Buffer.alloc(44); h.write("RIFF", 0); h.writeUInt32LE(36 + d.length, 4); h.write("WAVEfmt ", 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(24000, 24); h.writeUInt32LE(48000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write("data", 36); h.writeUInt32LE(d.length, 40);
+      return rt.fulfill({ headers: { "Content-Type": "audio/wav", "Access-Control-Allow-Origin": "*" }, body: Buffer.concat([h, d]) }); }
+    return rt.fulfill({ status: 404, body: "" }); });
   if (o.mayOom) await p.addInitScript(() => {
     // Giả lập iPhone: lần đầu mở giọng máy báo hết bộ nhớ, lần sau mới chạy được
     const W = window.Worker; let lan = 0;
@@ -209,6 +215,24 @@ async function chay(ten, o) {
     const kq = { ten, kq: await p.textContent("#kq-kiem-tra"), loiTrang, goi }; await p.close(); return { ...kq, nhatKy: "" };
   }
   if (o.chiCaiDat) return ngheThu(p, goi, loiTrang, ten);
+  if (o.vnKetNoi) {
+    // ⚙️ → VieNeu → Kết nối (tải giọng) → chọn giọng → Nghe thử → Lưu
+    await p.click("#nut-cai-dat");
+    await p.$eval('.dv-doc[data-dv="vn"]', (d) => (d.open = true));
+    await p.click("#nut-ket-noi-vn");
+    await p.waitForFunction(() => /Đã kết nối|⚠️/.test(document.getElementById("chu-vn").textContent), null, { timeout: 30000 });
+    const bao = await p.textContent("#chu-vn"), soGiong = await p.$$eval("#o-giong-vn option", (x) => x.length);
+    await p.selectOption("#o-giong-vn", "mai_anh");
+    await p.click('.nut-nghe[data-dv="vn"]');
+    await p.waitForFunction(() => !document.querySelector('.nut-nghe[data-dv="vn"]').disabled, null, { timeout: 30000 });
+    await p.click("#hop-cai-dat button[value=luu]");
+    const luu = await p.evaluate(() => JSON.parse(localStorage.getItem("phaha-dv-cai-dat")).dv.vn);
+    const kq = { ten, bao, soGiong, luu: { giong: luu.giong, soDs: luu.ds.length }, goi, loiTrang, nhatKy: "" };
+    if (!/Đã kết nối VieNeu: 2 giọng/.test(bao) || soGiong !== 3) kq.loi = "Không tải được danh sách giọng: " + bao;
+    else if (luu.giong !== "mai_anh" || !goi.vnDoc) kq.loi = "Không lưu giọng / không nghe thử được";
+    await p.close();
+    return kq;
+  }
   if (o.luuLai) { await p.click("#nut-cai-dat"); await p.click("#hop-cai-dat button[value=luu]"); }
   if (o.doiMa) { await p.click("#nut-cai-dat"); await p.fill("#o-khoa", o.doiMa); await p.click("#hop-cai-dat button[value=luu]"); }
   if (o.link) {
@@ -376,6 +400,22 @@ const KICH_BAN = {
       sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky");
         kq.tocDo = (nk.match(/đọc nhanh đều [\d.]+ lần/) || [""])[0];
         if (!kq.tocDo) kq.loi = "Không tính tốc độ chung"; } },
+  // VieNeu trên Mac: bật → đọc cả video bằng VieNeu (trước Gemini), gửi đúng giọng đã chọn
+  "55-vieneu-tren-mac": { caiDat: { ...CD, bat: { ...DU, vn: true, el: false }, dv: { ...CD.dv, vn: { dia: "http://127.0.0.1:8765", giong: "mai_anh", ds: [] } } }, mac: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/VieNeu/.test(kq.docBang) || !kq.goi.vnDoc) kq.loi = "Không đọc bằng VieNeu: " + kq.docBang;
+        else if (kq.goi.vnGiongGui !== "mai_anh") kq.loi = "Gửi sai giọng: " + kq.goi.vnGiongGui;
+        else if (kq.goi.gemTTS) kq.loi = "Vẫn gọi Gemini dù VieNeu đọc được"; } },
+  // Mac nhưng chưa bật VieNeu trong Terminal → tự chuyển sang giọng kế tiếp (Gemini), báo rõ cách bật
+  "55b-vieneu-chua-bat": { caiDat: { ...CD, bat: { ...DU, vn: true, el: false } }, mac: true, vnTat: true,
+      sau: async (p, kq) => { const nk = await p.textContent("#o-nhat-ky"); kq.docBang = (nk.match(/Đã đọc .*/) || [""])[0].slice(0, 80);
+        if (!/Không kết nối được VieNeu/.test(nk) || !/Gemini/.test(kq.docBang)) kq.loi = "Không tự chuyển giọng khi VieNeu chưa bật: " + kq.docBang; } },
+  // iPhone / máy không phải Mac: bật VieNeu cũng không dùng, không hiện trong cài đặt
+  "55c-vieneu-khong-dung-ngoai-mac": { caiDat: { ...CD, bat: { ...DU, vn: true, el: false } },
+      sau: async (p, kq) => { if (kq.goi.vnDoc) kq.loi = "Gọi VieNeu trên máy không phải Mac";
+        else if (await p.$('.dv-doc[data-dv="vn"]')) kq.loi = "Vẫn hiện mục VieNeu ngoài Mac"; } },
+  // Kết nối VieNeu trong ⚙️ → tải danh sách giọng
+  "55d-vieneu-ket-noi": { caiDat: { ...CD, bat: { ...DU, vn: true } }, mac: true, vnKetNoi: true },
   "27b-gemini-ma-rieng-nghe-thu": { caiDat: { ...CD, khoaDoc: "KD", bat: { ...DU, el: false } }, gemTTS: "het", chiCaiDat: true },
   "28-kiem-tra-ma": { caiDat: { ...CD, khoaDoc: "KD", dp: { groq: "gsk", or: "sk-or" } }, kiemMa: true },
   "28b-kiem-tra-ma-het": { caiDat: { ...CD, dp: { groq: "gsk" }, dv: { ...CD.dv, el: {} } }, kiemMa: true, gemini: "het", groq: "het", khongChu: true },

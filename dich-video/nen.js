@@ -9,7 +9,9 @@ export const $ = (id) => document.getElementById(id);
 export const API_GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 // PHIÊN BẢN APP: mỗi lần sửa và đưa lên app thì tăng số này (năm.tháng.ngày.lần-trong-ngày)
 // và ghi thay đổi vào PHIEN-BAN.md. Hiện ở đầu trang và dòng đầu nhật ký để biết máy đang chạy bản nào.
-export const PHIEN_BAN = "2026.11.25.1";
+// Đang mở app bằng trình duyệt trên máy Mac (không phải iPhone/iPad – iPad cũng báo "Macintosh" nhưng có cảm ứng)
+export const laMayMac = () => /Macintosh/.test(navigator.userAgent) && (navigator.maxTouchPoints || 0) < 2;
+export const PHIEN_BAN = "2026.11.27.1";
 export const TAN_SO_NGHE = 16000; // âm thanh gửi đi nghe: 16.000 mẫu/giây, 1 kênh
 export const TAN_SO_DOC = 24000; // giọng đọc trả về / ghép vào video
 export const DOAN_NGHE = 90; // mỗi lần gửi khoảng 1,5 phút âm thanh (đoạn ngắn trả lời nhanh, gửi song song)
@@ -69,9 +71,10 @@ caiDat.dv.el = Object.assign({ khoa: "", mh: "eleven_v3", giong: "", ds: [] }, c
 caiDat.dv.fish = Object.assign({ khoa: "", giong: "", ds: [] }, caiDat.dv.fish);
 caiDat.dv.edge = Object.assign({ giong: "vi-VN-HoaiMyNeural" }, caiDat.dv.edge);
 caiDat.dv.fpt = Object.assign({ khoa: "", giong: "banmai" }, caiDat.dv.fpt);
+caiDat.dv.vn = Object.assign({ dia: "http://127.0.0.1:8765", giong: "", ds: [] }, caiDat.dv.vn);
 caiDat.dv.vt = Object.assign({ khoa: "", giong: "hn-quynhanh" }, caiDat.dv.vt);
 // Bật/tắt từng dịch vụ đọc (Google Cloud chỉ bật sẵn nếu trước đây đã cài)
-caiDat.bat = Object.assign({ el: true, vt: true, gemini: true, fpt: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
+caiDat.bat = Object.assign({ vn: false, el: true, vt: true, gemini: true, fpt: true, fish: true, az: true, gc: !!caiDat.dv.gc.giong, edge: true }, caiDat.bat);
 // Phụ đề, lớp che, logo: giữ cài đặt cũ, thêm mục mới nếu thiếu
 {
   const md = macDinhLop(), cu = caiDat.lop || {};
